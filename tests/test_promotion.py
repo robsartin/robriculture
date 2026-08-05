@@ -169,12 +169,18 @@ def test_promotion_test_runs_real_games():
 
 
 def test_current_champion_reads_the_recorded_file():
-    from harness.promotion import current_champion
+    import json
 
-    assert current_champion() == "starter"
+    from harness.promotion import CHAMPION_PATH, current_champion
+
+    # Don't pin the champion's identity (it changes as strategies evolve) — just
+    # assert current_champion() reflects whatever is recorded in champion.json.
+    assert current_champion() == json.load(open(CHAMPION_PATH))["champion"]
 
 
 def test_promotion_test_defaults_to_the_recorded_champion():
+    from harness.promotion import current_champion
+
     # No real games: inject a fake play and a fake agent-builder.
     res = promotion_test(
         "greedy",
@@ -182,5 +188,5 @@ def test_promotion_test_defaults_to_the_recorded_champion():
         play_fn=lambda a, b, seed: 1,
         build=lambda names: {n: n for n in names},
     )
-    assert res.champion == "starter"
+    assert res.champion == current_champion()
     assert res.record.games == 2
