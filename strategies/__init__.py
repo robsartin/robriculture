@@ -8,6 +8,7 @@ short name. Add new strategies here.
 REGISTRY = {
     "lean": "strategies.lean",
     "greedy": "strategies.greedy",
+    "greedy_horizon": "strategies.greedy_horizon",
     "planner": "strategies.planner",
     "capital_rush": "strategies.capital_rush",
     "market_timer": "strategies.market_timer",
