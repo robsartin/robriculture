@@ -1,0 +1,48 @@
+{
+  "champion": "starter",
+  "games": 6,
+  "ranking": [
+    {
+      "name": "starter",
+      "win_rate": 1.0,
+      "wins": 36,
+      "played": 36
+    },
+    {
+      "name": "lean",
+      "win_rate": 0.16666666666666666,
+      "wins": 6,
+      "played": 36
+    },
+    {
+      "name": "greedy",
+      "win_rate": 0.16666666666666666,
+      "wins": 6,
+      "played": 36
+    },
+    {
+      "name": "planner",
+      "win_rate": 0.16666666666666666,
+      "wins": 6,
+      "played": 36
+    },
+    {
+      "name": "capital_rush",
+      "win_rate": 0.16666666666666666,
+      "wins": 6,
+      "played": 36
+    },
+    {
+      "name": "market_timer",
+      "win_rate": 0.16666666666666666,
+      "wins": 6,
+      "played": 36
+    },
+    {
+      "name": "random",
+      "win_rate": 0.0,
+      "wins": 0,
+      "played": 36
+    }
+  ]
+}

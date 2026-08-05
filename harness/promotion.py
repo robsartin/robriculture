@@ -1,0 +1,251 @@
+"""Promotion harness — ADR-0007's strategy-experiment gate.
+
+A strategy experiment is promoted only if its challenger is *actually better*
+than the current champion. "Better" is not a green test; it's a statistical
+claim: over a fixed set of seeded games, the challenger must both clear a
+win-rate bar and beat a fair-coin null by a binomial test. This module provides
+the reproducible measurement (`run_match`), the decision (`PromotionResult`),
+and the tooling to designate a champion (`designate_champion`).
+
+Ties are excluded from the win-rate and the binomial test (a paired-sign-test
+convention): they carry no information about which agent is stronger, but the
+tie-rate is reported alongside so a draw-heavy match is visible.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from math import comb
+
+
+def binomial_p_value(wins: int, decisive: int) -> float:
+    """One-sided exact binomial p-value: P(X >= wins | n=decisive, p=0.5).
+
+    The chance a fair coin would give the challenger at least `wins` of
+    `decisive` decisive games. Small p => the win-rate is hard to explain by
+    luck. With no decisive games there is no evidence, so p = 1.0.
+    """
+    if decisive <= 0:
+        return 1.0
+    wins = max(0, min(wins, decisive))
+    tail = sum(comb(decisive, k) for k in range(wins, decisive + 1))
+    return tail / (2 ** decisive)
+
+
+@dataclass(frozen=True)
+class Record:
+    """A challenger's tally against one opponent."""
+
+    wins: int
+    losses: int
+    ties: int = 0
+
+    @property
+    def games(self) -> int:
+        return self.wins + self.losses + self.ties
+
+    @property
+    def decisive(self) -> int:
+        return self.wins + self.losses
+
+    @property
+    def win_rate(self) -> float:
+        """Fraction of *decisive* games won; 0.5 when there are none."""
+        return self.wins / self.decisive if self.decisive else 0.5
+
+    @property
+    def tie_rate(self) -> float:
+        return self.ties / self.games if self.games else 0.0
+
+    @property
+    def p_value(self) -> float:
+        return binomial_p_value(self.wins, self.decisive)
+
+
+@dataclass(frozen=True)
+class PromotionResult:
+    """The verdict for a challenger vs a champion over a seeded match."""
+
+    challenger: str
+    champion: str
+    record: Record
+    bar: float = 0.55
+    alpha: float = 0.05
+
+    @property
+    def win_rate(self) -> float:
+        return self.record.win_rate
+
+    @property
+    def p_value(self) -> float:
+        return self.record.p_value
+
+    @property
+    def passed(self) -> bool:
+        """Promote iff the win-rate clears the bar AND it beats the coin-flip null."""
+        return self.record.win_rate >= self.bar and self.record.p_value < self.alpha
+
+
+# --- Game-running ---
+
+import itertools
+import os
+
+from harness.tournament import build_agents, play
+
+#: Where the designated champion is recorded (a committed decision artifact).
+CHAMPION_PATH = os.path.join(os.path.dirname(__file__), "champion.json")
+
+
+def run_match(challenger_agent, champion_agent, games=200, seeds=None, play_fn=play):
+    """Play a seeded match and tally it from the *challenger's* point of view.
+
+    Sides alternate each game to cancel any first-player advantage; the raw
+    result is negated on games where the challenger plays second. `seeds`
+    overrides the default `range(games)` (and sets the game count).
+    """
+    if seeds is None:
+        seeds = range(games)
+    wins = losses = ties = 0
+    for i, seed in enumerate(seeds):
+        if i % 2 == 0:
+            r = play_fn(challenger_agent, champion_agent, seed)
+        else:
+            r = -play_fn(champion_agent, challenger_agent, seed)
+        if r > 0:
+            wins += 1
+        elif r < 0:
+            losses += 1
+        else:
+            ties += 1
+    return Record(wins, losses, ties)
+
+
+def round_robin_rank(agents, games=20, play_fn=play):
+    """Round-robin among `agents` (a {label: agent} map); rank by win-rate.
+
+    Returns a list of `(label, win_rate, wins, played)` ordered best first.
+    """
+    labels = list(agents)
+    wins = {n: 0 for n in labels}
+    played = {n: 0 for n in labels}
+    for a, b in itertools.combinations(labels, 2):
+        for g in range(games):
+            r = play_fn(agents[a], agents[b], g) if g % 2 == 0 else -play_fn(agents[b], agents[a], g)
+            played[a] += 1
+            played[b] += 1
+            if r > 0:
+                wins[a] += 1
+            elif r < 0:
+                wins[b] += 1
+    ranking = [
+        (n, wins[n] / played[n] if played[n] else 0.0, wins[n], played[n])
+        for n in labels
+    ]
+    ranking.sort(key=lambda row: row[1], reverse=True)
+    return ranking
+
+
+def designate_champion(names, games=20, play_fn=play, build=build_agents):
+    """Run a round-robin among `names` and return the strongest label.
+
+    `build` maps names to agents (built-ins like "starter"/"random" pass through
+    as strings); it is injectable so the ranking logic can be tested without
+    running real games.
+    """
+    ranking = round_robin_rank(build(names), games=games, play_fn=play_fn)
+    return ranking[0][0]
+
+
+def save_champion(path, name, games, ranking):
+    """Record the designated champion + the ranking that chose it (JSON)."""
+    payload = {
+        "champion": name,
+        "games": games,
+        "ranking": [
+            {"name": n, "win_rate": wr, "wins": w, "played": p}
+            for (n, wr, w, p) in ranking
+        ],
+    }
+    with open(path, "w") as fh:
+        json.dump(payload, fh, indent=2)
+        fh.write("\n")
+
+
+def load_champion(path):
+    with open(path) as fh:
+        return json.load(fh)["champion"]
+
+
+def current_champion(path=CHAMPION_PATH):
+    """The champion an experiment measures against, per ADR-0007."""
+    return load_champion(path)
+
+
+def promotion_test(
+    challenger_name,
+    champion_name=None,
+    games=200,
+    bar=0.55,
+    alpha=0.05,
+    play_fn=play,
+    build=build_agents,
+):
+    """Run the ADR-0007 promotion test: challenger vs champion over seeded games."""
+    if champion_name is None:
+        champion_name = current_champion()
+    agents = build([challenger_name, champion_name])
+    record = run_match(
+        agents[challenger_name], agents[champion_name], games=games, play_fn=play_fn
+    )
+    return PromotionResult(challenger_name, champion_name, record, bar=bar, alpha=alpha)
+
+
+# --- CLI: thin glue over the tested functions above ---
+
+def main(argv=None):
+    import argparse
+    import sys
+
+    from strategies import REGISTRY
+
+    ap = argparse.ArgumentParser(description="robriculture promotion test / champion designation")
+    ap.add_argument("challenger", nargs="?", help="strategy name to test (omit with --designate)")
+    ap.add_argument("--champion", help="opponent name (default: the recorded champion)")
+    ap.add_argument("--games", type=int, default=200, help="seeded games (default 200)")
+    ap.add_argument("--bar", type=float, default=0.55, help="win-rate bar (default 0.55)")
+    ap.add_argument("--alpha", type=float, default=0.05, help="significance level (default 0.05)")
+    ap.add_argument("--designate", action="store_true",
+                    help="run a round-robin and record the strongest as champion")
+    ap.add_argument("names", nargs="*", help="agents to rank (for --designate; default: all + built-ins)")
+    args = ap.parse_args(argv)
+
+    if args.designate:
+        from harness.tournament import BUILTINS
+        names = args.names or (list(REGISTRY) + list(BUILTINS))
+        print(f"Designating champion among {names} ({args.games} games/pairing)...")
+        ranking = round_robin_rank(build_agents(names), games=args.games)
+        champ = ranking[0][0]
+        save_champion(CHAMPION_PATH, champ, args.games, ranking)
+        for name, wr, w, p in ranking:
+            print(f"  {name:16s} {wr:6.1%}  ({w}/{p})")
+        print(f"\nChampion: {champ}  -> {CHAMPION_PATH}")
+        return 0
+
+    if not args.challenger:
+        ap.error("provide a challenger name, or use --designate")
+    res = promotion_test(args.challenger, args.champion, games=args.games,
+                         bar=args.bar, alpha=args.alpha)
+    r = res.record
+    print(f"{res.challenger} vs {res.champion} ({r.games} seeded games)")
+    print(f"  wins {r.wins}  losses {r.losses}  ties {r.ties}")
+    print(f"  win-rate {r.win_rate:.1%} (decisive {r.decisive})  tie-rate {r.tie_rate:.1%}")
+    print(f"  binomial p={r.p_value:.4g}  bar={res.bar:.0%}  alpha={res.alpha}")
+    print(f"  => {'PROMOTE' if res.passed else 'REJECT'}")
+    return 0 if res.passed else 1
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
