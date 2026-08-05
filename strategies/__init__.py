@@ -12,6 +12,7 @@ REGISTRY = {
     "planner": "strategies.planner",
     "capital_rush": "strategies.capital_rush",
     "market_timer": "strategies.market_timer",
+    "smart_seller": "strategies.smart_seller",
 }
 
 
