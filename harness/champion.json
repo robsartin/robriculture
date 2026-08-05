@@ -1,54 +1,30 @@
 {
-  "champion": "greedy_horizon",
-  "games": 6,
+  "champion": "hired_hands",
+  "games": 12,
   "ranking": [
     {
-      "name": "greedy_horizon",
+      "name": "hired_hands",
       "win_rate": 1.0,
-      "wins": 42.0,
-      "played": 42.0
-    },
-    {
-      "name": "starter",
-      "win_rate": 0.8571428571428571,
       "wins": 36.0,
-      "played": 42.0
+      "played": 36.0
     },
     {
-      "name": "lean",
-      "win_rate": 0.14285714285714285,
-      "wins": 6.0,
-      "played": 42.0
+      "name": "routed",
+      "win_rate": 0.6666666666666666,
+      "wins": 24.0,
+      "played": 36.0
     },
     {
-      "name": "greedy",
-      "win_rate": 0.14285714285714285,
-      "wins": 6.0,
-      "played": 42.0
+      "name": "smart_seller",
+      "win_rate": 0.3333333333333333,
+      "wins": 12.0,
+      "played": 36.0
     },
     {
-      "name": "planner",
-      "win_rate": 0.14285714285714285,
-      "wins": 6.0,
-      "played": 42.0
-    },
-    {
-      "name": "capital_rush",
-      "win_rate": 0.14285714285714285,
-      "wins": 6.0,
-      "played": 42.0
-    },
-    {
-      "name": "market_timer",
-      "win_rate": 0.14285714285714285,
-      "wins": 6.0,
-      "played": 42.0
-    },
-    {
-      "name": "random",
+      "name": "greedy_horizon",
       "win_rate": 0.0,
       "wins": 0.0,
-      "played": 42.0
+      "played": 36.0
     }
   ]
 }

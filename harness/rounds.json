@@ -36,5 +36,49 @@
       }
     },
     "round": 1
+  },
+  {
+    "games": 10,
+    "results": {
+      "hired_hands": {
+        "wins": 30,
+        "played": 30
+      },
+      "routed": {
+        "wins": 20,
+        "played": 30
+      },
+      "smart_seller": {
+        "wins": 10,
+        "played": 30
+      },
+      "greedy_horizon": {
+        "wins": 0,
+        "played": 30
+      }
+    },
+    "round": 2
+  },
+  {
+    "games": 12,
+    "results": {
+      "hired_hands": {
+        "wins": 36,
+        "played": 36
+      },
+      "routed": {
+        "wins": 24,
+        "played": 36
+      },
+      "smart_seller": {
+        "wins": 12,
+        "played": 36
+      },
+      "greedy_horizon": {
+        "wins": 0,
+        "played": 36
+      }
+    },
+    "round": 3
   }
 ]

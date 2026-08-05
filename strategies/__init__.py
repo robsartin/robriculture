@@ -1,24 +1,29 @@
-"""Strategy registry.
+"""Strategy registry — auto-discovered.
 
-Every strategy module exposes a module-level `STRATEGY` (a Strategy subclass).
-The registry lets the harness and the build script refer to strategies by a
-short name. Add new strategies here.
+Every module in this package that exposes a module-level ``STRATEGY`` (a
+``Strategy`` subclass) is registered automatically, keyed by ``STRATEGY.name``.
+Adding a strategy is just dropping a file here — no manual edit to this file —
+so parallel experiments land without ever conflicting on the registry.
 """
 
-REGISTRY = {
-    "lean": "strategies.lean",
-    "greedy": "strategies.greedy",
-    "greedy_horizon": "strategies.greedy_horizon",
-    "planner": "strategies.planner",
-    "capital_rush": "strategies.capital_rush",
-    "market_timer": "strategies.market_timer",
-}
+from __future__ import annotations
+
+import importlib
+import pkgutil
+
+REGISTRY: dict[str, str] = {}
+
+for _module in pkgutil.iter_modules(__path__):
+    if _module.name.startswith("_"):
+        continue
+    _mod = importlib.import_module(f"{__name__}.{_module.name}")
+    _strategy = getattr(_mod, "STRATEGY", None)
+    if _strategy is not None:
+        REGISTRY[getattr(_strategy, "name", _module.name)] = f"{__name__}.{_module.name}"
 
 
 def load(name):
-    """Import a strategy module by short name and return its STRATEGY class."""
-    import importlib
+    """Import a strategy module by its registered name and return its STRATEGY."""
     if name not in REGISTRY:
         raise KeyError(f"unknown strategy {name!r}; known: {sorted(REGISTRY)}")
-    mod = importlib.import_module(REGISTRY[name])
-    return mod.STRATEGY
+    return importlib.import_module(REGISTRY[name]).STRATEGY
