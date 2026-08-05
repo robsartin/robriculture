@@ -1,0 +1,16 @@
+# Kaggriculture agent development
+# Python 3.11 recommended (Kaggle's runtime; 3.10+ works locally)
+
+# Core simulator + CLI. kaggle-environments is pinned to the version verified
+# working with the kaggriculture env. Keep this matched to what Kaggle runs to
+# avoid "works locally, errors on submit" surprises — bump it if the leaderboard
+# runtime updates.
+kaggle-environments==1.32.4
+kaggle>=1.6.0            # CLI, only needed for submitting/downloading
+
+# Pulled in by kaggle-environments; pinned for reproducibility.
+numpy==2.4.4
+
+# --- Dev / tuning tooling (optional but recommended) ---
+pytest>=8.0             # local tournament harness + regression tests
+tqdm>=4.66              # progress bars for batch game runs

@@ -1,0 +1,43 @@
+# --- Python virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Python bytecode / caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Kaggle credentials (NEVER commit) ---
+kaggle.json
+.kaggle/
+*.kaggle
+
+# --- Simulation artifacts ---
+# Replays, logs, and rendered games can get large and are reproducible.
+replays/
+logs/
+*.replay.json
+replay*.json
+render.html
+
+# --- Submission build artifacts ---
+submission.tar.gz
+*.tar.gz
+
+# --- Trained models / large binaries ---
+# Uncomment if you keep weights out of git (recommend Git LFS or a release
+# asset instead). Leave commented if a small bundled policy IS the submission.
+# *.pkl
+# *.pt
+# *.npz
+
+# --- Editor / OS cruft ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
