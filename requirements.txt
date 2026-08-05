@@ -13,4 +13,5 @@ numpy==2.4.4
 
 # --- Dev / tuning tooling (optional but recommended) ---
 pytest>=8.0             # local tournament harness + regression tests
+pytest-cov>=5.0         # coverage measurement + CI gate (line>=85%, branch>=65%)
 tqdm>=4.66              # progress bars for batch game runs

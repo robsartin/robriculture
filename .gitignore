@@ -41,3 +41,11 @@ submission.tar.gz
 .vscode/
 *.swp
 .DS_Store
+
+# --- Coverage artifacts ---
+.coverage
+coverage.json
+htmlcov/
+
+# --- Agent worktrees (local, transient) ---
+.claude/worktrees/

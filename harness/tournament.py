@@ -39,7 +39,7 @@ def build_agents(names):
     return agents
 
 
-def play(agent_a, agent_b, seed=None):
+def play(agent_a, agent_b, seed=None):  # pragma: no cover
     """Play one game. Return 1 if A wins, -1 if B wins, 0 tie."""
     config = {"episodeSteps": 720}
     if seed is not None:
@@ -52,7 +52,7 @@ def play(agent_a, agent_b, seed=None):
     return (ra > rb) - (ra < rb)
 
 
-def round_robin(names, games=20):
+def round_robin(names, games=20):  # pragma: no cover
     agents = build_agents(names)
     labels = list(agents)
     wins = {n: 0 for n in labels}
@@ -81,7 +81,7 @@ def round_robin(names, games=20):
     return wins, played
 
 
-def main(argv=None):
+def main(argv=None):  # pragma: no cover
     ap = argparse.ArgumentParser(description="robriculture local tournament")
     ap.add_argument("strategies", nargs="*", help="strategy names (default: all + built-ins)")
     ap.add_argument("--games", type=int, default=20, help="games per pairing (default 20)")

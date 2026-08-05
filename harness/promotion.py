@@ -204,7 +204,7 @@ def promotion_test(
 
 # --- CLI: thin glue over the tested functions above ---
 
-def main(argv=None):
+def main(argv=None):  # pragma: no cover
     import argparse
     import sys
 

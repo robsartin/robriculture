@@ -23,8 +23,28 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Coverage gate (#10) layers on here: add pytest-cov to requirements and
-      # append `--cov=kaggisim --cov=strategies --cov-report=term-missing
-      # --cov-fail-under=<N>` to this command (or add a dependent job).
-      - name: Run tests
-        run: pytest -q
+      - name: Run tests with coverage
+        run: pytest -q --cov --cov-branch --cov-report=term-missing --cov-report=json
+
+      # Enforce line >= 85% AND branch >= 65% (#10). coverage.py's own
+      # fail_under is a single number, so we check the two dimensions from the
+      # JSON report explicitly. Config (source, omit, exclusions) is in
+      # pyproject.toml.
+      - name: Enforce coverage gates (line >= 85%, branch >= 65%)
+        run: |
+          python - <<'PY'
+          import json, sys
+          t = json.load(open("coverage.json"))["totals"]
+          line = 100.0 * t["covered_lines"] / t["num_statements"] if t["num_statements"] else 100.0
+          branch = 100.0 * t["covered_branches"] / t["num_branches"] if t["num_branches"] else 100.0
+          print(f"line coverage:   {line:.1f}%  (gate 85%)")
+          print(f"branch coverage: {branch:.1f}%  (gate 65%)")
+          failures = []
+          if line < 85.0:
+              failures.append(f"line {line:.1f}% < 85%")
+          if branch < 65.0:
+              failures.append(f"branch {branch:.1f}% < 65%")
+          if failures:
+              sys.exit("COVERAGE GATE FAILED: " + "; ".join(failures))
+          print("coverage gate passed")
+          PY

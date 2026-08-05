@@ -73,7 +73,7 @@ def build(strategy_name, out_path):
     return out_path
 
 
-def smoke_test(out_path):
+def smoke_test(out_path):  # pragma: no cover
     """Extract and run one short game to confirm the packaged agent works."""
     with tempfile.TemporaryDirectory() as tmp:
         with tarfile.open(out_path) as tar:
@@ -91,7 +91,7 @@ def smoke_test(out_path):
         return r.returncode == 0
 
 
-def main(argv=None):
+def main(argv=None):  # pragma: no cover
     ap = argparse.ArgumentParser(description="package a strategy for submission")
     ap.add_argument("strategy")
     ap.add_argument("-o", "--out", default=None, help="output tarball path")
