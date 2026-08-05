@@ -166,3 +166,21 @@ def test_promotion_test_runs_real_games():
     res = promotion_test("greedy", "random", games=2)
     assert res.record.games == 2
     assert res.challenger == "greedy" and res.champion == "random"
+
+
+def test_current_champion_reads_the_recorded_file():
+    from harness.promotion import current_champion
+
+    assert current_champion() == "starter"
+
+
+def test_promotion_test_defaults_to_the_recorded_champion():
+    # No real games: inject a fake play and a fake agent-builder.
+    res = promotion_test(
+        "greedy",
+        games=2,
+        play_fn=lambda a, b, seed: 1,
+        build=lambda names: {n: n for n in names},
+    )
+    assert res.champion == "starter"
+    assert res.record.games == 2

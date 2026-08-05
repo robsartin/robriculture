@@ -1,0 +1,18 @@
+# Coverage configuration for the CI gate (issue #10).
+#
+# We measure our own packages and gate CI on line >= 85% and branch >= 65%.
+# Genuine integration entrypoints — the CLI `main()`s, the real-game loops in
+# the tournament, and the subprocess smoke test — are marked `# pragma: no
+# cover` at their `def`, because they exercise the live simulator/OS rather than
+# unit-testable logic. Everything else is expected to be covered by tests.
+
+[tool.coverage.run]
+branch = true
+source = ["kaggisim", "strategies", "harness", "build"]
+omit = ["tests/*", "conftest.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if __name__ == .__main__.:",
+]
