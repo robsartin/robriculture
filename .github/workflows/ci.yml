@@ -1,0 +1,30 @@
+name: CI
+
+# Run the full test suite on every push and PR: the no-crash gate (ADR-0006)
+# and the ADR-honesty checks (#3) all live under `pytest`.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Coverage gate (#10) layers on here: add pytest-cov to requirements and
+      # append `--cov=kaggisim --cov=strategies --cov-report=term-missing
+      # --cov-fail-under=<N>` to this command (or add a dependent job).
+      - name: Run tests
+        run: pytest -q
