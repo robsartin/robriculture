@@ -23,3 +23,4 @@ We use the lightweight [Michael Nygard format](https://cognitect.com/blog/2011/1
 | [0004](0004-python-only-agent.md) | Python-only agent | Accepted |
 | [0005](0005-cc-by-4.0-and-open-development.md) | CC-BY 4.0 and open development | Accepted |
 | [0006](0006-fail-safe-never-crash.md) | Fail safe, never crash | Accepted |
+| [0007](0007-experiment-driven-development-process.md) | Experiment-driven development process | Accepted |
