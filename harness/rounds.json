@@ -1,0 +1,40 @@
+[
+  {
+    "games": 6,
+    "results": {
+      "greedy_horizon": {
+        "wins": 42,
+        "played": 42
+      },
+      "starter": {
+        "wins": 36,
+        "played": 42
+      },
+      "lean": {
+        "wins": 6,
+        "played": 42
+      },
+      "greedy": {
+        "wins": 6,
+        "played": 42
+      },
+      "planner": {
+        "wins": 6,
+        "played": 42
+      },
+      "capital_rush": {
+        "wins": 6,
+        "played": 42
+      },
+      "market_timer": {
+        "wins": 6,
+        "played": 42
+      },
+      "random": {
+        "wins": 0,
+        "played": 42
+      }
+    },
+    "round": 1
+  }
+]

@@ -1,48 +1,54 @@
 {
-  "champion": "starter",
+  "champion": "greedy_horizon",
   "games": 6,
   "ranking": [
     {
-      "name": "starter",
+      "name": "greedy_horizon",
       "win_rate": 1.0,
-      "wins": 36,
-      "played": 36
+      "wins": 42.0,
+      "played": 42.0
+    },
+    {
+      "name": "starter",
+      "win_rate": 0.8571428571428571,
+      "wins": 36.0,
+      "played": 42.0
     },
     {
       "name": "lean",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "win_rate": 0.14285714285714285,
+      "wins": 6.0,
+      "played": 42.0
     },
     {
       "name": "greedy",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "win_rate": 0.14285714285714285,
+      "wins": 6.0,
+      "played": 42.0
     },
     {
       "name": "planner",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "win_rate": 0.14285714285714285,
+      "wins": 6.0,
+      "played": 42.0
     },
     {
       "name": "capital_rush",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "win_rate": 0.14285714285714285,
+      "wins": 6.0,
+      "played": 42.0
     },
     {
       "name": "market_timer",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "win_rate": 0.14285714285714285,
+      "wins": 6.0,
+      "played": 42.0
     },
     {
       "name": "random",
       "win_rate": 0.0,
-      "wins": 0,
-      "played": 36
+      "wins": 0.0,
+      "played": 42.0
     }
   ]
 }
