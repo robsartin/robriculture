@@ -25,14 +25,20 @@ CONFIG_DEFAULTS = {
 LAND_COSTS = [1000, 2000, 4000]   # cost of each successive quadrant
 
 # --- Crops ---
-# seed_cost, base_price, first_yield_day, max_yield_day, ongoing?, max_yield
+# seed_cost, base_price, first_yield_day, max_yield_day, production interval,
+#   ongoing?, max_yield
 #   (max_yield is the fertilized cap; unfertilized cap in comment where different)
+#   `interval` is the days between production ticks the sim uses for ongoing
+#   crops (0 for one-time crops, which yield once in their maturity window).
+# Values reconciled field-for-field against the installed sim
+# (kaggle_environments/envs/kaggriculture/kaggriculture.py) — see #16 and the
+# claim check in tests/test_economy_matches_sim.py.
 CROPS = {
-    "WHEAT":      {"seed": 10,  "base": 25,  "first": 2,  "max_day": 4,  "ongoing": False, "max_yield": 6},   # 4 unfert
-    "CARROT":     {"seed": 20,  "base": 35,  "first": 2,  "max_day": 3,  "ongoing": False, "max_yield": 4},   # 3 unfert
-    "TOMATO":     {"seed": 50,  "base": 60,  "first": 8,  "max_day": 11, "ongoing": True,  "max_yield": 4},   # 4 scheduled
-    "STRAWBERRY": {"seed": 100, "base": 120, "first": 10, "max_day": 16, "ongoing": True,  "max_yield": 4},
-    "MELON":      {"seed": 80,  "base": 250, "first": 10, "max_day": 10, "ongoing": False, "max_yield": 6},
+    "WHEAT":      {"seed": 10,  "base": 25,  "first": 2,  "max_day": 4,  "interval": 0, "ongoing": False, "max_yield": 6},   # 4 unfert
+    "CARROT":     {"seed": 20,  "base": 35,  "first": 2,  "max_day": 3,  "interval": 0, "ongoing": False, "max_yield": 4},   # 3 unfert
+    "TOMATO":     {"seed": 50,  "base": 60,  "first": 8,  "max_day": 8,  "interval": 1, "ongoing": True,  "max_yield": 4},   # produces every day after first yield
+    "STRAWBERRY": {"seed": 100, "base": 120, "first": 10, "max_day": 10, "interval": 2, "ongoing": True,  "max_yield": 4},   # produces every 2 days after first yield
+    "MELON":      {"seed": 80,  "base": 250, "first": 10, "max_day": 12, "interval": 0, "ongoing": False, "max_yield": 6},
 }
 
 # --- Animals ---
