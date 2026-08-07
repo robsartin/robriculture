@@ -1,48 +1,30 @@
 {
-  "champion": "starter",
-  "games": 6,
+  "champion": "hired_hands",
+  "games": 12,
   "ranking": [
     {
-      "name": "starter",
+      "name": "hired_hands",
       "win_rate": 1.0,
-      "wins": 36,
-      "played": 36
+      "wins": 36.0,
+      "played": 36.0
     },
     {
-      "name": "lean",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "name": "routed",
+      "win_rate": 0.6666666666666666,
+      "wins": 24.0,
+      "played": 36.0
     },
     {
-      "name": "greedy",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
+      "name": "smart_seller",
+      "win_rate": 0.3333333333333333,
+      "wins": 12.0,
+      "played": 36.0
     },
     {
-      "name": "planner",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
-    },
-    {
-      "name": "capital_rush",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
-    },
-    {
-      "name": "market_timer",
-      "win_rate": 0.16666666666666666,
-      "wins": 6,
-      "played": 36
-    },
-    {
-      "name": "random",
+      "name": "greedy_horizon",
       "win_rate": 0.0,
-      "wins": 0,
-      "played": 36
+      "wins": 0.0,
+      "played": 36.0
     }
   ]
 }
