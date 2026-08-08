@@ -1,30 +1,36 @@
 {
-  "champion": "hired_hands",
-  "games": 12,
+  "champion": "dairy_hands",
+  "games": 20,
   "ranking": [
     {
-      "name": "hired_hands",
+      "name": "dairy_hands",
       "win_rate": 1.0,
-      "wins": 36.0,
-      "played": 36.0
+      "wins": 80,
+      "played": 80
+    },
+    {
+      "name": "catch_hands",
+      "win_rate": 0.75,
+      "wins": 60,
+      "played": 80
+    },
+    {
+      "name": "wide_hands",
+      "win_rate": 0.5,
+      "wins": 40,
+      "played": 80
+    },
+    {
+      "name": "hired_hands",
+      "win_rate": 0.25,
+      "wins": 20,
+      "played": 80
     },
     {
       "name": "routed",
-      "win_rate": 0.6666666666666666,
-      "wins": 24.0,
-      "played": 36.0
-    },
-    {
-      "name": "smart_seller",
-      "win_rate": 0.3333333333333333,
-      "wins": 12.0,
-      "played": 36.0
-    },
-    {
-      "name": "greedy_horizon",
       "win_rate": 0.0,
-      "wins": 0.0,
-      "played": 36.0
+      "wins": 0,
+      "played": 80
     }
   ]
 }
