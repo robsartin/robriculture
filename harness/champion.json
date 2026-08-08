@@ -1,36 +1,42 @@
 {
-  "champion": "dairy_hands",
+  "champion": "mixed_hands",
   "games": 20,
   "ranking": [
     {
-      "name": "dairy_hands",
+      "name": "mixed_hands",
       "win_rate": 1.0,
+      "wins": 100,
+      "played": 100
+    },
+    {
+      "name": "dairy_hands",
+      "win_rate": 0.8,
       "wins": 80,
-      "played": 80
+      "played": 100
     },
     {
       "name": "catch_hands",
-      "win_rate": 0.75,
+      "win_rate": 0.6,
       "wins": 60,
-      "played": 80
+      "played": 100
     },
     {
       "name": "wide_hands",
-      "win_rate": 0.5,
+      "win_rate": 0.4,
       "wins": 40,
-      "played": 80
+      "played": 100
     },
     {
       "name": "hired_hands",
-      "win_rate": 0.25,
+      "win_rate": 0.2,
       "wins": 20,
-      "played": 80
+      "played": 100
     },
     {
       "name": "routed",
       "win_rate": 0.0,
       "wins": 0,
-      "played": 80
+      "played": 100
     }
   ]
 }
