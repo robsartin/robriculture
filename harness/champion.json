@@ -1,48 +1,54 @@
 {
-  "champion": "livestock_hand",
+  "champion": "ranch_hands",
   "games": 20,
   "ranking": [
     {
-      "name": "livestock_hand",
+      "name": "ranch_hands",
       "win_rate": 1.0,
+      "wins": 140,
+      "played": 140
+    },
+    {
+      "name": "livestock_hand",
+      "win_rate": 0.8571428571428571,
       "wins": 120,
-      "played": 120
+      "played": 140
     },
     {
       "name": "wheat_hands",
-      "win_rate": 0.8333333333333334,
+      "win_rate": 0.7142857142857143,
       "wins": 100,
-      "played": 120
+      "played": 140
     },
     {
       "name": "mixed_hands",
-      "win_rate": 0.6666666666666666,
+      "win_rate": 0.5714285714285714,
       "wins": 80,
-      "played": 120
+      "played": 140
     },
     {
       "name": "dairy_hands",
-      "win_rate": 0.5,
+      "win_rate": 0.42857142857142855,
       "wins": 60,
-      "played": 120
+      "played": 140
     },
     {
       "name": "catch_hands",
-      "win_rate": 0.3333333333333333,
+      "win_rate": 0.2857142857142857,
       "wins": 40,
-      "played": 120
+      "played": 140
     },
     {
       "name": "wide_hands",
-      "win_rate": 0.16666666666666666,
+      "win_rate": 0.14285714285714285,
       "wins": 20,
-      "played": 120
+      "played": 140
     },
     {
       "name": "hired_hands",
       "win_rate": 0.0,
       "wins": 0,
-      "played": 120
+      "played": 140
     }
   ]
 }
