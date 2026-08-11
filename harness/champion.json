@@ -1,54 +1,60 @@
 {
-  "champion": "ranch_hands",
+  "champion": "market_farmer",
   "games": 20,
   "ranking": [
     {
-      "name": "ranch_hands",
+      "name": "market_farmer",
       "win_rate": 1.0,
+      "wins": 160,
+      "played": 160
+    },
+    {
+      "name": "ranch_hands",
+      "win_rate": 0.875,
       "wins": 140,
-      "played": 140
+      "played": 160
     },
     {
       "name": "livestock_hand",
-      "win_rate": 0.8571428571428571,
+      "win_rate": 0.75,
       "wins": 120,
-      "played": 140
+      "played": 160
     },
     {
       "name": "wheat_hands",
-      "win_rate": 0.7142857142857143,
+      "win_rate": 0.625,
       "wins": 100,
-      "played": 140
+      "played": 160
     },
     {
       "name": "mixed_hands",
-      "win_rate": 0.5714285714285714,
+      "win_rate": 0.5,
       "wins": 80,
-      "played": 140
+      "played": 160
     },
     {
       "name": "dairy_hands",
-      "win_rate": 0.42857142857142855,
+      "win_rate": 0.375,
       "wins": 60,
-      "played": 140
+      "played": 160
     },
     {
       "name": "catch_hands",
-      "win_rate": 0.2857142857142857,
+      "win_rate": 0.25,
       "wins": 40,
-      "played": 140
+      "played": 160
     },
     {
       "name": "wide_hands",
-      "win_rate": 0.14285714285714285,
+      "win_rate": 0.125,
       "wins": 20,
-      "played": 140
+      "played": 160
     },
     {
       "name": "hired_hands",
       "win_rate": 0.0,
       "wins": 0,
-      "played": 140
+      "played": 160
     }
   ]
 }

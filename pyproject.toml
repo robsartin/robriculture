@@ -9,7 +9,7 @@
 [tool.coverage.run]
 branch = true
 source = ["kaggisim", "strategies", "harness", "build"]
-omit = ["tests/*", "conftest.py"]
+omit = ["tests/*", "conftest.py", "harness/market_bench.py"]
 
 [tool.coverage.report]
 show_missing = true
