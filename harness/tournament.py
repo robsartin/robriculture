@@ -39,6 +39,15 @@ def build_agents(names):
     return agents
 
 
+def benchmark_names():
+    """Registered strategy names flagged as readonly benchmark opponents.
+
+    Derived from the registry by reading each strategy's `benchmark` class flag,
+    so no edit to strategies/__init__.py is needed to opt one in (CLAUDE.md).
+    """
+    return {n for n in REGISTRY if getattr(load(n), "benchmark", False)}
+
+
 def play(agent_a, agent_b, seed=None):  # pragma: no cover
     """Play one game. Return 1 if A wins, -1 if B wins, 0 tie."""
     config = {"episodeSteps": 720}

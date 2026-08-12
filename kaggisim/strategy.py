@@ -23,6 +23,12 @@ class Strategy:
     #: Human-readable name, shown in the tournament harness.
     name: str = "unnamed"
 
+    #: When True, this strategy is a fixed "readonly" benchmark opponent: it is
+    #: always available as a tournament/promotion opponent, but is never eligible
+    #: to be designated champion (see harness.promotion.top_contender). Default
+    #: False — ordinary strategies are champion contenders.
+    benchmark: bool = False
+
     def act(self, state) -> dict:
         raise NotImplementedError
 
