@@ -49,3 +49,11 @@ htmlcov/
 
 # --- Agent worktrees (local, transient) ---
 .claude/worktrees/
+
+# --- Local Kaggle recon / notebook pulls (large, transient; not part of the repo) ---
+baseline/
+findings/
+kaito/
+meta/
+rank/
+score_kaggle.sh
