@@ -147,15 +147,30 @@ def round_robin_rank(agents, games=20, play_fn=play):
     return ranking
 
 
-def designate_champion(names, games=20, play_fn=play, build=build_agents):
-    """Run a round-robin among `names` and return the strongest label.
+def top_contender(ranking, benchmarks):
+    """The highest-ranked label in `ranking` that is not a benchmark opponent.
+
+    `ranking` is best-first `(label, win_rate, wins, played)` rows. Benchmarks
+    shape the ranking (as opponents) but can never be champion, so we skip them.
+    Raises ValueError if every label is a benchmark (no valid champion).
+    """
+    for label, *_rest in ranking:
+        if label not in benchmarks:
+            return label
+    raise ValueError("no non-benchmark contender in ranking")
+
+
+def designate_champion(names, games=20, play_fn=play, build=build_agents, benchmarks=None):
+    """Run a round-robin among `names` and return the strongest *non-benchmark* label.
 
     `build` maps names to agents (built-ins like "starter"/"random" pass through
     as strings); it is injectable so the ranking logic can be tested without
-    running real games.
+    running real games. `benchmarks` (a set of names) are opponents but never
+    champion candidates.
     """
+    benchmarks = benchmarks or set()
     ranking = round_robin_rank(build(names), games=games, play_fn=play_fn)
-    return ranking[0][0]
+    return top_contender(ranking, benchmarks)
 
 
 def save_champion(path, name, games, ranking):
@@ -222,11 +237,11 @@ def main(argv=None):  # pragma: no cover
     args = ap.parse_args(argv)
 
     if args.designate:
-        from harness.tournament import BUILTINS
+        from harness.tournament import BUILTINS, benchmark_names
         names = args.names or (list(REGISTRY) + list(BUILTINS))
         print(f"Designating champion among {names} ({args.games} games/pairing)...")
         ranking = round_robin_rank(build_agents(names), games=args.games)
-        champ = ranking[0][0]
+        champ = top_contender(ranking, benchmark_names())
         save_champion(CHAMPION_PATH, champ, args.games, ranking)
         for name, wr, w, p in ranking:
             print(f"  {name:16s} {wr:6.1%}  ({w}/{p})")

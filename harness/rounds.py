@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 
-from harness.promotion import CHAMPION_PATH, round_robin_rank, save_champion
+from harness.promotion import CHAMPION_PATH, round_robin_rank, save_champion, top_contender
 from harness.tournament import BUILTINS, build_agents, play
 
 #: Default recent-round window for champion selection (see #12; confirmed N=3).
@@ -86,12 +86,16 @@ def run_round(names, games=20, play_fn=play, build=build_agents):
 
 def run_and_record(names, games=20, window=DEFAULT_WINDOW, decay=None,
                    rounds_path=ROUNDS_PATH, champion_path=CHAMPION_PATH,
-                   play_fn=play, build=build_agents):
-    """Play a round, append it to history, re-designate the champion from the window."""
+                   play_fn=play, build=build_agents, benchmarks=None):
+    """Play a round, append it to history, re-designate the champion from the window.
+
+    `benchmarks` (a set of names) are opponents in the round but never champion.
+    """
+    benchmarks = benchmarks or set()
     rnd = run_round(names, games=games, play_fn=play_fn, build=build)
     append_round(rounds_path, rnd)
     ranking = windowed_ranking(load_rounds(rounds_path), window=window, decay=decay)
-    champion = ranking[0][0]
+    champion = top_contender(ranking, benchmarks)
     save_champion(champion_path, champion, games, ranking)
     return champion, ranking
 
@@ -99,6 +103,7 @@ def run_and_record(names, games=20, window=DEFAULT_WINDOW, decay=None,
 def main(argv=None):  # pragma: no cover
     import argparse
 
+    from harness.tournament import benchmark_names
     from strategies import REGISTRY
 
     ap = argparse.ArgumentParser(description="run a round and update the champion (windowed)")
@@ -109,7 +114,10 @@ def main(argv=None):  # pragma: no cover
     args = ap.parse_args(argv)
     names = args.names or (list(REGISTRY) + list(BUILTINS))
     print(f"Running a round over {names} ({args.games} games/pairing)...")
-    champion, ranking = run_and_record(names, games=args.games, window=args.window, decay=args.decay)
+    champion, ranking = run_and_record(
+        names, games=args.games, window=args.window, decay=args.decay,
+        benchmarks=benchmark_names(),
+    )
     for name, wr, w, p in ranking:
         print(f"  {name:16s} {wr:6.1%}  ({w:g}/{p:g})")
     print(f"\nChampion (window={args.window}): {champion}")

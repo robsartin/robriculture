@@ -1,0 +1,62 @@
+"""A benchmark opponent shapes the ranking but is never chosen as champion."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from harness import promotion, rounds
+
+
+def test_top_contender_skips_a_leading_benchmark():
+    ranking = [("meta_bot", 0.9, 90, 100), ("ranch_hands", 0.7, 70, 100)]
+    assert promotion.top_contender(ranking, {"meta_bot"}) == "ranch_hands"
+
+
+def test_top_contender_returns_the_leader_when_no_benchmark_leads():
+    ranking = [("ranch_hands", 0.8, 80, 100), ("meta_bot", 0.6, 60, 100)]
+    assert promotion.top_contender(ranking, {"meta_bot"}) == "ranch_hands"
+
+
+def test_top_contender_raises_when_every_label_is_a_benchmark():
+    ranking = [("meta_bot", 0.9, 90, 100)]
+    with pytest.raises(ValueError):
+        promotion.top_contender(ranking, {"meta_bot"})
+
+
+def test_designate_champion_never_returns_a_benchmark():
+    # A stub round-robin where the benchmark wins outright; the champion must be
+    # the strongest non-benchmark instead.
+    def fake_play(a, b, seed=None):
+        return 1 if a == "meta_bot" else (1 if a == "ranch_hands" else -1)
+
+    def fake_build(names):
+        return {n: n for n in names}
+
+    champ = promotion.designate_champion(
+        ["meta_bot", "ranch_hands", "wide_hands"],
+        games=2, play_fn=fake_play, build=fake_build, benchmarks={"meta_bot"},
+    )
+    assert champ != "meta_bot"
+
+
+def test_run_and_record_writes_a_non_benchmark_champion(tmp_path):
+    # meta_bot dominates the round, but champion.json must name a contender.
+    def fake_play(a, b, seed=None):
+        return 1 if a == "meta_bot" else 0
+
+    def fake_build(names):
+        return {n: n for n in names}
+
+    rounds_path = tmp_path / "rounds.json"
+    champ_path = tmp_path / "champion.json"
+    champ, ranking = rounds.run_and_record(
+        ["meta_bot", "ranch_hands"], games=2,
+        rounds_path=str(rounds_path), champion_path=str(champ_path),
+        play_fn=fake_play, build=fake_build, benchmarks={"meta_bot"},
+    )
+    assert champ != "meta_bot"
+    assert json.loads(champ_path.read_text())["champion"] != "meta_bot"
+    # The benchmark still appears in the recorded ranking (it shaped the round).
+    assert any(row[0] == "meta_bot" for row in ranking)
