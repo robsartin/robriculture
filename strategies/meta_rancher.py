@@ -384,8 +384,87 @@ def _hungry_tiles(beat, tiles):
             and not hh.tile_at(tiles, tp).get("fed_today", False)]
 
 
+def most_at_risk(beat, tiles):
+    """The hungriest placed, unfed animal in `beat`, or ``None`` if all fed.
+
+    An animal escapes after two consecutive unfed days (the sim's
+    ``consecutive_unfed`` tile counter), so among today's unfed animals the one
+    with the highest ``consecutive_unfed`` — closest to that escape threshold —
+    is the most at risk and is returned first. Ties (including the common case
+    of every unfed animal on day one, with no counter yet) keep beat order.
+    """
+    candidates = [
+        (hh.tile_at(tiles, tp).get("consecutive_unfed", 0), tp)
+        for tp, _ in beat
+        if _is_animal(hh.tile_at(tiles, tp))
+        and not hh.tile_at(tiles, tp).get("fed_today", False)
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda c: c[0])[1]
+
+
+def nearest_hungry_beat(pos, tiles, unlocked):
+    """The ``BEATS`` key of the nearest active beat with an unfed animal, or
+    ``None`` if every active beat is fully fed (or none has land unlocked yet).
+
+    Escape valve for the case a beat's own hand still can't keep it fed even
+    once feeding heads to the most-at-risk animal first — most commonly because
+    its dedicated hand (a high ``LIVESTOCK_INDICES`` slot) didn't get hired that
+    day at all, when the wage-driven hire count comes in under ``MAX_HANDS`` in
+    the tail. Lets ``act`` divert an idle non-livestock worker — one whose own
+    melon plot has closed for the season — to help instead of sitting on
+    ``PASS``.
+
+    Ranked by **risk first** (the highest ``consecutive_unfed`` among a beat's
+    hungry animals — closest to the 2-day escape threshold), distance only as
+    the tiebreaker. Distance-only ranking was tried first and starved the
+    farthest beat outright: BEATS[9] (SW, farthest from the shed/NW workers)
+    routinely goes unhired in the tail, but BEATS[8] (SW, closer to NW) is also
+    hungry whenever an idle worker is free, so a pure-nearest rule always sends
+    help to BEATS[8] and never once reaches BEATS[9] (confirmed by a seeded
+    full-game trace: BEATS[9]'s pair escaped at day 20 and was never recovered,
+    while BEATS[8]'s escape at day 25 was rescued and replaced within hours).
+    """
+    candidates = []
+    for idx, beat in BEATS.items():
+        if not beat_active(beat, unlocked):
+            continue
+        hungry = _hungry_tiles(beat, tiles)
+        if not hungry:
+            continue
+        risk = max(hh.tile_at(tiles, tp).get("consecutive_unfed", 0) for tp in hungry)
+        dist = min(abs(pos[0] - tp[0]) + abs(pos[1] - tp[1]) for tp in hungry)
+        candidates.append((-risk, dist, idx))
+    if not candidates:
+        return None
+    return min(candidates)[2]
+
+
 def _empty_pastures(beat, tiles):
     return [tp for tp, _ in beat if _is_empty_pasture(hh.tile_at(tiles, tp))]
+
+
+def _beat_outstanding(beat, tiles) -> bool:
+    """True while `beat` still has a survival-critical chore left today: an
+    un-built pasture, an unplaced/unbought animal, or an unfed animal.
+
+    Deliberately narrower than "every chore done" — harvest / fertilizer
+    collection / care can wait a turn without risking an escape, so once setup
+    and feeding are handled the hand is free to help elsewhere. A full-game
+    trace showed why this matters: gating on "every chore done" (including
+    harvest/fertilizer/care) kept a hand tied to its own already-fed beat until
+    ~hour 17, too late in the day to complete the shed round-trip (pick up
+    wheat, walk to the neighbor, feed) before the day resets; gating on feed
+    alone frees the hand as soon as its own animals are safe, hours earlier.
+    """
+    for tp, _ in beat:
+        tile = hh.tile_at(tiles, tp)
+        if not _is_animal(tile):
+            return True  # pasture / placement setup still pending
+        if not tile.get("fed_today", False):
+            return True
+    return False
 
 
 def livestock_action(pos, beat, tiles, inv, shed, unlocked):
@@ -421,9 +500,12 @@ def livestock_action(pos, beat, tiles, inv, shed, unlocked):
             return ["PICKUP", kind, max(1, want)]
 
     # (3) Feed — survival first. Feed from hand; else head to the shed for wheat.
+    # When the hand can't reach every hungry animal this turn, go to the MOST
+    # at-risk one first (closest to the 2-unfed-days escape threshold) rather
+    # than just the first in beat order.
     if hungry:
         if inv.get("WHEAT", 0) > 0:
-            tp = hungry[0]
+            tp = most_at_risk(beat, tiles) or hungry[0]
             return ["FEED"] if _on(pos, tp) else hh.step_toward(pos, tp)
         if shed.get("WHEAT", 0) > 0 and not _at_shed(pos):
             return hh.step_toward(pos, SHED_TILE)
@@ -493,7 +575,20 @@ class MetaRancherStrategy(Strategy):
         for i, pos in enumerate(positions):
             if i in LIVESTOCK_INDICES and beat_active(BEATS[i], unlocked):
                 inv = inventories[i] if i < len(inventories) else {}
-                actions.append(livestock_action(pos, BEATS[i], tiles, inv, shed, unlocked))
+                # Once this hand's own animals are placed and fed for the day
+                # (harvest / fertilizer / care can wait a turn), it's free to
+                # help the neediest OTHER beat instead — this is the common
+                # end-game slack: a short beat (2 sheep) is safe early while a
+                # beat whose dedicated hand wasn't hired that day (a high
+                # LIVESTOCK_INDEX slot dropped by the wage-driven hire count)
+                # goes untended and needs the shed round-trip started with
+                # hours to spare, not deferred until every other chore is done.
+                target_beat = BEATS[i]
+                if not _beat_outstanding(target_beat, tiles):
+                    other = nearest_hungry_beat(pos, tiles, unlocked)
+                    if other is not None and other != i:
+                        target_beat = BEATS[other]
+                actions.append(livestock_action(pos, target_beat, tiles, inv, shed, unlocked))
                 continue
 
             plot = melon_plot_for(i)
@@ -516,6 +611,17 @@ class MetaRancherStrategy(Strategy):
                     planted_this_turn[crop] = planted_this_turn.get(crop, 0) + 1
                 else:
                     action = ["WATER"] if hh._is_live_plant(tile) else ["PASS"]
+
+            # Idle-worker escape valve: a non-livestock hired hand (never the
+            # farmer, whose plot anchors the shed / fertilize loop) whose own
+            # melon plot has closed for the season and has nothing to do this
+            # turn helps the neediest beat instead of sitting on PASS — only
+            # reached once a beat's own hand still can't keep it fed alone.
+            if action == ["PASS"] and i != 0:
+                target = nearest_hungry_beat(pos, tiles, unlocked)
+                if target is not None:
+                    inv = inventories[i] if i < len(inventories) else {}
+                    action = livestock_action(pos, BEATS[target], tiles, inv, shed, unlocked)
             actions.append(action)
 
         farmer_action = actions[0]
