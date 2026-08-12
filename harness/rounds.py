@@ -70,9 +70,14 @@ def windowed_ranking(rounds, window=DEFAULT_WINDOW, decay=None):
     return ranking
 
 
-def designate_from_history(path=ROUNDS_PATH, window=DEFAULT_WINDOW, decay=None):
-    """The champion implied by the recent-round window."""
-    return windowed_ranking(load_rounds(path), window=window, decay=decay)[0][0]
+def designate_from_history(path=ROUNDS_PATH, window=DEFAULT_WINDOW, decay=None, benchmarks=None):
+    """The champion implied by the recent-round window.
+
+    `benchmarks` (a set of names) shape the ranking as opponents but are never
+    returned as champion (see `harness.promotion.top_contender`).
+    """
+    ranking = windowed_ranking(load_rounds(path), window=window, decay=decay)
+    return top_contender(ranking, benchmarks or set())
 
 
 def run_round(names, games=20, play_fn=play, build=build_agents):

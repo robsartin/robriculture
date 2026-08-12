@@ -41,6 +41,26 @@ def test_designate_champion_never_returns_a_benchmark():
     assert champ != "meta_bot"
 
 
+def test_designate_from_history_excludes_benchmark(tmp_path):
+    # meta_bot leads the windowed ranking, but designate_from_history must skip
+    # it and return the strongest non-benchmark contender.
+    rounds_path = tmp_path / "rounds.json"
+    rounds_path.write_text(json.dumps([
+        {
+            "round": 1,
+            "games": 2,
+            "results": {
+                "meta_bot": {"wins": 2, "played": 2},
+                "ranch_hands": {"wins": 1, "played": 2},
+            },
+        }
+    ]))
+
+    champ = rounds.designate_from_history(path=str(rounds_path), benchmarks={"meta_bot"})
+    assert champ != "meta_bot"
+    assert champ == "ranch_hands"
+
+
 def test_run_and_record_writes_a_non_benchmark_champion(tmp_path):
     # meta_bot dominates the round, but champion.json must name a contender.
     def fake_play(a, b, seed=None):
