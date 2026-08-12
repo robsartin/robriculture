@@ -25,6 +25,8 @@ see the ADRs in [docs/adr/](docs/adr/).
 
 **Always TDD** the code (red → green → refactor, stay green). Work on a branch per experiment; nothing lands on `main` directly; PRs are reviewed, not auto-merged.
 
+**Execute plans via subagent-driven-development** — a fresh implementer subagent per task, a spec + code-quality review after each task, and a whole-branch review before the PR. This is the standing default: go straight to it once a plan is committed; do **not** pause to offer an execution-mode menu.
+
 **Outcomes:**
 - **Hypothesis supported** → PR to `main`, reviewed, merged; the issue is closed by the merge and records the numbers.
 - **Hypothesis rejected** → **do not merge.** Record the result *and the root-cause lesson* as a comment on the issue, close it `not_planned`, and **discard the files** so `main` stays clean (see #24, #31 for the format). Salvage any genuinely reusable engine/harness/infra into its own small green-test PR *first*.
