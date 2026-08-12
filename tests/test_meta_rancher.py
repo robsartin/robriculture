@@ -100,6 +100,67 @@ def test_beat_outstanding_true_when_an_animal_is_unfed():
     assert mr._beat_outstanding([(a, "COW")], tiles) is True
 
 
+# --- hire_orders: hires yield market slots to sells + herd-critical buys
+# (tuning target #2, #61) -- forcing the full crew every hire-eligible morning
+# must never push the 10-order cap past the price-sensitive sells or the
+# herd-critical land/animal buys; any surplus hire target simply catches up
+# the next morning instead. ---
+
+def test_hire_orders_never_exceed_the_remaining_cap():
+    # 8 orders already queued (e.g. sells + buys); at most 2 hire slots remain.
+    assert mr.hire_orders(n_target=9, market_len=8, reserved=0) == [["HIRE"], ["HIRE"]]
+
+
+def test_hire_orders_yield_slots_reserved_for_herd_buys():
+    # 5 orders queued, but reserve 3 slots for land/animal buys -> only 2 hires.
+    assert mr.hire_orders(n_target=9, market_len=5, reserved=3) == [["HIRE"], ["HIRE"]]
+
+
+def test_hire_orders_empty_when_no_slots():
+    assert mr.hire_orders(n_target=9, market_len=10, reserved=0) == []
+
+
+def test_heavy_sell_dawn_hire_never_displaces_sell_or_herd_buy():
+    """End-to-end: a fresh dawn with a heavy-sell shed and the herd already up.
+
+    Every melon plot is already a live, watered plant (so seed restock wants
+    nothing) and the shed is stuffed with sellable produce plus a herd-existing
+    COW. NE land is unlocked, SW is not, so land_orders wants one more BUY_LAND
+    and animal_buy_orders wants COW purchases -- these, sized to fill the
+    10-order cap exactly, leave zero slots for the forced full-crew hire
+    target. Every SELL and every herd-critical BUY_LAND/BUY_ANIMAL order that
+    the pure helpers would emit must still be present; hiring must yield
+    entirely rather than truncate any of them.
+    """
+    tiles = [[None for _ in range(10)] for _ in range(10)]
+    live_plant = {"kind": "PLANT", "crop": mr.MELON, "watered_today": True, "planted_day": 0}
+    for x, y in mr.MELON_PLOTS:
+        tiles[y][x] = live_plant
+    shed = {"WHEAT": 50, "CARROT": 5, "MELON": 5, "MILK": 5, "TOMATO": 5, "COW": 1}
+    obs = {
+        "player": 0, "day": 1, "hour": 0,
+        "farms": [
+            {"money": 1_000_000, "tiles": tiles, "farmer": [4, 4],
+             "hands": [], "unlocked_quadrants": ["NW", "NE"]},
+            {"money": 1_000_000, "tiles": [[None] * 10 for _ in range(10)],
+             "farmer": [4, 4], "hands": []},
+        ],
+        "market": {"inventory": {}, "prices": {}},
+        "town": {"unlocked_shops": []},
+        "private": {"shed": shed, "seeds": {}, "inventories": [{}]},
+    }
+
+    market = mr.MetaRancherStrategy().act(obs)["market"]
+
+    assert len(market) <= 10
+    for order in mr._sell_orders_keep_feed(shed):
+        assert order in market
+    assert ["BUY_LAND"] in market
+    assert market.count(["BUY_ANIMAL", "COW", 1]) == 4
+    # No room left this turn -- the forced full-crew hire target yields entirely.
+    assert ["HIRE"] not in market
+
+
 def test_beat_outstanding_false_when_fed_even_with_chores_left():
     # Harvest/fertilizer/care are not survival-critical, so a fed animal with
     # those still pending does NOT keep the beat "outstanding".

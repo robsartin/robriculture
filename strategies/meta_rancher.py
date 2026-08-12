@@ -303,6 +303,21 @@ def wheat_orders(tiles, shed, inventories, money: float,
     return [["BUY_PRODUCT", "WHEAT", want]]
 
 
+# --- hiring --------------------------------------------------------------------
+
+def hire_orders(n_target: int, market_len: int, reserved: int = 0) -> list:
+    """``HIRE`` orders sized to whatever's left of the 10-order market cap.
+
+    Returns up to ``n_target`` ``["HIRE"]`` orders, bounded so
+    ``market_len + reserved + len(result)`` never exceeds 10 -- hires take only
+    the slots sells and herd-critical land/animal buys didn't already claim
+    (plus any additionally ``reserved`` slots). Hiring is a *target*, not a
+    one-shot demand: a surplus this morning isn't lost, it just catches up the
+    next hire-eligible morning (``act`` re-targets the full crew every time).
+    """
+    return [["HIRE"]] * max(0, min(n_target, 10 - market_len - reserved))
+
+
 # --- seed restock -------------------------------------------------------------
 
 def seed_restock_orders(tiles, seeds, melon_open, catch, n_workers, money, market_len):
@@ -546,26 +561,31 @@ class MetaRancherStrategy(Strategy):
         melon_open = hh.plantable(MELON, day, season_days)
 
         # --- Market: product SELLs FIRST so the price-sensitive melon/animal
-        # sells sit ahead of HIRE/BUY orders and are never truncated by the
+        # sells sit ahead of every BUY/HIRE order and are never truncated by the
         # 10-order cap. Crop-wheat is held back to the herd's feed buffer. ---
         market: list = _sell_orders_keep_feed(shed)
 
-        # --- Hire the crew (mornings only) — the multicrop wage rule, sized on
+        # --- Hire target (mornings only) — the multicrop wage rule, sized on
         # the full 10-worker target (up to 5 of them divert to livestock once
-        # their land opens; until then they farm melon). ---
-        n_hire = 0
+        # their land opens; until then they farm melon). This is only a
+        # *target* headcount here — the HIRE orders themselves are appended
+        # LAST, after every herd-critical buy has claimed its slot (see below),
+        # so a heavy-sell/heavy-buy morning never lets hiring displace a sell
+        # or a land/animal purchase. Hiring still only happens at hour == 0.
+        n_hire_target = 0
         if hour == 0:
-            n_hire = ch.plan_hands_multicrop(
+            n_hire_target = ch.plan_hands_multicrop(
                 day, money, hh.max_live_index(tiles, MELON_PLOTS),
                 catch, season_days, MAX_HANDS,
             )
-            # Once the herd is up, always field the full crew so the livestock
+            # Once the herd is up, always TARGET the full crew so the livestock
             # hands (the high indices) are never dropped by the crop-driven wage
             # rule — an unhired hand feeds nothing, and the herd would starve out
-            # in the tail after the crops close. Hiring is cheap (fib wage).
+            # in the tail after the crops close. Hiring is cheap (fib wage). Any
+            # surplus over what fits the market cap this morning catches up the
+            # next one (see the ``hire_orders`` call at the end of this method).
             if _herd_exists(tiles, shed):
-                n_hire = MAX_HANDS
-            market.extend([["HIRE"]] * n_hire)
+                n_hire_target = MAX_HANDS
 
         # --- One action per worker: livestock hands tend their beat; every other
         # worker runs the melon + wheat-catch-crop loop on its plot. ---
@@ -630,7 +650,7 @@ class MetaRancherStrategy(Strategy):
         # --- Seed restock: melon in the melon phase, the catch crop in the tail.
         # (Livestock hands farm melon too until their land opens, so the whole
         # crew's plots count; a peeled-off hand just leaves a little idle seed.) ---
-        total_workers = 1 + (n_hire if hour == 0 else len(hands))
+        total_workers = 1 + (n_hire_target if hour == 0 else len(hands))
         market.extend(
             seed_restock_orders(tiles, seeds, melon_open, catch, total_workers, money, len(market))
         )
@@ -657,6 +677,13 @@ class MetaRancherStrategy(Strategy):
                 animal_buy_orders(tiles, shed, inventories, money, unlocked,
                                   cap=10 - len(market))
             )
+
+        # --- Hire LAST — lowest market priority of all. Every sell and every
+        # herd-critical land/animal buy above has already claimed its slot;
+        # hiring only takes what's left of the 10-order cap this morning, and a
+        # surplus target simply re-targets (and catches up) the next morning. ---
+        if hour == 0:
+            market.extend(hire_orders(n_hire_target, len(market)))
 
         return {"farmer": farmer_action, "hands": hand_actions, "market": market[:10]}
 
