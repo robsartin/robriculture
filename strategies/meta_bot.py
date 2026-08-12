@@ -74,7 +74,6 @@ from strategies import wide_hands as wh
 MELON = ch.MELON
 CROPS = ch.CROPS
 SEASON_DAYS = ch.SEASON_DAYS
-TURNS_PER_DAY = ch.TURNS_PER_DAY
 
 #: 9 hired hands => 10 workers total (farmer + 9). Phase-0 read of "10 hands" as
 #: total headcount, matching our own promoted `wide_hands` empirical optimum.

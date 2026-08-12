@@ -296,3 +296,33 @@ def test_wheat_orders_stock_feed_only_once_the_herd_exists_and_from_surplus():
     assert orders and orders[0][0] == "BUY_PRODUCT" and orders[0][1] == "WHEAT"
     # Below the melon reserve -> protect capital, buy no feed.
     assert mb.wheat_orders(tiles, {"COW": 1}, [{}], money=mb.MELON_RESERVE - 1) == []
+
+
+# --- behavior pin (frozen benchmark, #59) ------------------------------------
+
+import hashlib
+import json
+
+
+def _fresh_obs(hour=0, day=0, money=100000, hands=None):
+    board = [[None for _ in range(10)] for _ in range(10)]
+    hands = hands or []
+    n_inv = 1 + len(hands)
+    return {
+        "player": 0, "day": day, "hour": hour,
+        "farms": [
+            {"money": money, "tiles": board, "farmer": [4, 4], "hands": hands},
+            {"money": money, "tiles": [[None]*10 for _ in range(10)], "farmer": [4, 4], "hands": []},
+        ],
+        "market": {"inventory": {}, "prices": {}},
+        "town": {"unlocked_shops": []},
+        "private": {"shed": {}, "seeds": {}, "inventories": [{} for _ in range(n_inv)]},
+    }
+
+
+def test_meta_bot_dawn_move_is_frozen():
+    # meta_bot is a readonly benchmark: its opening move is pinned so any edit
+    # to its behavior breaks CI (the "can't be changed" contract, #59).
+    action = mb.MetaBotStrategy().act(_fresh_obs(hour=0, day=0))
+    digest = hashlib.sha256(json.dumps(action, sort_keys=True).encode()).hexdigest()
+    assert digest == "b12fed068545aec8006f6b8f93ab18a9b7e4e12f507ad274f80f0eae211fbd48"
