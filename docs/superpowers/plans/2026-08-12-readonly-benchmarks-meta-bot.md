@@ -25,9 +25,9 @@
 ## File Structure
 
 - `kaggisim/strategy.py` — **modify.** Add `benchmark: bool = False` to the `Strategy` base.
-- `strategies/__init__.py` — **modify.** During discovery, also populate `BENCHMARKS: set[str]` (names whose `STRATEGY.benchmark` is truthy).
-- `harness/promotion.py` — **modify.** Add `top_contender(ranking, benchmarks)`; make `designate_champion` pick the top non-benchmark; pass `BENCHMARKS` from the CLI.
-- `harness/rounds.py` — **modify.** `run_and_record` picks the top non-benchmark via `top_contender`.
+- `harness/tournament.py` — **modify.** Add `benchmark_names() -> set[str]`, deriving the benchmark set from `REGISTRY` by reading each strategy's `benchmark` flag. **We do NOT edit `strategies/__init__.py`** — CLAUDE.md forbids it and the spec requires auto-discovery to stay untouched; deriving the set in the harness means adding a new benchmark strategy still needs zero `__init__.py` edits (the flag alone opts it in).
+- `harness/promotion.py` — **modify.** Add `top_contender(ranking, benchmarks)`; make `designate_champion` pick the top non-benchmark; pass `benchmark_names()` from the CLI.
+- `harness/rounds.py` — **modify.** `run_and_record` picks the top non-benchmark via `top_contender`; the CLI passes `benchmark_names()`.
 - `strategies/meta_bot.py` — **create.** The frozen benchmark agent (`benchmark = True`, `name = "meta_bot"`).
 - `tests/test_benchmark_flag.py` — **create.** The flag + registry discovery.
 - `tests/test_champion_excludes_benchmark.py` — **create.** The champion-never-a-benchmark invariant (both paths).
@@ -36,27 +36,30 @@
 
 ---
 
-### Task 1: `benchmark` flag on Strategy + registry discovery
+### Task 1: `benchmark` flag on Strategy + `benchmark_names()` helper
 
 **Files:**
 - Modify: `kaggisim/strategy.py:20-32` (the `Strategy` class body)
-- Modify: `strategies/__init__.py:14-22` (the discovery loop)
+- Modify: `harness/tournament.py:26-39` (add `benchmark_names()` beside `build_agents`)
 - Test: `tests/test_benchmark_flag.py`
 
+**Do NOT modify `strategies/__init__.py`.** CLAUDE.md forbids editing it, and the spec keeps auto-discovery untouched. Derive the benchmark set in the harness by reading the flag off each registered strategy.
+
 **Interfaces:**
-- Consumes: the existing `REGISTRY: dict[str, str]` and `load(name)` from `strategies/__init__.py`.
-- Produces: `Strategy.benchmark: bool` (class attribute, default `False`); `strategies.BENCHMARKS: set[str]` (registered names whose `STRATEGY.benchmark` is truthy).
+- Consumes: the existing `REGISTRY: dict[str, str]` and `load(name)` from `strategies/__init__.py` (read-only).
+- Produces: `Strategy.benchmark: bool` (class attribute, default `False`); `harness.tournament.benchmark_names() -> set[str]` (registered names whose `STRATEGY.benchmark` is truthy).
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_benchmark_flag.py
-"""The benchmark flag: opt-in on a Strategy subclass, surfaced by the registry."""
+"""The benchmark flag: opt-in on a Strategy subclass, surfaced by the harness."""
 
 from __future__ import annotations
 
+from harness.tournament import benchmark_names
 from kaggisim.strategy import Strategy
-from strategies import BENCHMARKS, REGISTRY
+from strategies import REGISTRY
 
 
 def test_strategy_base_defaults_to_not_a_benchmark():
@@ -72,21 +75,21 @@ def test_a_subclass_can_opt_in_to_benchmark():
     assert Frozen.benchmark is True
 
 
-def test_benchmarks_is_a_subset_of_the_registry():
-    # BENCHMARKS names are real, registered strategies.
-    assert BENCHMARKS <= set(REGISTRY)
+def test_benchmark_names_is_a_subset_of_the_registry():
+    # benchmark_names() are real, registered strategies.
+    assert benchmark_names() <= set(REGISTRY)
 
 
 def test_existing_strategies_are_not_benchmarks_by_default():
     # Nothing shipped so far is a benchmark (meta_bot arrives in a later task).
     assert "ranch_hands" in REGISTRY
-    assert "ranch_hands" not in BENCHMARKS
+    assert "ranch_hands" not in benchmark_names()
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `ROBRICULTURE_STRICT=1 pytest tests/test_benchmark_flag.py -v`
-Expected: FAIL — `ImportError: cannot import name 'BENCHMARKS'` (and `AttributeError` on `Strategy.benchmark`).
+Expected: FAIL — `ImportError: cannot import name 'benchmark_names'` (and `AttributeError` on `Strategy.benchmark`).
 
 - [ ] **Step 3: Add the flag to the base class**
 
@@ -103,24 +106,18 @@ In `kaggisim/strategy.py`, inside `class Strategy`, below the `name` attribute:
     benchmark: bool = False
 ```
 
-- [ ] **Step 4: Populate `BENCHMARKS` in the registry**
+- [ ] **Step 4: Add `benchmark_names()` to the harness**
 
-In `strategies/__init__.py`, extend the discovery loop and export the set:
+In `harness/tournament.py`, below `build_agents`, add (it already imports `REGISTRY, load`):
 
 ```python
-REGISTRY: dict[str, str] = {}
-BENCHMARKS: set[str] = set()
+def benchmark_names():
+    """Registered strategy names flagged as readonly benchmark opponents.
 
-for _module in pkgutil.iter_modules(__path__):
-    if _module.name.startswith("_"):
-        continue
-    _mod = importlib.import_module(f"{__name__}.{_module.name}")
-    _strategy = getattr(_mod, "STRATEGY", None)
-    if _strategy is not None:
-        _name = getattr(_strategy, "name", _module.name)
-        REGISTRY[_name] = f"{__name__}.{_module.name}"
-        if getattr(_strategy, "benchmark", False):
-            BENCHMARKS.add(_name)
+    Derived from the registry by reading each strategy's `benchmark` class flag,
+    so no edit to strategies/__init__.py is needed to opt one in (CLAUDE.md).
+    """
+    return {n for n in REGISTRY if getattr(load(n), "benchmark", False)}
 ```
 
 - [ ] **Step 5: Run the tests to verify they pass**
@@ -131,8 +128,8 @@ Expected: PASS (4 passed).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add kaggisim/strategy.py strategies/__init__.py tests/test_benchmark_flag.py
-git commit -m "feat: benchmark flag on Strategy + BENCHMARKS registry discovery (#59)"
+git add kaggisim/strategy.py harness/tournament.py tests/test_benchmark_flag.py
+git commit -m "feat: benchmark flag on Strategy + benchmark_names() harness helper (#59)"
 ```
 
 ---
@@ -280,18 +277,17 @@ def run_and_record(names, games=20, window=DEFAULT_WINDOW, decay=None,
     return champion, ranking
 ```
 
-- [ ] **Step 5: Pass `BENCHMARKS` from both CLIs**
+- [ ] **Step 5: Pass `benchmark_names()` from both CLIs**
 
 In `harness/promotion.py` `main()`'s `--designate` block, replace `champ = ranking[0][0]` with the contender pick and keep the benchmarks as opponents in `names`:
 
 ```python
     if args.designate:
-        from harness.tournament import BUILTINS
-        from strategies import BENCHMARKS
+        from harness.tournament import BUILTINS, benchmark_names
         names = args.names or (list(REGISTRY) + list(BUILTINS))
         print(f"Designating champion among {names} ({args.games} games/pairing)...")
         ranking = round_robin_rank(build_agents(names), games=args.games)
-        champ = top_contender(ranking, BENCHMARKS)
+        champ = top_contender(ranking, benchmark_names())
         save_champion(CHAMPION_PATH, champ, args.games, ranking)
         for name, wr, w, p in ranking:
             print(f"  {name:16s} {wr:6.1%}  ({w}/{p})")
@@ -302,11 +298,12 @@ In `harness/promotion.py` `main()`'s `--designate` block, replace `champ = ranki
 In `harness/rounds.py` `main()`, pass benchmarks through:
 
 ```python
-    from strategies import BENCHMARKS, REGISTRY
+    from harness.tournament import benchmark_names
+    from strategies import REGISTRY
     ...
     champion, ranking = run_and_record(
         names, games=args.games, window=args.window, decay=args.decay,
-        benchmarks=BENCHMARKS,
+        benchmarks=benchmark_names(),
     )
 ```
 
@@ -523,7 +520,7 @@ git commit -m "test: freeze meta_bot behavior with a seeded golden-trace pin (#5
 
 **Spec coverage:**
 - Readonly `benchmark = True` mechanism → Task 1. ✅
-- Auto-discovered, no `__init__.py` registration edit for the strategy → `meta_bot` is dropped in as a file (Task 4); `__init__.py` is touched only to extend *discovery* (Task 1), which the spec's mechanism explicitly requires. ✅
+- Auto-discovered, `strategies/__init__.py` never edited → `meta_bot` is dropped in as a file (Task 4); the benchmark set is derived in the harness via `benchmark_names()` (Task 1), honoring CLAUDE.md's "never edit `strategies/__init__.py`". ✅
 - Always an opponent, never champion (`--designate`/`champion.json` exclude) → Task 2 covers **both** designation paths (`promotion.designate_champion` + `rounds.run_and_record`). ✅
 - `meta_bot` frozen to 9 cow + 4 sheep + 1 wheat + 10 hands + fertilizer d2 → Task 4 (constants from Task 3). ✅
 - Phase 0 feasibility before building → Task 3. ✅
