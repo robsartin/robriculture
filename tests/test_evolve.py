@@ -62,6 +62,36 @@ def test_match_winrate_all_wins_is_one():
     assert ev.match_winrate(_tagged("win"), [_tagged("")], games=2, seed_base=0, play_fn=_stub_play) == 1.0
 
 
+def test_match_winrate_all_losses_is_zero():
+    """A pure-loss stub (agent always loses, on either side) => 0.0 win-rate."""
+    def lose_stub(a, b, seed=None):
+        if getattr(a, "tag", "") == "lose": return -1
+        if getattr(b, "tag", "") == "lose": return 1
+        return 0
+    assert ev.match_winrate(_tagged("lose"), [_tagged("")], games=4, seed_base=0, play_fn=lose_stub) == 0.0
+
+
+def test_match_winrate_alternates_sides_to_cancel_first_player_advantage():
+    """A play_fn that always favors whichever side is passed first would wrongly
+    inflate win-rate to 1.0 if match_winrate ever stopped alternating sides
+    (a "never alternate" bug); the correct alternating implementation cancels
+    the advantage to 0.5.
+    """
+    def first_player_wins(a, b, seed=None):
+        return 1
+    assert ev.match_winrate(_tagged(""), [_tagged("")], games=4, seed_base=0, play_fn=first_player_wins) == 0.5
+
+
+def test_match_winrate_zero_games_falls_back_to_half():
+    """games=0 => no games are played, so total stays 0 and the 0.5 fallback applies."""
+    assert ev.match_winrate(_tagged(""), [_tagged("")], games=0, seed_base=0, play_fn=_stub_play) == 0.5
+
+
+def test_match_winrate_no_opponents_falls_back_to_half():
+    """No opponents => no games are played, so total stays 0 and the 0.5 fallback applies."""
+    assert ev.match_winrate(_tagged(""), [], games=4, seed_base=0, play_fn=_stub_play) == 0.5
+
+
 def test_evaluate_population_returns_genome_fitness_pairs():
     """Evaluate population returns (genome, fitness) pairs."""
     pop = ev.initial_population(3, seed=1)

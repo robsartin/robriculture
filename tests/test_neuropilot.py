@@ -189,3 +189,18 @@ def test_load_champion_genome_valid_and_invalid(tmp_path):
     bad.write_text(json.dumps({"genome": [0.0, 0.0], "meta": {}}))   # wrong length
     assert np.load_champion_genome(str(bad)) is None
     assert np.load_champion_genome(str(tmp_path / "missing.json")) is None
+
+
+def test_load_champion_genome_malformed_json_returns_none(tmp_path):
+    """A file that isn't valid JSON at all never raises; returns None."""
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text("{not valid json")
+    assert np.load_champion_genome(str(malformed)) is None
+
+
+def test_load_champion_genome_missing_genome_key_returns_none(tmp_path):
+    """Valid JSON but missing the "genome" key never raises; returns None."""
+    import json
+    no_genome_key = tmp_path / "no_genome_key.json"
+    no_genome_key.write_text(json.dumps({"meta": {}}))
+    assert np.load_champion_genome(str(no_genome_key)) is None

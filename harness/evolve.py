@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, random
+import argparse, json, os, random, sys
 from kaggisim.strategy import make_agent
 from harness.tournament import play as _play
 from harness.tournament import build_agents
@@ -106,3 +106,54 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
         hof_genomes = update_hof(hof_genomes, [gen_best_g], hof_cap)
         population = next_generation(elites, pop_size, sigma, rng)
     return {"best_genome": best_genome, "best_fitness": best_fit, "history": history}
+
+
+def main(argv=None):  # pragma: no cover
+    ap = argparse.ArgumentParser(description="robriculture neuroevolution (#66)")
+    ap.add_argument("--generations", type=int, default=10)
+    ap.add_argument("--pop", type=int, default=20)
+    ap.add_argument("--games", type=int, default=4)
+    ap.add_argument("--sigma", type=float, default=0.2)
+    ap.add_argument("--sample-k", type=int, default=4)
+    ap.add_argument("--hof-cap", type=int, default=5)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--anchors", nargs="*", default=list(DEFAULT_ANCHORS),
+                     help="registered strategy names to use as fixed opponents")
+    ap.add_argument("--out", default=GENOME_ARTIFACT, help="where to save the champion genome")
+    ap.add_argument("--dry-run", action="store_true", help="skip writing the genome artifact")
+    args = ap.parse_args(argv)
+
+    result = evolve(
+        generations=args.generations,
+        pop_size=args.pop,
+        games=args.games,
+        sigma=args.sigma,
+        sample_k=args.sample_k,
+        hof_cap=args.hof_cap,
+        anchor_names=args.anchors,
+        seed=args.seed,
+    )
+
+    for h in result["history"]:
+        print(f"gen {h['gen']}: best={h['best']:.4f} mean={h['mean']:.4f}")
+
+    if args.dry_run:
+        print(f"dry-run: best_fitness={result['best_fitness']:.4f} (genome not saved)")
+    else:
+        save_genome(args.out, result["best_genome"], {
+            "fitness": result["best_fitness"],
+            "generations": args.generations,
+            "pop": args.pop,
+            "games": args.games,
+            "sigma": args.sigma,
+            "sample_k": args.sample_k,
+            "hof_cap": args.hof_cap,
+            "seed": args.seed,
+            "anchors": args.anchors,
+        })
+        print(f"saved champion genome to {args.out} (fitness={result['best_fitness']:.4f})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
