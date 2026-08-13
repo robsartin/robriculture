@@ -4,6 +4,7 @@ A small pure-Python MLP → knob controller; stdlib-only, fresh controller.
 """
 from __future__ import annotations
 import collections, math, random
+from kaggisim import actions as acts
 from kaggisim import economy
 from kaggisim.strategy import Strategy
 
@@ -112,7 +113,8 @@ DEFAULT_GENOME = random_genome(N_FEATURES, H1, N_KNOBS, seed=20260812)
 # an identity mapping (every output is already in [0,1]) — the *meaning* of
 # each knob (e.g. hire_target as a fraction of MAX_HANDS) is interpreted by the
 # controller below, not here. `livestock_pace`, `livestock_labor_share`,
-# `herd_target_scale` and `fertilize_pref` are unused until Task 4 (livestock).
+# `herd_target_scale`, `capital_reserve` and `fertilize_pref` drive the
+# livestock + fertilizer vocabulary (Task 4, below).
 
 Knobs = collections.namedtuple(
     "Knobs",
@@ -258,14 +260,290 @@ def _sell_orders(shed: dict, prices: dict, sell_throttle: float) -> list:
     return orders
 
 
+# --- Livestock + fertilizer (Task 4, #64) ------------------------------------
+#
+# Fresh code, built only from kaggisim.actions / economy / this module's own
+# helpers (no strategy imports, per ADR-0008). The sim mechanics below (unlock
+# order, build->place->feed order, COLLECT_FERTILIZER, FERTILIZE being
+# crop-only) are cross-checked against `meta_bot.animal_chore` /
+# `meta_bot.livestock_action` (read for reference, never imported) and against
+# the installed sim source (kaggle_environments/envs/kaggriculture/kaggriculture.py).
+
+#: The reachable comp's layout: a compact NE 3x3 cow block and an SW 4-tile
+#: sheep row — re-declared BY VALUE from `meta_bot.ANIMAL_TILES` (ADR-0008
+#: forbids importing another strategy module).
+ANIMAL_TILES: list = [
+    ((5, 0), "COW"), ((6, 0), "COW"), ((7, 0), "COW"),
+    ((5, 1), "COW"), ((6, 1), "COW"), ((7, 1), "COW"),
+    ((5, 2), "COW"), ((6, 2), "COW"), ((7, 2), "COW"),
+    ((0, 5), "SHEEP"), ((1, 5), "SHEEP"), ((2, 5), "SHEEP"), ((3, 5), "SHEEP"),
+]
+assert sum(1 for _, k in ANIMAL_TILES if k == "COW") == N_COW
+assert sum(1 for _, k in ANIMAL_TILES if k == "SHEEP") == N_SHEEP
+
+#: The one shed-access tile the crop crew also occupies (CROP_PLOTS[0]) — the
+#: only corner every worker can reach a PICKUP/DROP from.
+SHED_TILE = (4, 4)
+
+#: A knob-scaled money floor for livestock spend, sized against the season's
+#: starting capital (mirrors `meta_bot.MELON_RESERVE`'s role, but dialed by
+#: `capital_reserve` instead of fixed).
+_MONEY_FLOOR_BASE = economy.CONFIG_DEFAULTS["startingMoney"]  # 3000
+
+
+def _needs_quadrant(kind: str) -> str:
+    """The land quadrant an animal of `kind` is placed in (cows NE, sheep SW)."""
+    return "NE" if kind == "COW" else "SW"
+
+
+def _is_animal(tile) -> bool:
+    return isinstance(tile, dict) and "animal" in tile
+
+
+def _animal_chore(tile_pos, kind: str, pos, tiles, inv: dict, shed: dict, unlocked):
+    """This turn's chore for ONE animal tile, or `None` when it wants nothing.
+
+    A pure state machine over one tile: build the pasture, fetch the bought
+    animal from the shed and place it, then keep it fed / harvested /
+    collected / cared. Feed leads maintenance — an animal escapes after two
+    unfed days, so it is checked before harvest/collect/care. Mirrors
+    `meta_bot.animal_chore` (the correctness reference for this state
+    machine's shape; not imported).
+    """
+    if _needs_quadrant(kind) not in unlocked:
+        return None  # its land isn't bought yet — nothing buildable here.
+    tile = _tile_at(tiles, tile_pos)
+    on = _on(pos, tile_pos)
+
+    # --- Setup: pasture -> animal in hand -> placed. ---
+    if not _is_animal(tile):
+        if inv.get(kind, 0) > 0:
+            return acts.place(kind) if on else _step_toward(pos, tile_pos)
+        if tile is None:
+            return acts.build_pasture() if on else _step_toward(pos, tile_pos)
+        if shed.get(kind, 0) > 0:  # empty pasture; fetch the bought animal.
+            return acts.pickup(kind, 1) if _on(pos, SHED_TILE) else _step_toward(pos, SHED_TILE)
+        return None  # not bought yet; the market will buy it.
+
+    # --- Maintain the placed animal. ---
+    if not tile.get("fed_today", False) and inv.get("WHEAT", 0) > 0:
+        return acts.feed() if on else _step_toward(pos, tile_pos)
+    if tile.get("yield_units", 0) > 0:
+        return acts.harvest() if on else _step_toward(pos, tile_pos)
+    if tile.get("fertilizer_available", False):
+        return acts.collect_fertilizer() if on else _step_toward(pos, tile_pos)
+    if not tile.get("cared_today", False) and on:
+        return acts.care()
+    return None
+
+
+def _assign_beats(n_livestock: int) -> list:
+    """Split `ANIMAL_TILES` into `n_livestock` contiguous beats, as even as
+    possible — `[]` when no worker is on livestock duty this turn."""
+    if n_livestock <= 0:
+        return []
+    n = len(ANIMAL_TILES)
+    base, rem = divmod(n, n_livestock)
+    beats, idx = [], 0
+    for i in range(n_livestock):
+        size = base + (1 if i < rem else 0)
+        beats.append(ANIMAL_TILES[idx: idx + size])
+        idx += size
+    return beats
+
+
+def _livestock_worker_action(pos, beat: list, tiles, inv: dict, shed: dict, unlocked) -> list:
+    """One livestock worker's action this turn (never `None`).
+
+    Feed leads (survival-critical): fetch WHEAT from the shed for a hungry
+    animal in the beat before anything else, then fall through to the first
+    tile with an outstanding chore (`_animal_chore`); idle toward the beat
+    when nothing else applies.
+    """
+    hungry = [tp for tp, _ in beat if _is_animal(_tile_at(tiles, tp))
+              and not _tile_at(tiles, tp).get("fed_today", False)]
+    if hungry:
+        if inv.get("WHEAT", 0) > 0:
+            tp = hungry[0]
+            return acts.feed() if _on(pos, tp) else _step_toward(pos, tp)
+        if shed.get("WHEAT", 0) > 0:
+            if _on(pos, SHED_TILE):
+                return acts.pickup("WHEAT", min(shed["WHEAT"], len(hungry)))
+            return _step_toward(pos, SHED_TILE)
+    for tile_pos, kind in beat:
+        chore = _animal_chore(tile_pos, kind, pos, tiles, inv, shed, unlocked)
+        if chore is not None:
+            return chore
+    if beat:
+        return _step_toward(pos, beat[0][0])
+    return acts.pass_()
+
+
+def _land_order(unlocked, money: float, pace: float) -> list:
+    """At most one `BUY_LAND` this turn, paced by `livestock_pace`.
+
+    Below a pace of 0.5, land is never pursued; above it, the required money
+    buffer above the price shrinks toward 0 as pace climbs to 1 (buy as soon
+    as affordable). Mirrors the sim's fixed NE -> SW -> SE unlock order
+    (`kaggisim.economy.LAND_COSTS`); `[]` once all three are owned.
+    """
+    n_extra = len(unlocked) - 1  # NW is always unlocked; 0 => only NW owned
+    if n_extra < 0 or n_extra >= len(economy.LAND_COSTS) or pace < 0.5:
+        return []
+    price = economy.LAND_COSTS[n_extra]
+    buffer = (1.0 - pace) * price * 4
+    if money >= price + buffer:
+        return [["BUY_LAND"]]
+    return []
+
+
+def _herd_targets(knobs: Knobs) -> tuple:
+    """(cow_target, sheep_target) toward `herd_target_scale` of the full
+    13-animal comp, cows filled first, each capped at its species maximum."""
+    total = max(0, round(knobs.herd_target_scale * (N_COW + N_SHEEP)))
+    cow = min(N_COW, total)
+    sheep = min(N_SHEEP, max(0, total - N_COW))
+    return cow, sheep
+
+
+def _count_existing(kind: str, tiles, shed: dict, inventories: list) -> int:
+    """How many animals of `kind` are already accounted for — placed on a
+    tile, waiting in the shed, or held in a worker's inventory."""
+    placed = sum(
+        1 for row in tiles for t in row
+        if isinstance(t, dict) and t.get("animal") == kind
+    )
+    in_shed = shed.get(kind, 0)
+    in_inv = sum(inv.get(kind, 0) for inv in inventories)
+    return placed + in_shed + in_inv
+
+
+def _animal_orders(knobs: Knobs, tiles, shed: dict, inventories: list,
+                    money: float, unlocked, cap: int) -> list:
+    """`BUY_ANIMAL` orders toward the herd targets, cows before sheep.
+
+    Gated on the animal's land quadrant being unlocked and on money staying
+    above a `capital_reserve`-scaled floor per unit; capped at `cap` orders
+    (the caller passes the remaining market slots) so these lowest-priority
+    orders never displace a sell. Mirrors `meta_bot.animal_buy_orders`.
+    """
+    cow_target, sheep_target = _herd_targets(knobs)
+    floor = knobs.capital_reserve * _MONEY_FLOOR_BASE
+    orders: list = []
+    budget = money
+    for kind, target in (("COW", cow_target), ("SHEEP", sheep_target)):
+        if _needs_quadrant(kind) not in unlocked:
+            continue
+        have = _count_existing(kind, tiles, shed, inventories)
+        for _ in range(max(0, target - have)):
+            if len(orders) >= cap:
+                return orders
+            cost = economy.ANIMALS[kind]["cost"]
+            if budget < cost + floor:
+                break
+            orders.append(["BUY_ANIMAL", kind, 1])
+            budget -= cost
+    return orders
+
+
+def _wants_fertilizer(tile, day: int) -> bool:
+    """True when `tile` is a live plant not already fertilizer-covered for
+    `day` (a fresh unit would otherwise be wasted). FERTILIZE is crop-only —
+    this mirrors the sim's own `kind == "PLANT"` gate."""
+    if not _is_live_plant(tile):
+        return False
+    return tile.get("fertilized_until_day", -1) < day
+
+
+def _fertilize_or_fetch(tile, day: int, inv: dict, shed: dict):
+    """The fertilizer action for the shed-adjacent farmer plot (CROP_PLOTS[0],
+    which doubles as a shed-access tile), or `None`.
+
+    Applies straight from inventory when a unit is held; otherwise `PICKUP`
+    one from the shed (legal here only because this plot is shed-adjacent).
+    Mirrors `fertilized_hands.fertilize_or_fetch`.
+    """
+    if not _wants_fertilizer(tile, day):
+        return None
+    if inv.get("FERTILIZER", 0) > 0:
+        return acts.fertilize()
+    if shed.get("FERTILIZER", 0) > 0:
+        return acts.pickup("FERTILIZER", 1)
+    return None
+
+
+def _fertilizer_buy_order(knobs: Knobs, state, cap: int) -> list:
+    """A single fallback `BUY_PRODUCT FERTILIZER` for the farmer's crop plot,
+    or `[]`.
+
+    Gated on `fertilize_pref` and fires only when the plot's crop actually
+    wants fertilizer *and* neither the shed nor the farmer's own inventory
+    already holds a free unit — the herd's `COLLECT_FERTILIZER` byproduct is
+    always preferred over spending money. Mirrors `meta_bot.fertilizer_orders`
+    / `fertilized_hands.should_buy_fertilizer`.
+    """
+    if cap <= 0 or knobs.fertilize_pref < 0.5:
+        return []
+    player = state.get("player", 0)
+    me = state["farms"][player]
+    private = state.get("private", {})
+    day = state.get("day", 0)
+    tiles = me["tiles"]
+    shed = private.get("shed", {})
+    inventories = private.get("inventories", [])
+    farmer_inv = inventories[0] if inventories else {}
+    tile = _tile_at(tiles, CROP_PLOTS[0])
+    if not _wants_fertilizer(tile, day):
+        return []
+    if shed.get("FERTILIZER", 0) > 0 or farmer_inv.get("FERTILIZER", 0) > 0:
+        return []
+    price = economy.base_price("FERTILIZER") or 1.0
+    if me.get("money", 0) < price:
+        return []
+    return [["BUY_PRODUCT", "FERTILIZER", 1]]
+
+
+def _livestock_market_orders(knobs: Knobs, state, market_len: int) -> list:
+    """Livestock + fertilizer market orders, lowest priority.
+
+    `BUY_LAND` (paced by `livestock_pace`), then `BUY_ANIMAL` toward
+    `round(herd_target_scale * (N_COW + N_SHEEP))` (cows before sheep), then a
+    fallback fertilizer buy — capped at the market slots the caller has left
+    (`10 - market_len`) so these never displace a sell, hire or seed order.
+    """
+    cap = max(0, 10 - market_len)
+    if cap <= 0:
+        return []
+    player = state.get("player", 0)
+    me = state["farms"][player]
+    private = state.get("private", {})
+    money = me.get("money", 0)
+    tiles = me["tiles"]
+    unlocked = me.get("unlocked_quadrants", ["NW"])
+    shed = private.get("shed", {})
+    inventories = private.get("inventories", [])
+
+    orders: list = _land_order(unlocked, money, knobs.livestock_pace)[:cap]
+    if len(orders) < cap:
+        orders += _animal_orders(
+            knobs, tiles, shed, inventories, money, unlocked, cap - len(orders)
+        )
+    if len(orders) < cap:
+        orders += _fertilizer_buy_order(knobs, state, cap - len(orders))
+    return orders[:cap]
+
+
 def controller(knobs: Knobs, state) -> dict:
     """A legal `{"farmer", "hands", "market"}` turn from decoded knobs + state.
 
-    Crop crew: one worker per `CROP_PLOTS` tile (farmer first, then hands),
-    navigating to its plot and running the dig/plant/water/harvest loop there.
+    Worker roles: the last `round(livestock_labor_share * len(workers))`
+    workers (farmer counted first, so it's the last hands that peel off) tend
+    the herd in `ANIMAL_TILES` beats; the rest farm `CROP_PLOTS`, navigating to
+    their plot and running the dig/plant/water/fertilize/harvest loop there.
     Market: sells lead (never displaced by the 10-order cap), then hires up to
     `hire_target * MAX_HANDS` new hands (mornings only), then restocks seed for
-    empty active plots, bounded by money and the remaining order slots.
+    empty active crop plots, then livestock/fertilizer market orders (lowest
+    priority) fill whatever slots remain.
     """
     player = state.get("player", 0)
     me = state["farms"][player]
@@ -278,35 +556,55 @@ def controller(knobs: Knobs, state) -> dict:
     seeds = private.get("seeds", {})
     shed = private.get("shed", {})
     prices = state.get("market", {}).get("prices", {})
+    unlocked = me.get("unlocked_quadrants", ["NW"])
+    inventories = private.get("inventories", [])
 
     crop = _crop_for(knobs, day)
 
-    # --- One action per worker: navigate to its crop plot, then farm it. ---
+    # --- Worker roles: the last `livestock_labor_share` fraction of workers
+    # (farmer first, then hands) tend the herd; the rest farm crops. ---
     positions = [me["farmer"], *hands]
+    n_workers = len(positions)
+    n_livestock = min(n_workers, max(0, round(knobs.livestock_labor_share * n_workers)))
+    n_crop = n_workers - n_livestock
+    beats = _assign_beats(n_livestock)
+
+    # --- One action per worker: navigate to its plot/beat, then work it. ---
     planted_this_turn: dict = {}
     actions = []
     for i, pos in enumerate(positions):
-        plot = CROP_PLOTS[i] if i < len(CROP_PLOTS) else CROP_PLOTS[-1]
-        if not _on(pos, plot):
-            actions.append(_step_toward(pos, plot))
-            continue
-        tile = _tile_at(tiles, plot)
-        action = _plot_action(tile, day, crop)
-        if action[0] == "PLANT":
-            # Only plant as many of `crop` this turn as we hold seed for, or the
-            # sim's atomic-plant rule voids every plant of the crop at once.
-            planted_crop = action[1]
-            if planted_this_turn.get(planted_crop, 0) < seeds.get(planted_crop, 0):
-                planted_this_turn[planted_crop] = planted_this_turn.get(planted_crop, 0) + 1
-            else:
-                action = ["WATER"] if _is_live_plant(tile) else ["PASS"]
-        actions.append(action)
+        inv = inventories[i] if i < len(inventories) else {}
+        if i < n_crop:
+            plot = CROP_PLOTS[i] if i < len(CROP_PLOTS) else CROP_PLOTS[-1]
+            if not _on(pos, plot):
+                actions.append(_step_toward(pos, plot))
+                continue
+            tile = _tile_at(tiles, plot)
+            action = None
+            if i == 0 and knobs.fertilize_pref >= 0.5:
+                # Only the shed-adjacent farmer plot (CROP_PLOTS[0]) can
+                # PICKUP + FERTILIZE without leaving its tile.
+                action = _fertilize_or_fetch(tile, day, inv, shed)
+            if action is None:
+                action = _plot_action(tile, day, crop)
+            if action[0] == "PLANT":
+                # Only plant as many of `crop` this turn as we hold seed for, or the
+                # sim's atomic-plant rule voids every plant of the crop at once.
+                planted_crop = action[1]
+                if planted_this_turn.get(planted_crop, 0) < seeds.get(planted_crop, 0):
+                    planted_this_turn[planted_crop] = planted_this_turn.get(planted_crop, 0) + 1
+                else:
+                    action = ["WATER"] if _is_live_plant(tile) else ["PASS"]
+            actions.append(action)
+        else:
+            beat = beats[i - n_crop] if (i - n_crop) < len(beats) else []
+            actions.append(_livestock_worker_action(pos, beat, tiles, inv, shed, unlocked))
 
     farmer_action = actions[0]
     hand_actions = actions[1:]
 
-    # --- Market: sells first, then hire, then seed — sells are never truncated
-    # by the 10-order cap. ---
+    # --- Market: sells first, then hire, then seed, then livestock/fertilizer
+    # (lowest priority) — sells are never truncated by the 10-order cap. ---
     market: list = _sell_orders(shed, prices, knobs.sell_throttle)
 
     if hour == 0:
@@ -314,7 +612,7 @@ def controller(knobs: Knobs, state) -> dict:
         market.extend([["HIRE"]] * n_hire)
 
     if crop is not None and len(market) < 10:
-        active_plots = min(len(CROP_PLOTS), len(positions))
+        active_plots = min(n_crop, len(CROP_PLOTS))
         empty_active = sum(
             1 for plot in CROP_PLOTS[:active_plots] if _tile_at(tiles, plot) is None
         )
@@ -326,13 +624,18 @@ def controller(knobs: Knobs, state) -> dict:
             if buy > 0:
                 market.append(["BUY_SEED", crop, buy])
 
+    if len(market) < 10:
+        market.extend(_livestock_market_orders(knobs, state, len(market)))
+
     return {"farmer": farmer_action, "hands": hand_actions, "market": market[:10]}
 
 
 class NeuroPilotStrategy(Strategy):
-    """The NN-driven agent: MLP -> knobs -> controller. Crop/sell/hire/seed only
-    (livestock is Task 4) — weak by design (random default weights), but legal
-    and crash-free under `ROBRICULTURE_STRICT=1` (the Phase-1 milestone, #64)."""
+    """The NN-driven agent: MLP -> knobs -> controller. Full legal vocabulary —
+    crop farming, selling, hiring, livestock (land/pasture/place/feed/harvest/
+    collect) and fertilizer (#64) — weak by design (random default weights),
+    but legal and crash-free under `ROBRICULTURE_STRICT=1` (the Phase-1
+    milestone)."""
 
     name = "neuropilot"
     benchmark = False

@@ -117,3 +117,30 @@ def test_act_runs_and_returns_legal_shape():
 
 def test_strategy_registered_as_contender():
     assert np.STRATEGY.benchmark is False and np.STRATEGY.name == "neuropilot"
+
+
+# --- Task 4: livestock + fertilizer vocabulary --------------------------------
+
+def test_animal_chore_builds_pasture_on_empty_unlocked_tile():
+    tiles = [[None]*10 for _ in range(10)]
+    a = np._animal_chore((5, 0), "COW", [5, 0], tiles, {}, {}, ["NW", "NE"])
+    assert a == ["BUILD_PASTURE"]
+
+
+def test_animal_chore_none_when_land_locked():
+    tiles = [[None]*10 for _ in range(10)]
+    assert np._animal_chore((5, 0), "COW", [5, 0], tiles, {}, {}, ["NW"]) is None
+
+
+def test_livestock_orders_buy_land_before_animals_when_pace_high():
+    k = np.decode_knobs([0.5, 0.5, 1.0, 0.5, 1.0, 0.5, 0.0, 0.5])  # pace high, reserve low
+    orders = np._livestock_market_orders(k, _obs(money=100000, unlocked=("NW",)), 0)
+    assert ["BUY_LAND"] in orders
+
+
+def test_controller_still_sells_first_with_livestock_active():
+    k = np.decode_knobs([0.0, 0.5, 1.0, 1.0, 1.0, 0.5, 0.0, 0.5])
+    a = np.controller(k, _obs(hour=0, money=100000, shed={"MELON": 8}, unlocked=("NW", "NE", "SW")))
+    sells = [i for i, o in enumerate(a["market"]) if o[0] == "SELL"]
+    non = [i for i, o in enumerate(a["market"]) if o[0] != "SELL"]
+    assert not non or not sells or max(sells) < min(non)
