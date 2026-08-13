@@ -34,3 +34,37 @@ def test_next_generation_keeps_elites_and_refills_to_size():
     gen = ev.next_generation(elites, size=5, sigma=0.1, rng=random.Random(3))
     assert len(gen) == 5
     assert gen[0] in elites and gen[1] in elites               # elitism: elites carried verbatim
+
+
+def _stub_play(a, b, seed=None):
+    """Deterministic: agent tagged "win" beats everything; ties if both tagged "tie"."""
+    if getattr(a, "tag", "") == "win": return 1
+    if getattr(b, "tag", "") == "win": return -1
+    return 0
+
+
+def _tagged(tag):
+    """Return a stub agent with a tag."""
+    def agent(obs): return {"farmer": ["PASS"], "hands": [], "market": []}
+    agent.tag = tag
+    return agent
+
+
+def test_match_winrate_counts_ties_as_half():
+    """Ties contribute 0.5 to win-rate."""
+    me = _tagged("")                                  # always ties vs a plain opp
+    opp = [_tagged("")]
+    assert ev.match_winrate(me, opp, games=4, seed_base=0, play_fn=_stub_play) == 0.5
+
+
+def test_match_winrate_all_wins_is_one():
+    """Win all games => 1.0 win-rate."""
+    assert ev.match_winrate(_tagged("win"), [_tagged("")], games=2, seed_base=0, play_fn=_stub_play) == 1.0
+
+
+def test_evaluate_population_returns_genome_fitness_pairs():
+    """Evaluate population returns (genome, fitness) pairs."""
+    pop = ev.initial_population(3, seed=1)
+    scored = ev.evaluate_population(pop, [_tagged("")], games=2, seed_base=0, play_fn=_stub_play)
+    assert len(scored) == 3
+    assert all(g in pop and 0.0 <= f <= 1.0 for g, f in scored)
