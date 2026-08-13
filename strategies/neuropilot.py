@@ -63,3 +63,44 @@ def features(state) -> list[float]:
 
 N_FEATURES = 20
 NEUTRAL_FEATURES = [0.5] * N_FEATURES
+
+H1 = 16
+N_KNOBS = 8
+
+
+def _sigmoid(z: float) -> float:
+    if z < 0:
+        e = math.exp(z); return e / (1.0 + e)
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+def genome_size(n_in: int, h1: int, n_out: int) -> int:
+    return (h1 * n_in + h1) + (n_out * h1 + n_out)
+
+
+def random_genome(n_in: int, h1: int, n_out: int, seed: int) -> list[float]:
+    r = random.Random(seed)
+    return [r.uniform(-1.0, 1.0) for _ in range(genome_size(n_in, h1, n_out))]
+
+
+class MLP:
+    def __init__(self, w1, b1, w2, b2):
+        self.w1, self.b1, self.w2, self.b2 = w1, b1, w2, b2
+
+    @classmethod
+    def from_genome(cls, genome, n_in, h1, n_out):
+        i = 0
+        w1 = [genome[i + j*n_in : i + (j+1)*n_in] for j in range(h1)]; i += h1*n_in
+        b1 = genome[i:i+h1]; i += h1
+        w2 = [genome[i + j*h1 : i + (j+1)*h1] for j in range(n_out)]; i += n_out*h1
+        b2 = genome[i:i+n_out]
+        return cls(w1, b1, w2, b2)
+
+    def forward(self, features):
+        h = [math.tanh(sum(w*x for w, x in zip(row, features)) + b)
+             for row, b in zip(self.w1, self.b1)]
+        return [_sigmoid(sum(w*x for w, x in zip(row, h)) + b)
+                for row, b in zip(self.w2, self.b2)]
+
+
+DEFAULT_GENOME = random_genome(N_FEATURES, H1, N_KNOBS, seed=20260812)
