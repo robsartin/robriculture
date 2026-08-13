@@ -1,11 +1,20 @@
 from __future__ import annotations
-import random
+import json, os, random
 from kaggisim.strategy import make_agent
 from harness.tournament import play as _play
 from harness.tournament import build_agents
 from strategies import neuropilot as npilot
 
 GENOME_LEN = npilot.genome_size(npilot.N_FEATURES, npilot.H1, npilot.N_KNOBS)
+GENOME_ARTIFACT = os.path.join(os.path.dirname(__file__), "genomes", "champion_genome.json")
+
+
+def save_genome(path, genome, meta):
+    """Write a genome and metadata to a JSON file."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        json.dump({"genome": list(genome), "meta": meta}, fh, indent=2)
+        fh.write("\n")
 
 def initial_population(size, seed):
     return [npilot.random_genome(npilot.N_FEATURES, npilot.H1, npilot.N_KNOBS, seed=seed * 1000 + i)

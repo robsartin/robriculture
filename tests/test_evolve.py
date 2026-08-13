@@ -106,3 +106,12 @@ def test_evolve_is_deterministic_and_reports_history():
         assert out2["best_fitness"] == out["best_fitness"]     # deterministic
     finally:
         E.genome_agent = orig
+
+
+def test_save_genome_round_trips(tmp_path):
+    """save_genome writes a JSON with genome and meta; reads back losslessly."""
+    import json
+    p = tmp_path / "g.json"
+    ev.save_genome(str(p), [0.1, 0.2], {"fitness": 0.7})
+    d = json.loads(p.read_text())
+    assert d["genome"] == [0.1, 0.2] and d["meta"]["fitness"] == 0.7
