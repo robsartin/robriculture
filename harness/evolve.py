@@ -73,12 +73,20 @@ def build_opponents(pop_agents, anchor_agents_list, hof_agents, sample_k, rng):
     return list(anchor_agents_list) + list(hof_agents) + sample
 
 def update_hof(prev_hof, elites, cap):
-    """Append newly-seen elite genomes to the Hall-of-Fame, dedup, and cap to the most recent `cap`."""
+    """Append newly-seen elite genomes to the Hall-of-Fame, dedup, and cap to the most recent `cap`.
+
+    cap semantics: None = unbounded; <= 0 = Hall-of-Fame disabled (empty); positive = keep
+    the most-recent `cap` genomes.
+    """
     combined = list(prev_hof)
     for e in elites:
         if e not in combined:
             combined.append(e)
-    return combined[-cap:] if cap and len(combined) > cap else combined
+    if cap is None:
+        return combined
+    if cap <= 0:
+        return []
+    return combined[-cap:]
 
 def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
            anchor_names=DEFAULT_ANCHORS, seed=0, play_fn=_play):

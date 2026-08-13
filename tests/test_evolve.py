@@ -114,6 +114,11 @@ def test_update_hof_keeps_best_and_caps():
     assert len(hof) == 1
 
 
+def test_update_hof_cap_zero_disables():
+    hof = ev.update_hof([], [[1.0]*ev.GENOME_LEN, [2.0]*ev.GENOME_LEN], cap=0)
+    assert hof == []
+
+
 def test_evolve_is_deterministic_and_reports_history():
     # Stub: fitness = mean of genome (so mutation toward higher weights wins); no real games.
     def stub(a, b, seed=None):
