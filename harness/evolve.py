@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 from kaggisim.strategy import make_agent
 from harness.tournament import play as _play
+from harness.tournament import build_agents
 from strategies import neuropilot as npilot
 
 GENOME_LEN = npilot.genome_size(npilot.N_FEATURES, npilot.H1, npilot.N_KNOBS)
@@ -50,3 +51,49 @@ def evaluate_population(population, opponents, games, seed_base, play_fn=_play):
     """Evaluate all genomes in population; return [(genome, fitness), ...]."""
     return [(g, match_winrate(genome_agent(g), opponents, games, seed_base + i, play_fn))
             for i, g in enumerate(population)]
+
+DEFAULT_ANCHORS = ("meta_bot", "ranch_hands", "market_farmer", "ranch_adaptive", "wheat_hands", "spoiler")
+
+def anchor_agents(names):
+    """Return the agent callables for the given registered strategy names."""
+    return list(build_agents(list(names)).values())
+
+def build_opponents(pop_agents, anchor_agents_list, hof_agents, sample_k, rng):
+    """Opponent pool for a match: all anchors, all Hall-of-Fame agents, plus a random sample of the population."""
+    sample = rng.sample(pop_agents, min(sample_k, len(pop_agents))) if pop_agents else []
+    return list(anchor_agents_list) + list(hof_agents) + sample
+
+def update_hof(prev_hof, elites, cap):
+    """Append newly-seen elite genomes to the Hall-of-Fame, dedup, and cap to the most recent `cap`."""
+    combined = list(prev_hof)
+    for e in elites:
+        if e not in combined:
+            combined.append(e)
+    return combined[-cap:] if cap and len(combined) > cap else combined
+
+def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
+           anchor_names=DEFAULT_ANCHORS, seed=0, play_fn=_play):
+    """Run the neuroevolution loop; return best genome/fitness and per-generation history."""
+    rng = random.Random(seed)
+    anchors = anchor_agents(anchor_names)
+    population = initial_population(pop_size, seed)
+    hof_genomes = []
+    best_genome, best_fit, history = None, -1.0, []
+    for gen in range(generations):
+        pop_agents = [genome_agent(g) for g in population]
+        hof_agents = [genome_agent(g) for g in hof_genomes]
+        scored = []
+        for i, g in enumerate(population):
+            opp = build_opponents([pa for j, pa in enumerate(pop_agents) if j != i],
+                                  anchors, hof_agents, sample_k, rng)
+            scored.append((g, match_winrate(pop_agents[i], opp, games, seed + gen * 7919 + i, play_fn)))
+        scored.sort(key=lambda gf: gf[1], reverse=True)
+        gen_best_g, gen_best_f = scored[0]
+        mean_f = sum(f for _, f in scored) / len(scored)
+        history.append({"gen": gen, "best": gen_best_f, "mean": mean_f})
+        if gen_best_f > best_fit:
+            best_fit, best_genome = gen_best_f, gen_best_g
+        elites = [g for g, _ in scored[:max(1, pop_size // 4)]]
+        hof_genomes = update_hof(hof_genomes, [gen_best_g], hof_cap)
+        population = next_generation(elites, pop_size, sigma, rng)
+    return {"best_genome": best_genome, "best_fitness": best_fit, "history": history}

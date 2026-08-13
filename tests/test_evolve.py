@@ -68,3 +68,41 @@ def test_evaluate_population_returns_genome_fitness_pairs():
     scored = ev.evaluate_population(pop, [_tagged("")], games=2, seed_base=0, play_fn=_stub_play)
     assert len(scored) == 3
     assert all(g in pop and 0.0 <= f <= 1.0 for g, f in scored)
+
+
+def test_build_opponents_includes_anchors_hof_and_a_pop_sample():
+    rng = random.Random(0)
+    pop = [_tagged(f"p{i}") for i in range(5)]
+    opp = ev.build_opponents(pop, [_tagged("anchor")], [_tagged("hof")], sample_k=2, rng=rng)
+    tags = [getattr(a, "tag", "") for a in opp]
+    assert "anchor" in tags and "hof" in tags
+    assert sum(t.startswith("p") for t in tags) == 2
+
+
+def test_update_hof_keeps_best_and_caps():
+    hof = ev.update_hof([], [[1.0]*ev.GENOME_LEN, [2.0]*ev.GENOME_LEN], cap=1)
+    assert len(hof) == 1
+
+
+def test_evolve_is_deterministic_and_reports_history():
+    # Stub: fitness = mean of genome (so mutation toward higher weights wins); no real games.
+    def stub(a, b, seed=None):
+        return (getattr(a, "_score", 0) > getattr(b, "_score", 0)) - (getattr(a, "_score", 0) < getattr(b, "_score", 0))
+    # Monkeypatch genome_agent to tag the agent with its genome mean for the stub.
+    import harness.evolve as E
+    orig = E.genome_agent
+    def tagged_agent(g):
+        ag = _tagged("")
+        ag._score = sum(g) / len(g)
+        return ag
+    E.genome_agent = tagged_agent
+    try:
+        out = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
+                       hof_cap=2, anchor_names=[], seed=1, play_fn=stub)
+        assert set(out) == {"best_genome", "best_fitness", "history"}
+        assert len(out["history"]) == 3
+        out2 = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
+                        hof_cap=2, anchor_names=[], seed=1, play_fn=stub)
+        assert out2["best_fitness"] == out["best_fitness"]     # deterministic
+    finally:
+        E.genome_agent = orig
