@@ -3,7 +3,7 @@
 A small pure-Python MLP → knob controller; stdlib-only, fresh controller.
 """
 from __future__ import annotations
-import collections, math, random
+import collections, json, math, os, random
 from kaggisim import actions as acts
 from kaggisim import economy
 from kaggisim.strategy import Strategy
@@ -104,7 +104,21 @@ class MLP:
                 for row, b in zip(self.w2, self.b2)]
 
 
-DEFAULT_GENOME = random_genome(N_FEATURES, H1, N_KNOBS, seed=20260812)
+_GENOME_ARTIFACT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "harness", "genomes", "champion_genome.json")
+
+
+def load_champion_genome(path=_GENOME_ARTIFACT):
+    """The evolved champion genome if present and shape-correct, else None (never raises)."""
+    try:
+        with open(path) as fh:
+            g = json.load(fh)["genome"]
+        return g if len(g) == genome_size(N_FEATURES, H1, N_KNOBS) else None
+    except Exception:
+        return None
+
+
+_loaded = load_champion_genome()
+DEFAULT_GENOME = _loaded if _loaded is not None else random_genome(N_FEATURES, H1, N_KNOBS, seed=20260812)
 
 
 # --- Knob decode (Task 3, #64) -----------------------------------------------

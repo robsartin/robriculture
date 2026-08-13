@@ -177,3 +177,30 @@ def test_land_order_stops_once_ne_and_sw_are_unlocked():
     # quadrants), mirroring meta_bot.land_orders' n_extra >= 2 guard, instead
     # of also reaching for the $4000 SE quadrant once affordable.
     assert np._land_order(["NW", "NE", "SW"], money=1_000_000, pace=1.0) == []
+
+
+def test_load_champion_genome_valid_and_invalid(tmp_path):
+    """load_champion_genome returns the genome if file exists & length is correct; None otherwise."""
+    import json
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps({"genome": [0.0]*np.genome_size(np.N_FEATURES, np.H1, np.N_KNOBS), "meta": {}}))
+    assert np.load_champion_genome(str(good)) is not None
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"genome": [0.0, 0.0], "meta": {}}))   # wrong length
+    assert np.load_champion_genome(str(bad)) is None
+    assert np.load_champion_genome(str(tmp_path / "missing.json")) is None
+
+
+def test_load_champion_genome_malformed_json_returns_none(tmp_path):
+    """A file that isn't valid JSON at all never raises; returns None."""
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text("{not valid json")
+    assert np.load_champion_genome(str(malformed)) is None
+
+
+def test_load_champion_genome_missing_genome_key_returns_none(tmp_path):
+    """Valid JSON but missing the "genome" key never raises; returns None."""
+    import json
+    no_genome_key = tmp_path / "no_genome_key.json"
+    no_genome_key.write_text(json.dumps({"meta": {}}))
+    assert np.load_champion_genome(str(no_genome_key)) is None
