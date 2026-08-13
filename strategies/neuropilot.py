@@ -8,8 +8,8 @@ from kaggisim import actions as acts
 from kaggisim import economy
 from kaggisim.strategy import Strategy
 
-SEASON_DAYS = 30
-TURNS_PER_DAY = 12
+TURNS_PER_DAY = economy.CONFIG_DEFAULTS["turnsPerDay"]
+SEASON_DAYS = economy.CONFIG_DEFAULTS["episodeSteps"] // TURNS_PER_DAY
 MAX_HANDS = 9
 N_COW, N_SHEEP = 9, 4
 
@@ -384,12 +384,15 @@ def _land_order(unlocked, money: float, pace: float) -> list:
 
     Below a pace of 0.5, land is never pursued; above it, the required money
     buffer above the price shrinks toward 0 as pace climbs to 1 (buy as soon
-    as affordable). Mirrors the sim's fixed NE -> SW -> SE unlock order
-    (`kaggisim.economy.LAND_COSTS`); `[]` once all three are owned.
+    as affordable). Follows the sim's fixed NE -> SW unlock order
+    (`kaggisim.economy.LAND_COSTS`), capped at those two extra quadrants —
+    no `ANIMAL_TILES` tile lives in the $4000 SE quadrant, so it's never
+    worth buying (mirrors `meta_bot.land_orders`' `n_extra >= 2` guard,
+    by value, not import). `[]` once NE and SW are both owned.
     """
     n_extra = len(unlocked) - 1  # NW is always unlocked; 0 => only NW owned
-    if n_extra < 0 or n_extra >= len(economy.LAND_COSTS) or pace < 0.5:
-        return []
+    if n_extra < 0 or n_extra >= 2 or pace < 0.5:
+        return []  # already own NE and SW — never reach for the $4000 SE
     price = economy.LAND_COSTS[n_extra]
     buffer = (1.0 - pace) * price * 4
     if money >= price + buffer:
@@ -641,7 +644,8 @@ class NeuroPilotStrategy(Strategy):
     benchmark = False
 
     def __init__(self, genome=None):
-        self.mlp = MLP.from_genome(genome or DEFAULT_GENOME, N_FEATURES, H1, N_KNOBS)
+        g = genome if genome is not None else DEFAULT_GENOME
+        self.mlp = MLP.from_genome(g, N_FEATURES, H1, N_KNOBS)
 
     def act(self, state) -> dict:
         knobs = decode_knobs(self.mlp.forward(features(state)))

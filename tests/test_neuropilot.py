@@ -74,6 +74,32 @@ def test_default_genome_has_the_right_length():
     assert len(np.DEFAULT_GENOME) == np.genome_size(np.N_FEATURES, np.H1, np.N_KNOBS)
 
 
+def test_mlp_forward_matches_hand_computation_with_distinct_dims():
+    # n_in=2, h1=3, n_out=1 — distinct dims so a W1/W2 row/column transpose
+    # would change the result (the all-dims-1 tiny test above can't catch
+    # that: every dim is 1 there, so transposing changes nothing).
+    genome = [
+        1.0, 0.0,       # W1 row 0 (hidden unit 0's weights on [x0, x1])
+        0.0, 1.0,       # W1 row 1
+        1.0, 1.0,       # W1 row 2
+        0.0, 0.0, 0.0,  # b1
+        2.0, 3.0, 4.0,  # W2 row 0 (n_out=1, over the 3 hidden units)
+        0.5,            # b2
+    ]
+    assert len(genome) == np.genome_size(2, 3, 1)
+    mlp = np.MLP.from_genome(genome, 2, 3, 1)
+    x = [1.0, 2.0]
+    h = [
+        math.tanh(1.0 * x[0] + 0.0 * x[1] + 0.0),
+        math.tanh(0.0 * x[0] + 1.0 * x[1] + 0.0),
+        math.tanh(1.0 * x[0] + 1.0 * x[1] + 0.0),
+    ]
+    expected = 1.0 / (1.0 + math.exp(-(2.0 * h[0] + 3.0 * h[1] + 4.0 * h[2] + 0.5)))
+    out = mlp.forward(x)
+    assert len(out) == 1
+    assert abs(out[0] - expected) < 1e-9
+
+
 # --- Task 3: knob decode + minimal controller -------------------------------
 
 def test_decode_knobs_maps_all_eight_fields_into_unit_range():
@@ -144,3 +170,10 @@ def test_controller_still_sells_first_with_livestock_active():
     sells = [i for i, o in enumerate(a["market"]) if o[0] == "SELL"]
     non = [i for i, o in enumerate(a["market"]) if o[0] != "SELL"]
     assert not non or not sells or max(sells) < min(non)
+
+
+def test_land_order_stops_once_ne_and_sw_are_unlocked():
+    # No ANIMAL_TILES quadrant lives in SE — cap land at NE+SW (2 extra
+    # quadrants), mirroring meta_bot.land_orders' n_extra >= 2 guard, instead
+    # of also reaching for the $4000 SE quadrant once affordable.
+    assert np._land_order(["NW", "NE", "SW"], money=1_000_000, pace=1.0) == []
