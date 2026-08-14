@@ -104,6 +104,12 @@ class MLP:
                 for row, b in zip(self.w2, self.b2)]
 
 
+#: The evolved champion genome ships INSIDE the strategies package so it travels in
+#: the submission tarball — build/package.py copies strategies/ (and kaggisim/), NOT
+#: harness/. Without this, a submitted neuropilot would find no genome at eval time
+#: and silently fall back to random weights. The harness path below is where the
+#: evolution loop writes during dev; promoting a champion = copy it to _LOCAL_GENOME.
+_LOCAL_GENOME = os.path.join(os.path.dirname(__file__), "champion_genome.json")
 _GENOME_ARTIFACT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "harness", "genomes", "champion_genome.json")
 
 
@@ -117,7 +123,9 @@ def load_champion_genome(path=_GENOME_ARTIFACT):
         return None
 
 
-_loaded = load_champion_genome()
+# Prefer the package-local champion (travels in the tarball); fall back to the
+# harness artifact (in-repo dev), then to the seeded-random default.
+_loaded = load_champion_genome(_LOCAL_GENOME) or load_champion_genome()
 DEFAULT_GENOME = _loaded if _loaded is not None else random_genome(N_FEATURES, H1, N_KNOBS, seed=20260812)
 
 
