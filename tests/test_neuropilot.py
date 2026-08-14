@@ -204,3 +204,14 @@ def test_load_champion_genome_missing_genome_key_returns_none(tmp_path):
     no_genome_key = tmp_path / "no_genome_key.json"
     no_genome_key.write_text(json.dumps({"meta": {}}))
     assert np.load_champion_genome(str(no_genome_key)) is None
+
+
+def test_default_genome_is_the_packaged_local_champion():
+    """The evolved champion ships inside strategies/ so it travels in the submission
+    tarball (build/package.py copies strategies/, not harness/). DEFAULT_GENOME must
+    load that package-local file — otherwise a submitted neuropilot silently reverts
+    to random weights."""
+    local = np.load_champion_genome(np._LOCAL_GENOME)
+    assert local is not None
+    assert len(local) == np.genome_size(np.N_FEATURES, np.H1, np.N_KNOBS)
+    assert np.DEFAULT_GENOME == local
