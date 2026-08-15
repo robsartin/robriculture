@@ -104,9 +104,15 @@ existing pattern in `tests/test_evolve.py`:
   independently, then return `mine/(mine+theirs)`. If both are zero after
   clamping (including falsy/`None` rewards), return 0.5. Opponent zero with a
   positive own score → 1.0.
-- `match_share(agent, opponents, games, seed_base, play_fn) -> float` — mean
-  per-game share, alternating sides on odd games exactly as `match_winrate` does.
-  No opponents / zero games → 0.5.
+- `opponent_record(agent, opponent, games, seed_base, rewards_fn) -> dict` — the
+  single game-playing primitive. Plays `games` games against **one** opponent,
+  alternating sides on odd games, and derives **both** the W/T/L record and the
+  mean score share from the same rewards. One pass; no game is ever played twice
+  to collect a second statistic. Returns
+  `{"w", "t", "l", "games", "win_rate", "share"}`; zero games → `win_rate` and
+  `share` both 0.5.
+- `match_share(agent, opponents, games, seed_base, rewards_fn) -> float` — mean of
+  `opponent_record(...)["share"]` across opponents. No opponents → 0.5.
 - `blended_fitness(anchor_share, pool_share, anchor_weight) -> float` —
   `w·anchor + (1-w)·pool`. When the sibling pool is empty (generation 0, or
   `--hof-cap 0` with `--sample-k 0`), returns `anchor_share` alone rather than
@@ -114,10 +120,15 @@ existing pattern in `tests/test_evolve.py`:
 - `seeded_population(seed_genome, size, sigma, rng) -> list` — the seed genome
   verbatim as element 0, then `size-1` mutants of it.
 
-`match_winrate` is **kept unchanged** and does not become dead code: `genome_bench`
-calls it per opponent (with a single-element opponent list) to produce that
-opponent's win-rate, exactly as `match_share` produces that opponent's share. Its
-existing tests stay green.
+`match_winrate` and `evaluate_population` are **removed**, superseded by
+`opponent_record`. Having `genome_bench` call `match_winrate` alongside
+`match_share` would have played every benchmark game twice to collect two
+statistics that both fall out of one set of rewards. `evaluate_population` was
+already dead — `evolve()` inlines its own scoring loop and never called it.
+
+The five behaviours their tests covered — ties counting as half, all-wins,
+all-losses, side alternation cancelling first-player advantage, and the zero-games
+/ no-opponents fallbacks — are **ported to `opponent_record`**, not dropped.
 
 `evolve()` computes anchor share and sibling share separately per genome, blends
 them, and uses the blend as fitness. Selection, elitism, Hall-of-Fame, and
@@ -132,7 +143,7 @@ Returns per-opponent W/T/L, win-rate, and mean share, plus the totals. CLI:
 `python -m harness.genome_bench --genome <path> --games N`.
 
 Seeds are derived deterministically from the opponent index and game number (the
-same `seed_base + oi * 100000 + g` scheme `match_winrate` already uses), so two
+same `seed_base + oi * 100000 + g` scheme the harness already uses), so two
 invocations with the same arguments reproduce the same numbers exactly, per
 ADR-0005.
 
@@ -183,8 +194,10 @@ TDD throughout — a failing test before each implementation, per the repo's sta
 rule. Unit tests cover:
 
 - `share`: tie → 0.5; both zero → 0.5; negative clamped; opponent zero → 1.0.
-- `match_share`: side alternation cancels first-player advantage; empty opponents
-  and zero games → 0.5.
+- `opponent_record`: ties count as half; all-wins → 1.0; all-losses → 0.0; side
+  alternation cancels first-player advantage; zero games → 0.5. W/T/L and share
+  are consistent with each other on the same rewards.
+- `match_share`: mean across opponents; empty opponent list → 0.5.
 - `blended_fitness`: the weighting arithmetic, and the empty-sibling-pool fallback.
 - `seeded_population`: element 0 is the seed verbatim; correct length; deterministic
   under a seeded `rng`.
