@@ -1,5 +1,6 @@
 """Neuroevolution harness (Phase 2, #66)."""
 from __future__ import annotations
+import json
 import random
 import pytest
 from harness import evolve as ev
@@ -291,3 +292,46 @@ def test_load_genome_rejects_a_missing_file(tmp_path):
     """A typo'd path must stop the run, not quietly start from noise."""
     with pytest.raises(ValueError, match="seed genome"):
         ev.load_genome(str(tmp_path / "nope.json"))
+
+
+def test_checkpoint_genome_writes_a_loadable_artifact(tmp_path):
+    """A checkpoint is a real genome artifact, loadable mid-run."""
+    p = tmp_path / "ckpt.json"
+    g = [0.25] * ev.GENOME_LEN
+    assert ev.checkpoint_genome(str(p), g, 0.42, [{"gen": 0, "best": 0.42}]) is True
+    assert ev.load_genome(str(p)) == g
+
+
+def test_checkpoint_genome_records_progress_in_meta(tmp_path):
+    """The checkpoint carries fitness and generations-so-far, so an interrupted
+    run is interpretable without the console output."""
+    p = tmp_path / "ckpt.json"
+    ev.checkpoint_genome(str(p), [0.25] * ev.GENOME_LEN, 0.42,
+                         [{"gen": 0, "best": 0.4}, {"gen": 1, "best": 0.42}])
+    meta = json.loads(p.read_text())["meta"]
+    assert meta["fitness"] == 0.42
+    assert meta["generations_completed"] == 2
+    assert meta["checkpoint"] is True
+
+
+def test_checkpoint_genome_survives_a_write_failure(tmp_path):
+    """A disk hiccup must not kill an 8-hour run — warn and carry on."""
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("i am a file, not a directory")
+    bad = blocker / "sub" / "ckpt.json"
+    assert ev.checkpoint_genome(str(bad), [0.25] * ev.GENOME_LEN, 0.1, []) is False
+
+
+def test_evolve_checkpoints_once_per_generation():
+    """Every generation persists the best-so-far, so an interrupt loses at most one."""
+    calls = []
+
+    def rewards(a, b, seed=None):
+        return (100.0, 100.0)
+
+    ev.evolve(generations=3, pop_size=4, games=2, sigma=0.1, sample_k=1, hof_cap=1,
+              anchor_names=(), seed=1, rewards_fn=rewards,
+              anchor_agents_override=[_tagged("")],
+              checkpoint_fn=lambda g, f, h: calls.append((f, len(h))))
+    assert len(calls) == 3
+    assert [n for _, n in calls] == [1, 2, 3]

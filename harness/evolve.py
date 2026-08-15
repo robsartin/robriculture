@@ -16,6 +16,31 @@ def save_genome(path, genome, meta):
         json.dump({"genome": list(genome), "meta": meta}, fh, indent=2)
         fh.write("\n")
 
+def checkpoint_genome(path, genome, fitness, history):
+    """Persist the best-so-far genome mid-run. Return True on success.
+
+    Written to a temp file and moved into place with os.replace, so an interrupt
+    can never leave a half-written artifact. A write failure warns and returns
+    False rather than raising: losing an 8-hour run to a transient disk error
+    would be worse than a missing checkpoint (#70).
+    """
+    tmp = f"{path}.tmp"
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(tmp, "w") as fh:
+            json.dump({"genome": list(genome), "meta": {
+                "fitness": fitness,
+                "generations_completed": len(history),
+                "checkpoint": True,
+                "history": history,
+            }}, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp, path)
+        return True
+    except OSError as exc:
+        print(f"warning: checkpoint to {path!r} failed ({exc}); continuing", file=sys.stderr)
+        return False
+
 def initial_population(size, seed):
     return [npilot.random_genome(npilot.N_FEATURES, npilot.H1, npilot.N_KNOBS, seed=seed * 1000 + i)
             for i in range(size)]
@@ -180,7 +205,7 @@ def update_hof(prev_hof, elites, cap):
 def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
            anchor_names=DEFAULT_ANCHORS, seed=0, rewards_fn=_play_rewards,
            anchor_weight=DEFAULT_ANCHOR_WEIGHT, anchor_agents_override=None,
-           seed_genome=None):
+           seed_genome=None, checkpoint_fn=None):
     """Run the neuroevolution loop; return best genome/fitness and per-generation history.
 
     Fitness is the anchor-dominant blend of score shares (#70), not win-rate:
@@ -212,6 +237,8 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
         history.append({"gen": gen, "best": gen_best_f, "mean": mean_f})
         if gen_best_f > best_fit:
             best_fit, best_genome = gen_best_f, gen_best_g
+        if checkpoint_fn is not None:
+            checkpoint_fn(best_genome, best_fit, list(history))
         elites = [g for g, _ in scored[:max(1, pop_size // 4)]]
         hof_genomes = update_hof(hof_genomes, [gen_best_g], hof_cap)
         population = next_generation(elites, pop_size, sigma, rng)
@@ -239,6 +266,9 @@ def main(argv=None):  # pragma: no cover
 
     seed_genome = load_genome(args.seed_genome) if args.seed_genome else None
 
+    ckpt = None if args.dry_run else (
+        lambda g, f, h: checkpoint_genome(args.out, g, f, h))
+
     result = evolve(
         generations=args.generations,
         pop_size=args.pop,
@@ -250,6 +280,7 @@ def main(argv=None):  # pragma: no cover
         seed=args.seed,
         anchor_weight=args.anchor_weight,
         seed_genome=seed_genome,
+        checkpoint_fn=ckpt,
     )
 
     for h in result["history"]:
