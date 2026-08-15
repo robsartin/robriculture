@@ -1,6 +1,7 @@
 """Neuroevolution harness (Phase 2, #66)."""
 from __future__ import annotations
 import random
+import pytest
 from harness import evolve as ev
 
 
@@ -234,3 +235,59 @@ def test_share_is_one_when_opponent_scores_nothing():
 def test_share_is_proportional_between_the_extremes():
     """The champion's real 20570-vs-59136 game lands at its reward proportion."""
     assert ev.share(20570.0, 59136.0) == 20570.0 / (20570.0 + 59136.0)
+
+
+def test_seeded_population_keeps_the_seed_verbatim():
+    """Element 0 is the seed itself, so a run can never score below its starting point."""
+    seed_g = [0.5] * ev.GENOME_LEN
+    pop = ev.seeded_population(seed_g, size=4, sigma=0.1, rng=random.Random(3))
+    assert len(pop) == 4
+    assert pop[0] == seed_g
+    assert all(g != seed_g for g in pop[1:])          # the rest are mutants
+
+
+def test_seeded_population_is_deterministic_for_a_seeded_rng():
+    """ADR-0005: the same rng seed reproduces the same population exactly."""
+    seed_g = [0.5] * ev.GENOME_LEN
+    a = ev.seeded_population(seed_g, size=4, sigma=0.1, rng=random.Random(3))
+    b = ev.seeded_population(seed_g, size=4, sigma=0.1, rng=random.Random(3))
+    assert a == b
+
+
+def test_evolve_starts_from_the_seed_genome_when_given_one():
+    """A seeded run begins at the champion, not at random noise."""
+    def rewards(a, b, seed=None):
+        return (100.0, 100.0)
+
+    seed_g = [0.5] * ev.GENOME_LEN
+    out = ev.evolve(generations=1, pop_size=4, games=2, sigma=0.0, sample_k=1,
+                    hof_cap=1, anchor_names=(), seed=1, rewards_fn=rewards,
+                    anchor_agents_override=[_tagged("")], seed_genome=seed_g)
+    # sigma 0 makes every mutant identical to the seed, so the winner must be it.
+    assert out["best_genome"] == seed_g
+
+
+def test_load_genome_round_trips_a_saved_artifact(tmp_path):
+    """A genome written by save_genome loads back identically."""
+    p = tmp_path / "g.json"
+    g = [0.25] * ev.GENOME_LEN
+    ev.save_genome(str(p), g, {"fitness": 0.5})
+    assert ev.load_genome(str(p)) == g
+
+
+def test_load_genome_rejects_a_wrong_length_genome(tmp_path):
+    """Fail loudly, never silently fall back to random weights.
+
+    A silent fallback is exactly what shipped a submission running on random
+    weights before the Phase 4 fix — the failure must be impossible to miss.
+    """
+    p = tmp_path / "short.json"
+    ev.save_genome(str(p), [0.1, 0.2, 0.3], {})
+    with pytest.raises(ValueError, match="length"):
+        ev.load_genome(str(p))
+
+
+def test_load_genome_rejects_a_missing_file(tmp_path):
+    """A typo'd path must stop the run, not quietly start from noise."""
+    with pytest.raises(ValueError, match="seed genome"):
+        ev.load_genome(str(tmp_path / "nope.json"))

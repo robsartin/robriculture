@@ -20,6 +20,41 @@ def initial_population(size, seed):
     return [npilot.random_genome(npilot.N_FEATURES, npilot.H1, npilot.N_KNOBS, seed=seed * 1000 + i)
             for i in range(size)]
 
+def seeded_population(seed_genome, size, sigma, rng):
+    """Population seeded from an existing champion: the seed itself, then mutants.
+
+    A fresh random start throws away everything a previous run learned — the
+    evolved champion earns ~20,000 reward where a random genome earns ~1,700, so
+    an unseeded run spends its first generations re-deriving the basics (#70).
+    Keeping the seed verbatim at index 0 means the run can never end up worse
+    than where it began.
+    """
+    pop = [list(seed_genome)]
+    while len(pop) < size:
+        pop.append(mutate(seed_genome, sigma, rng))
+    return pop[:size]
+
+
+def load_genome(path):
+    """Load a genome artifact for --seed-genome. Raise ValueError if unusable.
+
+    Deliberately loud: a silent fallback to random weights is how a submission
+    once shipped running on noise (Phase 4). A bad --seed-genome must stop the run.
+    """
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"could not read seed genome {path!r}: {exc}") from exc
+    g = data.get("genome") if isinstance(data, dict) else data
+    if not isinstance(g, list):
+        raise ValueError(f"seed genome {path!r} has no 'genome' list")
+    if len(g) != GENOME_LEN:
+        raise ValueError(
+            f"seed genome {path!r} has length {len(g)}, expected {GENOME_LEN}")
+    return [float(w) for w in g]
+
+
 def mutate(genome, sigma, rng):
     if sigma == 0.0:
         return list(genome)
@@ -144,7 +179,8 @@ def update_hof(prev_hof, elites, cap):
 
 def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
            anchor_names=DEFAULT_ANCHORS, seed=0, rewards_fn=_play_rewards,
-           anchor_weight=DEFAULT_ANCHOR_WEIGHT, anchor_agents_override=None):
+           anchor_weight=DEFAULT_ANCHOR_WEIGHT, anchor_agents_override=None,
+           seed_genome=None):
     """Run the neuroevolution loop; return best genome/fitness and per-generation history.
 
     Fitness is the anchor-dominant blend of score shares (#70), not win-rate:
@@ -154,7 +190,8 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
     rng = random.Random(seed)
     anchors = (anchor_agents_override if anchor_agents_override is not None
                else anchor_agents(anchor_names))
-    population = initial_population(pop_size, seed)
+    population = (seeded_population(seed_genome, pop_size, sigma, rng)
+                  if seed_genome is not None else initial_population(pop_size, seed))
     hof_genomes = []
     best_genome, best_fit, history = None, -1.0, []
     for gen in range(generations):
@@ -196,7 +233,11 @@ def main(argv=None):  # pragma: no cover
                     help="weight on the anchor share vs the sibling pool (default 0.75)")
     ap.add_argument("--out", default=GENOME_ARTIFACT, help="where to save the champion genome")
     ap.add_argument("--dry-run", action="store_true", help="skip writing the genome artifact")
+    ap.add_argument("--seed-genome", default=None,
+                    help="start from this genome artifact instead of random init")
     args = ap.parse_args(argv)
+
+    seed_genome = load_genome(args.seed_genome) if args.seed_genome else None
 
     result = evolve(
         generations=args.generations,
@@ -208,6 +249,7 @@ def main(argv=None):  # pragma: no cover
         anchor_names=args.anchors,
         seed=args.seed,
         anchor_weight=args.anchor_weight,
+        seed_genome=seed_genome,
     )
 
     for h in result["history"]:
@@ -227,6 +269,7 @@ def main(argv=None):  # pragma: no cover
             "seed": args.seed,
             "anchors": args.anchors,
             "anchor_weight": args.anchor_weight,
+            "seed_genome": args.seed_genome,
         })
         print(f"saved champion genome to {args.out} (fitness={result['best_fitness']:.4f})")
     return 0
