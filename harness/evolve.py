@@ -20,9 +20,11 @@ def checkpoint_genome(path, genome, fitness, history):
     """Persist the best-so-far genome mid-run. Return True on success.
 
     Written to a temp file and moved into place with os.replace, so an interrupt
-    can never leave a half-written artifact. A write failure warns and returns
-    False rather than raising: losing an 8-hour run to a transient disk error
-    would be worse than a missing checkpoint (#70).
+    can never leave a half-written artifact. Any failure to write the checkpoint —
+    a disk error (OSError) or a value that json.dump can't serialize
+    (TypeError/ValueError) — warns and returns False rather than raising: losing
+    an 8-hour run to a checkpoint hiccup would be worse than a missing
+    checkpoint (#70).
     """
     tmp = f"{path}.tmp"
     try:
@@ -37,7 +39,7 @@ def checkpoint_genome(path, genome, fitness, history):
             fh.write("\n")
         os.replace(tmp, path)
         return True
-    except OSError as exc:
+    except (OSError, TypeError, ValueError) as exc:
         print(f"warning: checkpoint to {path!r} failed ({exc}); continuing", file=sys.stderr)
         return False
 

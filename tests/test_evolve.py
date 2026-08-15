@@ -335,3 +335,40 @@ def test_evolve_checkpoints_once_per_generation():
               checkpoint_fn=lambda g, f, h: calls.append((f, len(h))))
     assert len(calls) == 3
     assert [n for _, n in calls] == [1, 2, 3]
+
+
+def test_checkpoint_genome_survives_a_non_serializable_value(tmp_path):
+    """json.dump raises TypeError (not OSError) on a bad value; that must not
+    escape either — the same #70 guarantee, for a different failure mode."""
+    p = tmp_path / "ckpt.json"
+    bad_history = [{"gen": 0, "best": object()}]
+    assert ev.checkpoint_genome(str(p), [0.25] * ev.GENOME_LEN, 0.1, bad_history) is False
+
+
+def test_evolve_checkpoints_best_so_far_not_current_generation_best():
+    """A generation that regresses must not overwrite a better earlier checkpoint.
+
+    pop_size=1 and hof_cap=0 keep the population's single genome unchanged across
+    generations, and the sole opponent pool is empty until the anchor supplies it —
+    so the only thing that varies per generation is the seed evolve derives as
+    `seed + gen * 7919 + i`. The stub reward keys off that seed to make generation 1
+    collapse (share 0.1) and generation 2 only partially recover (share 0.5), both
+    well below generation 0's 0.9. A checkpoint that tracked the current
+    generation's best (the #70 regression this guards against) would record
+    [0.9, 0.1, 0.5]; tracking best-so-far must record [0.9, 0.9, 0.9].
+    """
+    calls = []
+
+    def rewards(a, b, seed=None):
+        if seed < 7919:
+            return (900.0, 100.0)          # generation 0: dominant
+        if seed < 15838:
+            return (100.0, 900.0)          # generation 1: collapses
+        return (100.0, 100.0)              # generation 2: partial recovery, still < gen 0
+
+    ev.evolve(generations=3, pop_size=1, games=1, sigma=0.1, sample_k=1, hof_cap=0,
+              anchor_names=(), seed=1, rewards_fn=rewards,
+              anchor_agents_override=[_tagged("anchor")],
+              checkpoint_fn=lambda g, f, h: calls.append(f))
+    assert len(calls) == 3
+    assert calls == [0.9, 0.9, 0.9]
