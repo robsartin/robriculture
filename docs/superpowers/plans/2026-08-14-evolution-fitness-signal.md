@@ -15,12 +15,14 @@
 
 - **Run every command through the venv:** `PYTHONPATH=. .venv/bin/python -m pytest ...`. The system `python3` is 3.9 and will fail; the repo root must be on `PYTHONPATH` for `kaggisim`/`strategies`/`harness` to import.
 - **TDD, strictly:** the failing test is written and *observed failing* before the implementation exists. Red → green → refactor → commit.
+- **The suite is green at every commit.** No task ends with a known-failing test. If a change breaks an existing test, fixing that test is part of the same task.
 - **Stdlib only** in anything reachable from a submitted strategy (ADR-0004). This work is harness-side, but do not add third-party imports anywhere.
 - **Never edit `strategies/__init__.py`** — the registry auto-discovers.
 - **Do not modify `strategies/neuropilot.py` or `strategies/champion_genome.json`.** Baking a new champion is a separate, later decision.
 - **Coverage gate:** line ≥ 85%, branch ≥ 65%. CLI `main()` entrypoints and live-game loops get `# pragma: no cover` at the `def`.
 - **Test naming:** `test_<expected>_when_<condition>` style, each with a one-line docstring or comment stating intent. Follow `tests/test_evolve.py`.
 - **Reproducibility (ADR-0005):** seeds fixed everywhere; new run settings recorded in the saved genome's `meta`.
+- **No stub-and-fill-later.** Every function committed is complete. A helper is introduced in the same task that implements it.
 - **Commit trailer** on every commit:
   ```
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
@@ -31,9 +33,9 @@
 | file | responsibility | change |
 |---|---|---|
 | `harness/tournament.py` | live game execution | **Modify** — extract `play_rewards()`, make `play()` its sign |
-| `harness/evolve.py` | the evolution loop and its pure scoring helpers | **Modify** — add 5 helpers, remove 2 superseded ones, add checkpointing + 2 flags |
+| `harness/evolve.py` | the evolution loop and its pure scoring helpers | **Modify** — add 6 helpers, remove 2 superseded ones, add checkpointing + 2 flags |
 | `harness/genome_bench.py` | frozen per-opponent benchmark of one genome | **Create** |
-| `tests/test_evolve.py` | unit tests for the scoring helpers and loop | **Modify** — port 5 tests, add ~12 |
+| `tests/test_evolve.py` | unit tests for the scoring helpers and loop | **Modify** — port 5 tests, add ~17 |
 | `tests/test_genome_bench.py` | unit tests for the benchmark | **Create** |
 
 ---
@@ -161,24 +163,28 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: `opponent_record()` and `match_share()`
+### Task 2: Anchor-dominant blended fitness
 
-One pass over the games yields both the W/T/L record and the mean share. This supersedes `match_winrate` and `evaluate_population`.
+The change that actually moves the plateau. `opponent_record`, `match_share`, `blended_fitness`, and the `evolve()` rewiring land together: removing `match_winrate` necessarily breaks `evolve()`, so splitting them would leave the suite red at a commit.
 
 **Files:**
-- Modify: `harness/evolve.py` (replace `match_winrate` at lines 43-57 and `evaluate_population` at lines 59-62)
-- Test: `tests/test_evolve.py` (port the 5 existing `match_winrate` tests at lines 53-92, remove the `evaluate_population` test at lines 95-101)
+- Modify: `harness/evolve.py` — replace `match_winrate` (lines 43-57) and `evaluate_population` (lines 59-62); rewrite `evolve` (lines 91-116)
+- Test: `tests/test_evolve.py` — port the 5 `match_winrate` tests (lines 53-92), remove the `evaluate_population` test (lines 95-101), update the determinism test (lines 122-143)
 
 **Interfaces:**
 - Consumes: `harness.evolve.share` (Task 1).
 - Produces:
-  - `harness.evolve.opponent_record(agent, opponent, games, seed_base, rewards_fn=_play_rewards) -> dict` with keys `"w"`, `"t"`, `"l"`, `"games"`, `"win_rate"`, `"share"`. Zero games → `win_rate` and `share` both `0.5`, counts all `0`.
-  - `harness.evolve.match_share(agent, opponents, games, seed_base, rewards_fn=_play_rewards) -> float` — mean of each opponent's `"share"`. Empty opponent list → `0.5`.
-  - `rewards_fn` has the signature `(agent_a, agent_b, seed) -> (reward_a, reward_b)`.
+  - `opponent_record(agent, opponent, games, seed_base, rewards_fn=_play_rewards) -> dict` with keys `"w"`, `"t"`, `"l"`, `"games"`, `"win_rate"`, `"share"`. Zero games → `win_rate` and `share` both `0.5`, counts all `0`.
+  - `match_share(agent, opponents, games, seed_base, rewards_fn=_play_rewards) -> float` — mean of each opponent's `"share"`. Empty opponent list → `0.5`.
+  - `blended_fitness(anchor_share, pool_share, anchor_weight=DEFAULT_ANCHOR_WEIGHT) -> float`
+  - `DEFAULT_ANCHOR_WEIGHT = 0.75`
+  - `evolve(generations, pop_size, games, sigma, sample_k, hof_cap, anchor_names=DEFAULT_ANCHORS, seed=0, rewards_fn=_play_rewards, anchor_weight=DEFAULT_ANCHOR_WEIGHT, anchor_agents_override=None)` — the keyword is now `rewards_fn`, **not** `play_fn`.
+  - `rewards_fn` signature: `(agent_a, agent_b, seed) -> (reward_a, reward_b)`.
+- Later tasks extend `evolve()`'s signature further: Task 3 adds `seed_genome`, Task 4 adds `checkpoint_fn`. Do **not** add them here.
 
 - [ ] **Step 1: Write the failing tests**
 
-In `tests/test_evolve.py`, **delete** `test_match_winrate_counts_ties_as_half`, `test_match_winrate_all_wins_is_one`, `test_match_winrate_all_losses_is_zero`, `test_match_winrate_alternates_sides_to_cancel_first_player_advantage`, `test_match_winrate_zero_games_falls_back_to_half`, `test_match_winrate_no_opponents_falls_back_to_half`, and `test_evaluate_population_returns_genome_fitness_pairs` (lines 53-101). Keep the `_stub_play` / `_tagged` helpers — `_tagged` is reused below.
+In `tests/test_evolve.py`, **delete** `test_match_winrate_counts_ties_as_half`, `test_match_winrate_all_wins_is_one`, `test_match_winrate_all_losses_is_zero`, `test_match_winrate_alternates_sides_to_cancel_first_player_advantage`, `test_match_winrate_zero_games_falls_back_to_half`, `test_match_winrate_no_opponents_falls_back_to_half`, and `test_evaluate_population_returns_genome_fitness_pairs` (lines 53-101). Keep the `_stub_play` / `_tagged` helpers — `_tagged` is reused throughout; delete `_stub_play` only if nothing else references it after the edit.
 
 Add in their place:
 
@@ -255,16 +261,85 @@ def test_match_share_no_opponents_falls_back_to_half():
     """An empty pool is neutral, not a loss — generation 0 has no Hall-of-Fame."""
     assert ev.match_share(_tagged(""), [], games=4, seed_base=0,
                           rewards_fn=_stub_rewards) == 0.5
+
+
+def test_blended_fitness_weights_anchors_more_heavily():
+    """Anchors are the real field, so they dominate: 0.75 anchor / 0.25 sibling."""
+    assert ev.blended_fitness(0.8, 0.4, 0.75) == 0.75 * 0.8 + 0.25 * 0.4
+
+
+def test_blended_fitness_ignores_an_empty_sibling_pool():
+    """Generation 0 has no Hall-of-Fame; a missing pool is neutral, not a zero.
+
+    Scoring the absent pool as 0.0 would drag every gen-0 genome down by a
+    constant and make gen 0 incomparable to later generations.
+    """
+    assert ev.blended_fitness(0.8, None, 0.75) == 0.8
+
+
+def test_blended_fitness_full_anchor_weight_ignores_the_pool():
+    """anchor_weight 1.0 makes the sibling pool contribute nothing."""
+    assert ev.blended_fitness(0.6, 0.9, 1.0) == 0.6
+
+
+def test_evolve_fitness_is_dominated_by_the_anchors():
+    """The #70 regression guard: beating siblings must NOT be able to mask
+    losing to every anchor. This is the exact failure that pinned fitness at
+    0.5833 while the agent went 0-for-5 against the real field."""
+    def rewards(a, b, seed=None):
+        # Every neuropilot genome loses badly to the lone anchor and ties siblings.
+        if getattr(a, "tag", "") == "anchor":
+            return (900.0, 100.0)
+        if getattr(b, "tag", "") == "anchor":
+            return (100.0, 900.0)
+        return (100.0, 100.0)
+
+    result = ev.evolve(generations=2, pop_size=4, games=2, sigma=0.1, sample_k=2,
+                       hof_cap=2, anchor_names=(), seed=1, rewards_fn=rewards,
+                       anchor_weight=0.75, anchor_agents_override=[_tagged("anchor")])
+    # anchor share 0.10, sibling share 0.50 -> 0.75*0.10 + 0.25*0.50 = 0.20
+    assert result["best_fitness"] == 0.2
 ```
+
+Then **replace** `test_evolve_is_deterministic_and_reports_history` (lines 122-143) with this version — the determinism and history assertions are unchanged; only the stub's return type and the keyword differ:
+
+```python
+def test_evolve_is_deterministic_and_reports_history():
+    # Stub: reward tracks the genome mean, so mutation toward higher weights wins; no real games.
+    def stub(a, b, seed=None):
+        return (getattr(a, "_score", 0.0) + 1.0, getattr(b, "_score", 0.0) + 1.0)
+    # Monkeypatch genome_agent to tag the agent with its genome mean for the stub.
+    import harness.evolve as E
+    orig = E.genome_agent
+    def tagged_agent(g):
+        ag = _tagged("")
+        ag._score = sum(g) / len(g)
+        return ag
+    E.genome_agent = tagged_agent
+    try:
+        out = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
+                       hof_cap=2, anchor_names=[], seed=1, rewards_fn=stub,
+                       anchor_agents_override=[_tagged("")])
+        assert set(out) == {"best_genome", "best_fitness", "history"}
+        assert len(out["history"]) == 3
+        out2 = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
+                        hof_cap=2, anchor_names=[], seed=1, rewards_fn=stub,
+                        anchor_agents_override=[_tagged("")])
+        assert out2["best_fitness"] == out["best_fitness"]     # deterministic
+    finally:
+        E.genome_agent = orig
+```
+
+The `+ 1.0` keeps both rewards strictly positive so `share` never hits its both-zero fallback, and `anchor_agents_override` supplies a stub anchor now that `anchor_names=[]` no longer produces one.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -k "opponent_record or match_share" -v`
+Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -v`
 Expected: FAIL — `AttributeError: module 'harness.evolve' has no attribute 'opponent_record'`
 
-- [ ] **Step 3: Implement in `harness/evolve.py`**
+- [ ] **Step 3: Implement the scoring helpers**
 
-Change the import at line 4 from:
+Change the import at line 4 of `harness/evolve.py` from:
 
 ```python
 from harness.tournament import play as _play
@@ -320,103 +395,8 @@ def match_share(agent, opponents, games, seed_base, rewards_fn=_play_rewards):
         opponent_record(agent, opp, games, seed_base + oi * 100000, rewards_fn)["share"]
         for oi, opp in enumerate(opponents)
     ) / len(opponents)
-```
-
-- [ ] **Step 4: Run the tests to verify they pass**
-
-Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -v`
-Expected: The 8 new tests PASS. `test_evolve_is_deterministic_and_reports_history` will FAIL — it passes `play_fn=` and `evolve()` still references the removed `match_winrate`. Task 3 fixes that; leave it failing for now and say so in the commit.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add harness/evolve.py tests/test_evolve.py
-git commit -m "feat(evolve): opponent_record supersedes match_winrate (#70)
-
-One pass over the games now yields both the W/T/L record and the mean score
-share. Playing each game twice to collect them separately would have doubled
-benchmark cost for two numbers that fall out of the same rewards.
-evaluate_population goes too — evolve() inlines its own scoring loop and never
-called it. All five behaviours the old tests covered are ported.
-
-evolve() itself is wired up in the next commit; its determinism test is red
-until then.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
-```
-
----
-
-### Task 3: `blended_fitness()` and wiring `evolve()`
-
-The 0.75/0.25 anchor/sibling blend, and the loop that uses it. This is the change that actually moves the plateau.
-
-**Files:**
-- Modify: `harness/evolve.py` (add `blended_fitness`; rewrite the scoring block inside `evolve` at lines 99-116)
-- Test: `tests/test_evolve.py`
-
-**Interfaces:**
-- Consumes: `share`, `opponent_record`, `match_share` (Tasks 1-2).
-- Produces:
-  - `harness.evolve.blended_fitness(anchor_share, pool_share, anchor_weight) -> float`
-  - `harness.evolve.DEFAULT_ANCHOR_WEIGHT = 0.75`
-  - `evolve(..., anchor_weight=DEFAULT_ANCHOR_WEIGHT, rewards_fn=_play_rewards)` — note the keyword is now `rewards_fn`, **not** `play_fn`.
-
-- [ ] **Step 1: Write the failing tests**
-
-Add to `tests/test_evolve.py`:
-
-```python
-def test_blended_fitness_weights_anchors_more_heavily():
-    """Anchors are the real field, so they dominate: 0.75 anchor / 0.25 sibling."""
-    assert ev.blended_fitness(0.8, 0.4, 0.75) == 0.75 * 0.8 + 0.25 * 0.4
 
 
-def test_blended_fitness_ignores_an_empty_sibling_pool():
-    """Generation 0 has no Hall-of-Fame; a missing pool is neutral, not a zero.
-
-    Scoring the absent pool as 0.0 would drag every gen-0 genome down by a
-    constant and make gen 0 incomparable to later generations.
-    """
-    assert ev.blended_fitness(0.8, None, 0.75) == 0.8
-
-
-def test_blended_fitness_full_anchor_weight_ignores_the_pool():
-    """anchor_weight 1.0 makes the sibling pool contribute nothing."""
-    assert ev.blended_fitness(0.6, 0.9, 1.0) == 0.6
-
-
-def test_evolve_fitness_is_dominated_by_the_anchors():
-    """The #70 regression guard: beating siblings must NOT be able to mask
-    losing to every anchor. This is the exact failure that pinned fitness at
-    0.5833 while the agent went 0-for-5 against the real field."""
-    def rewards(a, b, seed=None):
-        # Every neuropilot genome loses badly to the lone anchor and ties siblings.
-        a_is_anchor = getattr(a, "tag", "") == "anchor"
-        b_is_anchor = getattr(b, "tag", "") == "anchor"
-        if a_is_anchor:
-            return (900.0, 100.0)
-        if b_is_anchor:
-            return (100.0, 900.0)
-        return (100.0, 100.0)
-
-    result = ev.evolve(generations=2, pop_size=4, games=2, sigma=0.1, sample_k=2,
-                       hof_cap=2, anchor_names=(), seed=1, rewards_fn=rewards,
-                       anchor_weight=0.75, anchor_agents_override=[_tagged("anchor")])
-    # anchor share 0.10, sibling share 0.50 -> 0.75*0.10 + 0.25*0.50 = 0.20
-    assert result["best_fitness"] == 0.2
-```
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -k "blended or dominated" -v`
-Expected: FAIL — `AttributeError: module 'harness.evolve' has no attribute 'blended_fitness'`
-
-- [ ] **Step 3: Implement `blended_fitness`**
-
-Add to `harness/evolve.py` after `match_share`:
-
-```python
 DEFAULT_ANCHOR_WEIGHT = 0.75
 
 
@@ -437,15 +417,14 @@ def blended_fitness(anchor_share, pool_share, anchor_weight=DEFAULT_ANCHOR_WEIGH
     return anchor_weight * anchor_share + (1.0 - anchor_weight) * pool_share
 ```
 
-- [ ] **Step 4: Rewrite the scoring block in `evolve()`**
+- [ ] **Step 4: Rewrite `evolve()`**
 
 Replace the whole `evolve` function (lines 91-116) with:
 
 ```python
 def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
            anchor_names=DEFAULT_ANCHORS, seed=0, rewards_fn=_play_rewards,
-           anchor_weight=DEFAULT_ANCHOR_WEIGHT, seed_genome=None,
-           checkpoint_fn=None, anchor_agents_override=None):
+           anchor_weight=DEFAULT_ANCHOR_WEIGHT, anchor_agents_override=None):
     """Run the neuroevolution loop; return best genome/fitness and per-generation history.
 
     Fitness is the anchor-dominant blend of score shares (#70), not win-rate:
@@ -455,8 +434,7 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
     rng = random.Random(seed)
     anchors = (anchor_agents_override if anchor_agents_override is not None
                else anchor_agents(anchor_names))
-    population = (seeded_population(seed_genome, pop_size, sigma, rng)
-                  if seed_genome is not None else initial_population(pop_size, seed))
+    population = initial_population(pop_size, seed)
     hof_genomes = []
     best_genome, best_fit, history = None, -1.0, []
     for gen in range(generations):
@@ -477,67 +455,31 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
         history.append({"gen": gen, "best": gen_best_f, "mean": mean_f})
         if gen_best_f > best_fit:
             best_fit, best_genome = gen_best_f, gen_best_g
-        if checkpoint_fn is not None:
-            checkpoint_fn(best_genome, best_fit, list(history))
         elites = [g for g, _ in scored[:max(1, pop_size // 4)]]
         hof_genomes = update_hof(hof_genomes, [gen_best_g], hof_cap)
         population = next_generation(elites, pop_size, sigma, rng)
     return {"best_genome": best_genome, "best_fitness": best_fit, "history": history}
 ```
 
-Note `build_opponents` is called with an empty anchor list — anchors are now scored
-separately so they can be weighted. `seeded_population` arrives in Task 4; until then
-`seed_genome` is always `None`, so that branch is unreachable. Add a temporary stub
-above `evolve` so the module imports:
+`build_opponents` is called with an empty anchor list because anchors are now scored separately so they can be weighted.
+
+- [ ] **Step 5: Add the `--anchor-weight` flag**
+
+In `main()`, alongside the existing arguments:
 
 ```python
-def seeded_population(seed_genome, size, sigma, rng):
-    """Replaced with the real implementation in Task 4."""
-    raise NotImplementedError
+    ap.add_argument("--anchor-weight", type=float, default=DEFAULT_ANCHOR_WEIGHT,
+                    help="weight on the anchor share vs the sibling pool (default 0.75)")
 ```
 
-- [ ] **Step 5: Update the existing determinism test**
-
-`test_evolve_is_deterministic_and_reports_history` (currently `tests/test_evolve.py:122-143`)
-passes `play_fn=` and its stub returns a sign. Replace the whole test with this version —
-the determinism and history assertions are unchanged, only the stub's return type and
-the keyword differ:
-
-```python
-def test_evolve_is_deterministic_and_reports_history():
-    # Stub: reward tracks the genome mean, so mutation toward higher weights wins; no real games.
-    def stub(a, b, seed=None):
-        return (getattr(a, "_score", 0.0) + 1.0, getattr(b, "_score", 0.0) + 1.0)
-    # Monkeypatch genome_agent to tag the agent with its genome mean for the stub.
-    import harness.evolve as E
-    orig = E.genome_agent
-    def tagged_agent(g):
-        ag = _tagged("")
-        ag._score = sum(g) / len(g)
-        return ag
-    E.genome_agent = tagged_agent
-    try:
-        out = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
-                       hof_cap=2, anchor_names=[], seed=1, rewards_fn=stub,
-                       anchor_agents_override=[_tagged("")])
-        assert set(out) == {"best_genome", "best_fitness", "history"}
-        assert len(out["history"]) == 3
-        out2 = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
-                        hof_cap=2, anchor_names=[], seed=1, rewards_fn=stub,
-                        anchor_agents_override=[_tagged("")])
-        assert out2["best_fitness"] == out["best_fitness"]     # deterministic
-    finally:
-        E.genome_agent = orig
-```
-
-The `+ 1.0` keeps both rewards strictly positive so `share` never hits its
-both-zero fallback, and `anchor_agents_override` supplies a stub anchor now that
-`anchor_names=[]` no longer produces one.
+Pass `anchor_weight=args.anchor_weight` into the `evolve(...)` call, and add
+`"anchor_weight": args.anchor_weight` to the `meta` dict in the `save_genome` call so
+runs stay reproducible (ADR-0005).
 
 - [ ] **Step 6: Run the full suite**
 
 Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/ -q`
-Expected: PASS — everything green, including the ported determinism test.
+Expected: PASS — everything green, no failures, no errors.
 
 - [ ] **Step 7: Commit**
 
@@ -551,24 +493,30 @@ sibling opponents supplied all the gradient and saturated at 12/12 by gen 4 —
 14/24 = 0.5833, the plateau — while the agent went 0-for-5 against every real
 anchor. Fitness is now the shaped score share, so losing by less scores better.
 
+opponent_record replaces match_winrate: one pass over the games yields both the
+W/T/L record and the mean share, where calling both would have played every game
+twice for two numbers from the same rewards. evaluate_population goes too — it
+was already dead, since evolve() inlines its own scoring loop.
+
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 4: `seeded_population()` and the `--seed-genome` flag
+### Task 3: `seeded_population()` and the `--seed-genome` flag
 
 Start a run from the 20,000-reward champion instead of re-deriving basics from 1,700-reward randoms.
 
 **Files:**
-- Modify: `harness/evolve.py` (replace the Task 3 stub; add `load_genome`, extend `main`)
+- Modify: `harness/evolve.py` (add `seeded_population` and `load_genome`; extend `evolve` and `main`)
 - Test: `tests/test_evolve.py`
 
 **Interfaces:**
-- Consumes: `mutate` (existing), `GENOME_LEN` (existing).
+- Consumes: `mutate`, `GENOME_LEN`, `save_genome` (all existing); `evolve` (Task 2).
 - Produces:
-  - `harness.evolve.seeded_population(seed_genome, size, sigma, rng) -> list[list[float]]`
-  - `harness.evolve.load_genome(path) -> list[float]` — raises `ValueError` on a missing, unreadable, or wrong-length genome.
+  - `seeded_population(seed_genome, size, sigma, rng) -> list[list[float]]`
+  - `load_genome(path) -> list[float]` — raises `ValueError` on a missing, unreadable, or wrong-length genome.
+  - `evolve(...)` gains a `seed_genome=None` keyword.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -590,6 +538,19 @@ def test_seeded_population_is_deterministic_for_a_seeded_rng():
     a = ev.seeded_population(seed_g, size=4, sigma=0.1, rng=random.Random(3))
     b = ev.seeded_population(seed_g, size=4, sigma=0.1, rng=random.Random(3))
     assert a == b
+
+
+def test_evolve_starts_from_the_seed_genome_when_given_one():
+    """A seeded run begins at the champion, not at random noise."""
+    def rewards(a, b, seed=None):
+        return (100.0, 100.0)
+
+    seed_g = [0.5] * ev.GENOME_LEN
+    out = ev.evolve(generations=1, pop_size=4, games=2, sigma=0.0, sample_k=1,
+                    hof_cap=1, anchor_names=(), seed=1, rewards_fn=rewards,
+                    anchor_agents_override=[_tagged("")], seed_genome=seed_g)
+    # sigma 0 makes every mutant identical to the seed, so the winner must be it.
+    assert out["best_genome"] == seed_g
 
 
 def test_load_genome_round_trips_a_saved_artifact(tmp_path):
@@ -622,12 +583,12 @@ Add `import pytest` to the test module's imports if it is not already there.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -k "seeded_population or load_genome" -v`
-Expected: FAIL — `NotImplementedError` for the population tests, `AttributeError` for `load_genome`.
+Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -k "seeded_population or load_genome or seed_genome" -v`
+Expected: FAIL — `AttributeError: module 'harness.evolve' has no attribute 'seeded_population'`
 
-- [ ] **Step 3: Implement both**
+- [ ] **Step 3: Implement both helpers**
 
-Replace the Task 3 `seeded_population` stub in `harness/evolve.py` with:
+Add to `harness/evolve.py` after `initial_population`:
 
 ```python
 def seeded_population(seed_genome, size, sigma, rng):
@@ -665,41 +626,54 @@ def load_genome(path):
     return [float(w) for w in g]
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [ ] **Step 4: Wire `seed_genome` into `evolve()`**
 
-Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -v`
-Expected: PASS — all tests.
+Add `seed_genome=None` to `evolve()`'s keyword arguments, and replace its population
+initialization line:
 
-- [ ] **Step 5: Wire the CLI flags**
+```python
+    population = initial_population(pop_size, seed)
+```
 
-In `main()` in `harness/evolve.py`, add these arguments alongside the existing ones:
+with:
+
+```python
+    population = (seeded_population(seed_genome, pop_size, sigma, rng)
+                  if seed_genome is not None else initial_population(pop_size, seed))
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/ -q`
+Expected: PASS — the whole suite.
+
+- [ ] **Step 6: Wire the CLI flag**
+
+In `main()`:
 
 ```python
     ap.add_argument("--seed-genome", default=None,
                     help="start from this genome artifact instead of random init")
-    ap.add_argument("--anchor-weight", type=float, default=DEFAULT_ANCHOR_WEIGHT,
-                    help="weight on the anchor share vs the sibling pool (default 0.75)")
 ```
 
-Then, before the `evolve(...)` call:
+Before the `evolve(...)` call:
 
 ```python
     seed_genome = load_genome(args.seed_genome) if args.seed_genome else None
 ```
 
-Pass `seed_genome=seed_genome` and `anchor_weight=args.anchor_weight` into `evolve(...)`,
-and add `"anchor_weight": args.anchor_weight` and `"seed_genome": args.seed_genome` to
-the `meta` dict in the `save_genome` call so runs stay reproducible (ADR-0005).
+Pass `seed_genome=seed_genome` into `evolve(...)`, and add `"seed_genome": args.seed_genome`
+to the `meta` dict in the `save_genome` call.
 
-- [ ] **Step 6: Verify the CLI accepts the flags**
+- [ ] **Step 7: Verify the CLI**
 
 Run: `PYTHONPATH=. .venv/bin/python -m harness.evolve --help`
 Expected: `--seed-genome` and `--anchor-weight` both listed.
 
 Run: `PYTHONPATH=. .venv/bin/python -m harness.evolve --seed-genome /nope.json --dry-run`
-Expected: exits with a clear `could not read seed genome` error, not a traceback into random init.
+Expected: exits with a clear `could not read seed genome` message rather than starting a run.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add harness/evolve.py tests/test_evolve.py
@@ -720,17 +694,19 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Per-generation checkpointing
+### Task 4: Per-generation checkpointing
 
 An interrupted overnight run currently loses everything. Issue #70 calls this out explicitly.
 
 **Files:**
-- Modify: `harness/evolve.py` (add `checkpoint_genome`; wire it in `main`)
+- Modify: `harness/evolve.py` (add `checkpoint_genome`; add a `checkpoint_fn` hook to `evolve`; wire it in `main`)
 - Test: `tests/test_evolve.py`
 
 **Interfaces:**
-- Consumes: `save_genome` (existing), `evolve(..., checkpoint_fn=...)` (Task 3).
-- Produces: `harness.evolve.checkpoint_genome(path, genome, fitness, history)` — writes atomically, warns and returns `False` on failure instead of raising.
+- Consumes: `save_genome`, `load_genome` (Task 3), `evolve` (Task 2).
+- Produces:
+  - `checkpoint_genome(path, genome, fitness, history) -> bool` — writes atomically; warns and returns `False` on failure instead of raising.
+  - `evolve(...)` gains a `checkpoint_fn=None` keyword, called once per generation as `checkpoint_fn(best_genome, best_fitness, history)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -759,8 +735,9 @@ def test_checkpoint_genome_records_progress_in_meta(tmp_path):
 
 def test_checkpoint_genome_survives_a_write_failure(tmp_path):
     """A disk hiccup must not kill an 8-hour run — warn and carry on."""
-    bad = tmp_path / "no_such_dir" / "sub" / "ckpt.json"
-    (tmp_path / "no_such_dir").write_text("i am a file, not a directory")
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("i am a file, not a directory")
+    bad = blocker / "sub" / "ckpt.json"
     assert ev.checkpoint_genome(str(bad), [0.25] * ev.GENOME_LEN, 0.1, []) is False
 
 
@@ -817,29 +794,39 @@ def checkpoint_genome(path, genome, fitness, history):
         return False
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [ ] **Step 4: Add the `checkpoint_fn` hook to `evolve()`**
 
-Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/test_evolve.py -v`
-Expected: PASS — all tests.
+Add `checkpoint_fn=None` to `evolve()`'s keyword arguments. Inside the generation loop,
+immediately after the `if gen_best_f > best_fit:` block and before the `elites = ...` line:
 
-- [ ] **Step 5: Wire checkpointing into `main()`**
+```python
+        if checkpoint_fn is not None:
+            checkpoint_fn(best_genome, best_fit, list(history))
+```
 
-In `main()`, before the `evolve(...)` call:
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `PYTHONPATH=. .venv/bin/python -m pytest tests/ -q`
+Expected: PASS — the whole suite.
+
+- [ ] **Step 6: Wire checkpointing into `main()`**
+
+Before the `evolve(...)` call:
 
 ```python
     ckpt = None if args.dry_run else (
         lambda g, f, h: checkpoint_genome(args.out, g, f, h))
 ```
 
-and pass `checkpoint_fn=ckpt` into `evolve(...)`. The final `save_genome` call stays
-as it is — it overwrites the last checkpoint with the complete metadata block.
+Pass `checkpoint_fn=ckpt` into `evolve(...)`. The final `save_genome` call stays as it is —
+it overwrites the last checkpoint with the complete metadata block.
 
-- [ ] **Step 6: Verify end to end with a tiny real run**
+- [ ] **Step 7: Verify end to end with a tiny real run**
 
 Run: `PYTHONPATH=. .venv/bin/python -m harness.evolve --generations 2 --pop 4 --games 1 --sample-k 1 --hof-cap 1 --out /tmp/ckpt_test.json`
 Expected: prints two `gen N: best=... mean=...` lines, then `saved champion genome to /tmp/ckpt_test.json`. Takes a few minutes — these are real games.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add harness/evolve.py tests/test_evolve.py
@@ -856,7 +843,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: `harness/genome_bench.py` — the frozen success bar
+### Task 5: `harness/genome_bench.py` — the frozen success bar
 
 The agreed acceptance criterion for #70: a reproducible number that makes "0.5833 is a plateau" falsifiable. This is the scratch diagnostic from the brainstorm, promoted to a real tool.
 
@@ -865,10 +852,10 @@ The agreed acceptance criterion for #70: a reproducible number that makes "0.583
 - Create: `tests/test_genome_bench.py`
 
 **Interfaces:**
-- Consumes: `evolve.load_genome`, `evolve.opponent_record`, `evolve.genome_agent`, `evolve.DEFAULT_ANCHORS`, `tournament.build_agents`.
-- Produces: `harness.genome_bench.benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0, rewards_fn=None, agents_override=None) -> dict` with keys `"per_opponent"` (list of dicts each carrying `"name"`, `"w"`, `"t"`, `"l"`, `"games"`, `"win_rate"`, `"share"`), `"win_rate"`, `"share"`, `"games"`.
+- Consumes: `evolve.load_genome` (Task 3), `evolve.opponent_record` (Task 2), `evolve.genome_agent`, `evolve.DEFAULT_ANCHORS`, `tournament.build_agents`, `tournament.play_rewards` (Task 1).
+- Produces: `benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0, rewards_fn=None, agents_override=None) -> dict` with keys `"per_opponent"` (list of dicts each carrying `"name"`, `"w"`, `"t"`, `"l"`, `"games"`, `"win_rate"`, `"share"`), `"win_rate"`, `"share"`, `"games"`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
 
 Create `tests/test_genome_bench.py`:
 
@@ -967,6 +954,13 @@ from harness.tournament import build_agents
 from harness.tournament import play_rewards as _play_rewards
 
 
+def _passer():
+    """A do-nothing agent, used when no genome is supplied (tests)."""
+    def agent(obs):
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+    return agent
+
+
 def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
                      rewards_fn=None, agents_override=None):
     """Play `genome` against each anchor and report the per-opponent breakdown.
@@ -976,7 +970,8 @@ def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
     from the opponent index and game number, so the result reproduces exactly.
     """
     rewards_fn = rewards_fn or _play_rewards
-    agents = agents_override if agents_override is not None else build_agents(list(anchor_names))
+    agents = (agents_override if agents_override is not None
+              else build_agents(list(anchor_names)))
     me = genome_agent(genome) if genome is not None else _passer()
 
     rows = []
@@ -991,13 +986,6 @@ def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
         "share": sum(r["share"] for r in rows) / n if n else 0.5,
         "games": sum(r["games"] for r in rows),
     }
-
-
-def _passer():
-    """A do-nothing agent, used when no genome is supplied (tests)."""
-    def agent(obs):
-        return {"farmer": ["PASS"], "hands": [], "market": []}
-    return agent
 
 
 def main(argv=None):  # pragma: no cover
@@ -1053,7 +1041,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: Documentation and the full CI gate
+### Task 6: Documentation and the full CI gate
 
 **Files:**
 - Modify: `CLAUDE.md` (the "Quick reference" list)
