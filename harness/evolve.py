@@ -25,6 +25,19 @@ def mutate(genome, sigma, rng):
         return list(genome)
     return [w + rng.gauss(0.0, sigma) for w in genome]
 
+def share(mine, theirs) -> float:
+    """Score share `mine / (mine + theirs)` — a smooth generalization of win-rate.
+
+    0.5 at a tie, above 0.5 when ahead, and continuously informative when behind.
+    Binary win/loss gives the search no gradient until it crosses the finish line;
+    this does (#70). Each side is clamped to >= 0 independently so a negative
+    reward can never push the result outside [0, 1].
+    """
+    a = max(0.0, float(mine or 0.0))
+    b = max(0.0, float(theirs or 0.0))
+    total = a + b
+    return 0.5 if total == 0.0 else a / total
+
 def select_elites(scored, k):
     ranked = sorted(scored, key=lambda gf: gf[1], reverse=True)
     return [g for g, _ in ranked[:k]]

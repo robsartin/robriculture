@@ -150,3 +150,30 @@ def test_save_genome_round_trips(tmp_path):
     ev.save_genome(str(p), [0.1, 0.2], {"fitness": 0.7})
     d = json.loads(p.read_text())
     assert d["genome"] == [0.1, 0.2] and d["meta"]["fitness"] == 0.7
+
+
+def test_share_is_half_when_scores_are_equal():
+    """A tie in reward is a 0.5 share — the same value a tied game scores."""
+    assert ev.share(100.0, 100.0) == 0.5
+
+
+def test_share_is_half_when_both_scores_are_zero():
+    """Degenerate both-zero games must not divide by zero."""
+    assert ev.share(0, 0) == 0.5
+    assert ev.share(None, None) == 0.5
+
+
+def test_share_clamps_negative_scores_to_zero():
+    """A negative reward is floored at 0 so share stays inside [0, 1]."""
+    assert ev.share(-50.0, 50.0) == 0.0
+    assert ev.share(50.0, -50.0) == 1.0
+
+
+def test_share_is_one_when_opponent_scores_nothing():
+    """Outscoring an opponent who earned nothing is a full share."""
+    assert ev.share(20000.0, 0.0) == 1.0
+
+
+def test_share_is_proportional_between_the_extremes():
+    """The champion's real 20570-vs-59136 game lands at its reward proportion."""
+    assert ev.share(20570.0, 59136.0) == 20570.0 / (20570.0 + 59136.0)
