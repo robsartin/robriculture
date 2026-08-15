@@ -1019,7 +1019,9 @@ Expected: PASS (4 tests)
 
 Run: `PYTHONPATH=. .venv/bin/python -m harness.genome_bench --genome strategies/champion_genome.json --games 4`
 
-Expected: the table from the issue — `spoiler` at rate 1.000, the other five at 0.000, TOTAL rate ≈ 0.1667, and shares in the 0.35–0.62 band. Takes ~1 minute (24 real games). **If the win-rates do not match the issue's table, stop and report** — the benchmark is the success criterion, so it has to reproduce the number it is meant to measure.
+Expected: the table from the issue — `spoiler` at rate 1.000, the other five at 0.000, TOTAL rate ≈ 0.1667. Takes ~1 minute (24 real games). **If the win-rates do not match the issue's table, stop and report** — the benchmark is the success criterion, so it has to reproduce the number it is meant to measure.
+
+Note the units: the issue's diagnostic table reports **ratios** (`me/opp`), while `genome_bench` reports **shares** (`me/(me+opp)`). They are the same measurement in different units — `share = ratio/(1+ratio)` — so the issue's 0.35–1.03 ratio band corresponds to a 0.26–0.51 share band. Do not compare the two columns directly.
 
 - [ ] **Step 6: Commit**
 
@@ -1126,8 +1128,18 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 Not a task — the experiment the branch exists to enable, run after the tasks land.
 Per ADR-0007 the result belongs in issue #70 either way.
 
-Baseline is already recorded: the current champion scores **win-rate 0.1667, share ≈ 0.53**
-on `genome_bench --games 4`.
+Baseline, **measured** with the Task 5 benchmark rather than estimated — the current
+champion on `genome_bench --games 4` scores:
+
+```
+meta_bot         W0 T0 L4  rate=0.000 share=0.261
+ranch_hands      W0 T0 L4  rate=0.000 share=0.360
+market_farmer    W0 T0 L4  rate=0.000 share=0.348
+ranch_adaptive   W0 T0 L4  rate=0.000 share=0.366
+wheat_hands      W0 T0 L4  rate=0.000 share=0.378
+spoiler          W4 T0 L0  rate=1.000 share=0.507
+TOTAL            games=24  rate=0.1667 share=0.3700
+```
 
 ```bash
 # Seeded from the current champion, sized to the ~14,000-game overnight budget.
@@ -1146,8 +1158,10 @@ Then compare on the frozen bar:
 PYTHONPATH=. .venv/bin/python -m harness.genome_bench --genome harness/genomes/champion_genome.json --games 4
 ```
 
-**Hypothesis:** mean share rises above the champion's ≈ 0.53, and at least one anchor
-beyond `spoiler` moves off a 0.000 win-rate.
+**Hypothesis:** mean share rises above the champion's measured **0.3700**, and at least
+one anchor beyond `spoiler` moves off a 0.000 win-rate. A share of 0.5 against an
+opponent means parity; every real anchor currently sits below 0.38, so there is a
+long way to climb before wins should be expected.
 
 **If share rises but win-rate does not**, that is the margin-vs-wins proxy gap the spec
 flagged — report it, and it becomes the argument for #71 (widening the controller)

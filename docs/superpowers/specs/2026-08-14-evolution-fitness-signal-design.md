@@ -53,6 +53,11 @@ opponents at `--games 2` = 24 games. The anchors contribute ~2 wins (spoiler); t
 2. **The losses are climbable, not catastrophic.** Score ratios of 0.35–0.62 vary
    informatively across opponents. The win-rate those games feed into is a flat
    0.000 for every one of them.
+
+   Units note: the `ratio` column above is `me/opp`. The shaped fitness this spec
+   adopts, and the `genome_bench` tool, both report **share** = `me/(me+opp)` =
+   `ratio/(1+ratio)`. The same measurements in share terms are 0.26–0.38, with
+   `spoiler` at 0.507. Do not compare the two columns directly.
 3. **Therefore the entire 12× gain came from beating siblings**, the only component
    of fitness with any gradient. That component saturated at 12/12 by generation 4
    — which *is* the plateau.
