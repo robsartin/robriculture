@@ -29,6 +29,14 @@ render.html
 submission.tar.gz
 *.tar.gz
 
+# --- Neuroevolution run output (#70) ---
+# harness/genomes/ is an OUTPUT directory — evolve.py's default --out and its
+# per-generation checkpoints land here, and a run rewrites them every few
+# minutes. Only .gitkeep is tracked. Promoting a champion is the deliberate act
+# of copying one of these to strategies/champion_genome.json, which IS tracked
+# because it ships in the submission.
+harness/genomes/*.json
+
 # --- Trained models / large binaries ---
 # Uncomment if you keep weights out of git (recommend Git LFS or a release
 # asset instead). Leave commented if a small bundled policy IS the submission.

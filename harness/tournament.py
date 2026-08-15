@@ -48,16 +48,24 @@ def benchmark_names():
     return {n for n in REGISTRY if getattr(load(n), "benchmark", False)}
 
 
-def play(agent_a, agent_b, seed=None):  # pragma: no cover
-    """Play one game. Return 1 if A wins, -1 if B wins, 0 tie."""
+def play_rewards(agent_a, agent_b, seed=None):  # pragma: no cover
+    """Play one game. Return the raw (reward_a, reward_b).
+
+    The magnitude matters: neuroevolution scores on reward share, not just the
+    sign, so that losing by less is measurably better than losing by more (#70).
+    """
     config = {"episodeSteps": 720}
     if seed is not None:
         config["seed"] = seed
     env = make("kaggriculture", configuration=config)
     env.run([agent_a, agent_b])
     ra, rb = (s.reward for s in env.steps[-1])
-    ra = ra or 0
-    rb = rb or 0
+    return (ra or 0), (rb or 0)
+
+
+def play(agent_a, agent_b, seed=None):  # pragma: no cover
+    """Play one game. Return 1 if A wins, -1 if B wins, 0 tie."""
+    ra, rb = play_rewards(agent_a, agent_b, seed)
     return (ra > rb) - (ra < rb)
 
 
