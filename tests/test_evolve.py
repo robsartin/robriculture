@@ -125,10 +125,11 @@ def test_blended_fitness_weights_anchors_more_heavily():
 
 
 def test_blended_fitness_ignores_an_empty_sibling_pool():
-    """Generation 0 has no Hall-of-Fame; a missing pool is neutral, not a zero.
+    """No sibling opponents at all (sample_k <= 0 and an empty/disabled
+    Hall-of-Fame) is neutral, not a zero — not specific to generation 0.
 
-    Scoring the absent pool as 0.0 would drag every gen-0 genome down by a
-    constant and make gen 0 incomparable to later generations.
+    Scoring the absent pool as 0.0 would drag every such genome down by a
+    constant and make it incomparable to generations with a nonempty pool.
     """
     assert ev.blended_fitness(0.8, None, 0.75) == 0.8
 
@@ -311,6 +312,24 @@ def test_checkpoint_genome_records_progress_in_meta(tmp_path):
     meta = json.loads(p.read_text())["meta"]
     assert meta["fitness"] == 0.42
     assert meta["generations_completed"] == 2
+    assert meta["checkpoint"] is True
+
+
+def test_checkpoint_genome_carries_the_run_settings(tmp_path):
+    """An interrupted run's checkpoint is the ONLY surviving artifact, so it must
+    record the same settings the final save_genome() call does — not just
+    progress — or it isn't reproducible (ADR-0005, #70)."""
+    p = tmp_path / "ckpt.json"
+    settings = {"seed": 7, "anchor_weight": 0.6, "pop": 20}
+    ev.checkpoint_genome(str(p), [0.25] * ev.GENOME_LEN, 0.42,
+                         [{"gen": 0, "best": 0.42}], settings=settings)
+    meta = json.loads(p.read_text())["meta"]
+    assert meta["seed"] == 7
+    assert meta["anchor_weight"] == 0.6
+    assert meta["pop"] == 20
+    # checkpoint-specific fields still win over the run settings.
+    assert meta["fitness"] == 0.42
+    assert meta["generations_completed"] == 1
     assert meta["checkpoint"] is True
 
 

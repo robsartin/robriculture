@@ -24,13 +24,6 @@ from harness.tournament import build_agents
 from harness.tournament import play_rewards as _play_rewards
 
 
-def _passer():
-    """A do-nothing agent, used when no genome is supplied (tests)."""
-    def agent(obs):
-        return {"farmer": ["PASS"], "hands": [], "market": []}
-    return agent
-
-
 def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
                      rewards_fn=None, agents_override=None):
     """Play `genome` against each anchor and report the per-opponent breakdown.
@@ -38,11 +31,16 @@ def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
     No Hall-of-Fame and no population sample: those are what let sibling-beating
     dominate the evolution fitness and saturate it at 0.5833 (#70). Seeds derive
     from the opponent index and game number, so the result reproduces exactly.
+
+    `genome` is normally a genome list, turned into an agent via genome_agent().
+    An already-built agent callable (the same seam agents_override provides for
+    the opponent side) is used as-is, so tests can supply a lightweight stub
+    instead of round-tripping through a real NeuroPilotStrategy.
     """
     rewards_fn = rewards_fn or _play_rewards
     agents = (agents_override if agents_override is not None
               else build_agents(list(anchor_names)))
-    me = genome_agent(genome) if genome is not None else _passer()
+    me = genome if callable(genome) else genome_agent(genome)
 
     rows = []
     for oi, (name, opp) in enumerate(agents.items()):

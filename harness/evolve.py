@@ -16,8 +16,15 @@ def save_genome(path, genome, meta):
         json.dump({"genome": list(genome), "meta": meta}, fh, indent=2)
         fh.write("\n")
 
-def checkpoint_genome(path, genome, fitness, history):
+def checkpoint_genome(path, genome, fitness, history, settings=None):
     """Persist the best-so-far genome mid-run. Return True on success.
+
+    `settings` carries the run's configuration (generations, pop, games, seed,
+    anchors, ...) — the same fields the final save_genome() call records. If an
+    8-hour run is interrupted, the checkpoint is the ONLY surviving artifact, so
+    it must be reproducible and interpretable on its own, not just track progress
+    (#70). checkpoint-specific fields (fitness, generations_completed, checkpoint,
+    history) always take precedence over any same-named key in settings.
 
     Written to a temp file and moved into place with os.replace, so an interrupt
     can never leave a half-written artifact. Any failure to write the checkpoint —
@@ -29,13 +36,15 @@ def checkpoint_genome(path, genome, fitness, history):
     tmp = f"{path}.tmp"
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        meta = dict(settings or {})
+        meta.update({
+            "fitness": fitness,
+            "generations_completed": len(history),
+            "checkpoint": True,
+            "history": history,
+        })
         with open(tmp, "w") as fh:
-            json.dump({"genome": list(genome), "meta": {
-                "fitness": fitness,
-                "generations_completed": len(history),
-                "checkpoint": True,
-                "history": history,
-            }}, fh, indent=2)
+            json.dump({"genome": list(genome), "meta": meta}, fh, indent=2)
             fh.write("\n")
         os.replace(tmp, path)
         return True
@@ -169,9 +178,11 @@ def blended_fitness(anchor_share, pool_share, anchor_weight=DEFAULT_ANCHOR_WEIGH
     sibling-beating supply all the gradient — and that component saturates, which
     is what pinned fitness at 0.5833 (#70).
 
-    `pool_share` of None means there were no sibling opponents (generation 0, or a
-    disabled Hall-of-Fame): fall back to the anchor share rather than scoring the
-    absent pool as a loss.
+    `pool_share` of None means there were no sibling opponents at all: sample_k
+    <= 0 AND the Hall-of-Fame is empty or disabled. It is not specific to
+    generation 0 — even there the sibling pool is a random sample of the
+    population itself, non-empty whenever sample_k >= 1 and pop_size >= 2. Fall
+    back to the anchor share rather than scoring the absent pool as a loss.
     """
     if pool_share is None:
         return anchor_share
@@ -268,8 +279,21 @@ def main(argv=None):  # pragma: no cover
 
     seed_genome = load_genome(args.seed_genome) if args.seed_genome else None
 
+    run_settings = {
+        "generations": args.generations,
+        "pop": args.pop,
+        "games": args.games,
+        "sigma": args.sigma,
+        "sample_k": args.sample_k,
+        "hof_cap": args.hof_cap,
+        "seed": args.seed,
+        "anchors": args.anchors,
+        "anchor_weight": args.anchor_weight,
+        "seed_genome": args.seed_genome,
+    }
+
     ckpt = None if args.dry_run else (
-        lambda g, f, h: checkpoint_genome(args.out, g, f, h))
+        lambda g, f, h: checkpoint_genome(args.out, g, f, h, settings=run_settings))
 
     result = evolve(
         generations=args.generations,
@@ -293,16 +317,7 @@ def main(argv=None):  # pragma: no cover
     else:
         save_genome(args.out, result["best_genome"], {
             "fitness": result["best_fitness"],
-            "generations": args.generations,
-            "pop": args.pop,
-            "games": args.games,
-            "sigma": args.sigma,
-            "sample_k": args.sample_k,
-            "hof_cap": args.hof_cap,
-            "seed": args.seed,
-            "anchors": args.anchors,
-            "anchor_weight": args.anchor_weight,
-            "seed_genome": args.seed_genome,
+            **run_settings,
         })
         print(f"saved champion genome to {args.out} (fitness={result['best_fitness']:.4f})")
     return 0
