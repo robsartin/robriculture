@@ -14,6 +14,7 @@ see the ADRs in [docs/adr/](docs/adr/).
 - `python -m harness.promotion <challenger> --champion <name> --games 200` — the ADR-0007 strategy gate (seeded; reports win-rate + binomial p + PROMOTE/REJECT).
 - `python -m harness.promotion --designate` — re-designate the champion from a seeded round-robin.
 - `python -m harness.rounds --games 20 --window 3` — play a round, append it to `harness/rounds.json`, re-pick the champion over the recent window (#12).
+- `python -m harness.genome_bench --genome <path> --games 4` — score one genome against the fixed anchors only (no Hall-of-Fame, no population sample). The **comparable** number across evolution runs; `evolve`'s own fitness is not (#70).
 - `python -m build.package <strategy>` — build a submittable tarball (runs a post-build smoke test).
 
 ## The experiment loop (ADR-0007) — the defining workflow

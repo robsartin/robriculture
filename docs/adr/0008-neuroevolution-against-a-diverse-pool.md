@@ -63,6 +63,12 @@ harness; (3) the diverse external-opponent pool; (4) submission integration.
 - Vendoring external agents carries licensing obligations — only agents whose
   license clearly permits reuse, each attributed (consistent with [[ADR-0005]]'s
   open-development stance).
+- **Pool composition must be weighted, not merely diverse (#70, 2026-08-14).** The
+  first implementation averaged all opponents equally, so a population sample and
+  Hall-of-Fame that were half the pool supplied all the gradient — and saturated,
+  pinning fitness at 0.5833 while the agent lost to every real anchor. Fitness is
+  now an anchor-dominant blend of shaped score shares. Win/loss alone gives no
+  gradient below the finish line.
 
 ## Alternatives considered
 
