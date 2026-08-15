@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse, json, os, random, sys
 from kaggisim.strategy import make_agent
-from harness.tournament import play as _play
+from harness.tournament import play_rewards as _play_rewards
 from harness.tournament import build_agents
 from strategies import neuropilot as npilot
 
@@ -53,26 +53,67 @@ def genome_agent(genome):
     """Return the agent callable for a genome."""
     return make_agent(npilot.NeuroPilotStrategy(genome=genome))
 
-def match_winrate(agent, opponents, games, seed_base, play_fn=_play):
-    """Calculate win-rate (ties count as 0.5) playing agent against all opponents.
+def opponent_record(agent, opponent, games, seed_base, rewards_fn=_play_rewards):
+    """Play `games` games against one opponent; report the record and the score share.
 
-    Plays agent against each opponent for `games` games, alternating sides.
-    Ties count as 0.5 wins. Returns (wins + 0.5*ties) / total.
+    Both statistics come from the same rewards in a single pass — playing each game
+    twice to collect them separately would double the cost for nothing. Sides
+    alternate on odd games so first-player advantage cancels.
+
+    Zero games returns the neutral 0.5 for both rates rather than 0: no evidence is
+    not evidence of failure.
     """
-    wins = ties = total = 0
-    for oi, opp in enumerate(opponents):
-        for g in range(games):
-            seed = seed_base + oi * 100000 + g
-            r = play_fn(agent, opp, seed) if g % 2 == 0 else -play_fn(opp, agent, seed)
-            total += 1
-            if r > 0: wins += 1
-            elif r == 0: ties += 1
-    return (wins + 0.5 * ties) / total if total else 0.5
+    w = t = l = 0
+    shares = []
+    for g in range(games):
+        seed = seed_base + g
+        if g % 2 == 0:
+            mine, theirs = rewards_fn(agent, opponent, seed)
+        else:
+            theirs, mine = rewards_fn(opponent, agent, seed)
+        shares.append(share(mine, theirs))
+        if mine > theirs:
+            w += 1
+        elif mine == theirs:
+            t += 1
+        else:
+            l += 1
+    n = len(shares)
+    return {
+        "w": w, "t": t, "l": l, "games": n,
+        "win_rate": (w + 0.5 * t) / n if n else 0.5,
+        "share": sum(shares) / n if n else 0.5,
+    }
 
-def evaluate_population(population, opponents, games, seed_base, play_fn=_play):
-    """Evaluate all genomes in population; return [(genome, fitness), ...]."""
-    return [(g, match_winrate(genome_agent(g), opponents, games, seed_base + i, play_fn))
-            for i, g in enumerate(population)]
+
+def match_share(agent, opponents, games, seed_base, rewards_fn=_play_rewards):
+    """Mean score share across every opponent — each opponent weighted equally."""
+    if not opponents:
+        return 0.5
+    return sum(
+        opponent_record(agent, opp, games, seed_base + oi * 100000, rewards_fn)["share"]
+        for oi, opp in enumerate(opponents)
+    ) / len(opponents)
+
+
+DEFAULT_ANCHOR_WEIGHT = 0.75
+
+
+def blended_fitness(anchor_share, pool_share, anchor_weight=DEFAULT_ANCHOR_WEIGHT) -> float:
+    """Combine the anchor and sibling-pool shares, anchors dominant.
+
+    The anchors are the only opponents that stand in for the real field. Scoring
+    them at equal weight with the population sample and Hall-of-Fame let
+    sibling-beating supply all the gradient — and that component saturates, which
+    is what pinned fitness at 0.5833 (#70).
+
+    `pool_share` of None means there were no sibling opponents (generation 0, or a
+    disabled Hall-of-Fame): fall back to the anchor share rather than scoring the
+    absent pool as a loss.
+    """
+    if pool_share is None:
+        return anchor_share
+    return anchor_weight * anchor_share + (1.0 - anchor_weight) * pool_share
 
 DEFAULT_ANCHORS = ("meta_bot", "ranch_hands", "market_farmer", "ranch_adaptive", "wheat_hands", "spoiler")
 
@@ -102,10 +143,17 @@ def update_hof(prev_hof, elites, cap):
     return combined[-cap:]
 
 def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
-           anchor_names=DEFAULT_ANCHORS, seed=0, play_fn=_play):
-    """Run the neuroevolution loop; return best genome/fitness and per-generation history."""
+           anchor_names=DEFAULT_ANCHORS, seed=0, rewards_fn=_play_rewards,
+           anchor_weight=DEFAULT_ANCHOR_WEIGHT, anchor_agents_override=None):
+    """Run the neuroevolution loop; return best genome/fitness and per-generation history.
+
+    Fitness is the anchor-dominant blend of score shares (#70), not win-rate:
+    win/loss gives no gradient at all until the agent starts winning, and it was
+    not winning.
+    """
     rng = random.Random(seed)
-    anchors = anchor_agents(anchor_names)
+    anchors = (anchor_agents_override if anchor_agents_override is not None
+               else anchor_agents(anchor_names))
     population = initial_population(pop_size, seed)
     hof_genomes = []
     best_genome, best_fit, history = None, -1.0, []
@@ -114,9 +162,13 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
         hof_agents = [genome_agent(g) for g in hof_genomes]
         scored = []
         for i, g in enumerate(population):
-            opp = build_opponents([pa for j, pa in enumerate(pop_agents) if j != i],
-                                  anchors, hof_agents, sample_k, rng)
-            scored.append((g, match_winrate(pop_agents[i], opp, games, seed + gen * 7919 + i, play_fn)))
+            base = seed + gen * 7919 + i
+            siblings = build_opponents([pa for j, pa in enumerate(pop_agents) if j != i],
+                                       [], hof_agents, sample_k, rng)
+            a_share = match_share(pop_agents[i], anchors, games, base, rewards_fn)
+            p_share = (match_share(pop_agents[i], siblings, games, base + 50000, rewards_fn)
+                       if siblings else None)
+            scored.append((g, blended_fitness(a_share, p_share, anchor_weight)))
         scored.sort(key=lambda gf: gf[1], reverse=True)
         gen_best_g, gen_best_f = scored[0]
         mean_f = sum(f for _, f in scored) / len(scored)
@@ -140,6 +192,8 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--anchors", nargs="*", default=list(DEFAULT_ANCHORS),
                      help="registered strategy names to use as fixed opponents")
+    ap.add_argument("--anchor-weight", type=float, default=DEFAULT_ANCHOR_WEIGHT,
+                    help="weight on the anchor share vs the sibling pool (default 0.75)")
     ap.add_argument("--out", default=GENOME_ARTIFACT, help="where to save the champion genome")
     ap.add_argument("--dry-run", action="store_true", help="skip writing the genome artifact")
     args = ap.parse_args(argv)
@@ -153,6 +207,7 @@ def main(argv=None):  # pragma: no cover
         hof_cap=args.hof_cap,
         anchor_names=args.anchors,
         seed=args.seed,
+        anchor_weight=args.anchor_weight,
     )
 
     for h in result["history"]:
@@ -171,6 +226,7 @@ def main(argv=None):  # pragma: no cover
             "hof_cap": args.hof_cap,
             "seed": args.seed,
             "anchors": args.anchors,
+            "anchor_weight": args.anchor_weight,
         })
         print(f"saved champion genome to {args.out} (fitness={result['best_fitness']:.4f})")
     return 0
