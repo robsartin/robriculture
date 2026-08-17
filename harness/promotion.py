@@ -167,6 +167,11 @@ def pool_share_rank(candidates, pool, games=2, seed_base=0,
     rows = []
     for name, agent in candidates.items():
         opponents = [a for opp_name, a in pool.items() if opp_name != name]
+        if not opponents:
+            raise ValueError(
+                f"candidate {name!r} has no opponents: it is the only entry in the pool, "
+                f"and a candidate never plays itself"
+            )
         rows.append({
             "name": name,
             "share": match_share(agent, opponents, games, seed_base, rewards_fn),

@@ -257,6 +257,18 @@ def test_pool_share_rank_raises_on_an_empty_pool():
         promotion.pool_share_rank({"a": _named("a")}, {}, games=2, rewards_fn=_stub_rewards)
 
 
+def test_pool_share_rank_raises_when_a_candidate_is_the_only_pool_entry():
+    """Self-exclusion can empty a candidate's opponent list; that must raise.
+
+    match_share returns 0.5 for an empty opponent list by design (#70). Letting
+    that through here would designate a champion on a number that means
+    "no evidence" rather than "evenly matched".
+    """
+    with pytest.raises(ValueError, match="no opponents"):
+        promotion.pool_share_rank({"x": _named("x")}, {"x": _named("x")},
+                                  games=2, rewards_fn=_stub_rewards)
+
+
 def test_top_contender_takes_names_and_skips_benchmarks():
     """top_contender now consumes best-first names, not ranking tuples."""
     assert promotion.top_contender(["meta_bot", "ranch_hands"], {"meta_bot"}) == "ranch_hands"
