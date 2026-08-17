@@ -77,7 +77,7 @@ def designate_from_history(path=ROUNDS_PATH, window=DEFAULT_WINDOW, decay=None, 
     returned as champion (see `harness.promotion.top_contender`).
     """
     ranking = windowed_ranking(load_rounds(path), window=window, decay=decay)
-    return top_contender(ranking, benchmarks or set())
+    return top_contender([row[0] for row in ranking], benchmarks or set())
 
 
 def run_round(names, games=20, play_fn=play, build=build_agents):
@@ -100,7 +100,7 @@ def run_and_record(names, games=20, window=DEFAULT_WINDOW, decay=None,
     rnd = run_round(names, games=games, play_fn=play_fn, build=build)
     append_round(rounds_path, rnd)
     ranking = windowed_ranking(load_rounds(rounds_path), window=window, decay=decay)
-    champion = top_contender(ranking, benchmarks)
+    champion = top_contender([row[0] for row in ranking], benchmarks)
     save_champion(champion_path, champion, games, ranking)
     return champion, ranking
 

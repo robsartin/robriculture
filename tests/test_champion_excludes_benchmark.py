@@ -10,19 +10,16 @@ from harness import promotion, rounds
 
 
 def test_top_contender_skips_a_leading_benchmark():
-    ranking = [("meta_bot", 0.9, 90, 100), ("ranch_hands", 0.7, 70, 100)]
-    assert promotion.top_contender(ranking, {"meta_bot"}) == "ranch_hands"
+    assert promotion.top_contender(["meta_bot", "ranch_hands"], {"meta_bot"}) == "ranch_hands"
 
 
 def test_top_contender_returns_the_leader_when_no_benchmark_leads():
-    ranking = [("ranch_hands", 0.8, 80, 100), ("meta_bot", 0.6, 60, 100)]
-    assert promotion.top_contender(ranking, {"meta_bot"}) == "ranch_hands"
+    assert promotion.top_contender(["ranch_hands", "meta_bot"], {"meta_bot"}) == "ranch_hands"
 
 
 def test_top_contender_raises_when_every_label_is_a_benchmark():
-    ranking = [("meta_bot", 0.9, 90, 100)]
     with pytest.raises(ValueError):
-        promotion.top_contender(ranking, {"meta_bot"})
+        promotion.top_contender(["meta_bot"], {"meta_bot"})
 
 
 def test_designate_champion_never_returns_a_benchmark():

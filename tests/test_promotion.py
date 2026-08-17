@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from harness import promotion
 from harness.promotion import (
     Record,
     PromotionResult,
@@ -190,3 +191,79 @@ def test_promotion_test_defaults_to_the_recorded_champion():
     )
     assert res.champion == current_champion()
     assert res.record.games == 2
+
+
+# --- pool_share_rank: rank by score share (#70), not win-rate ---
+
+def _named(tag):
+    """A stub agent carrying a tag the stub rewards_fn can key off."""
+    def agent(obs):
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+    agent.tag = tag
+    return agent
+
+
+def _stub_rewards(a, b, seed=None):
+    """Reward equals the agent's tag length — longer tag scores higher."""
+    return (float(len(getattr(a, "tag", ""))), float(len(getattr(b, "tag", ""))))
+
+
+def test_pool_share_rank_orders_by_share_descending():
+    """The strongest agent by score share ranks first."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    rows = promotion.pool_share_rank(cands, pool, games=2, rewards_fn=_stub_rewards)
+    assert [r["name"] for r in rows] == ["aaa", "a"]
+    assert rows[0]["share"] > rows[1]["share"]
+
+
+def test_pool_share_rank_never_plays_a_candidate_against_itself():
+    """A candidate that is also in the pool must not be its own opponent —
+    a self-match always scores 0.5 and would drag every share toward the mean."""
+    seen = []
+
+    def recording_rewards(a, b, seed=None):
+        seen.append((getattr(a, "tag", ""), getattr(b, "tag", "")))
+        return (100.0, 100.0)
+
+    cands = {"x": _named("x")}
+    pool = {"x": _named("x"), "y": _named("y")}
+    promotion.pool_share_rank(cands, pool, games=2, rewards_fn=recording_rewards)
+    assert all("x" not in (a, b) or a != b for a, b in seen)
+    assert all({a, b} != {"x"} for a, b in seen)
+
+
+def test_pool_share_rank_carries_the_benchmark_flag():
+    """The artifact records which rows are external benchmarks."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    rows = promotion.pool_share_rank(cands, pool, games=2,
+                                     rewards_fn=_stub_rewards, benchmarks={"aaa"})
+    flags = {r["name"]: r["benchmark"] for r in rows}
+    assert flags == {"aaa": True, "a": False}
+
+
+def test_pool_share_rank_is_deterministic_for_fixed_seeds():
+    """ADR-0005: same arguments, same ranking."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    kw = dict(games=2, rewards_fn=_stub_rewards)
+    assert promotion.pool_share_rank(cands, pool, **kw) == promotion.pool_share_rank(cands, pool, **kw)
+
+
+def test_pool_share_rank_raises_on_an_empty_pool():
+    """No opponents means no measurement — fail rather than emit 0.5 for everyone."""
+    with pytest.raises(ValueError, match="pool"):
+        promotion.pool_share_rank({"a": _named("a")}, {}, games=2, rewards_fn=_stub_rewards)
+
+
+def test_top_contender_takes_names_and_skips_benchmarks():
+    """top_contender now consumes best-first names, not ranking tuples."""
+    assert promotion.top_contender(["meta_bot", "ranch_hands"], {"meta_bot"}) == "ranch_hands"
+    assert promotion.top_contender(["ranch_hands", "meta_bot"], {"meta_bot"}) == "ranch_hands"
+
+
+def test_top_contender_raises_when_every_name_is_a_benchmark():
+    """There is no valid submit default if everything is external."""
+    with pytest.raises(ValueError):
+        promotion.top_contender(["meta_bot"], {"meta_bot"})

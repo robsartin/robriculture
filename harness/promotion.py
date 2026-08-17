@@ -92,7 +92,9 @@ class PromotionResult:
 import itertools
 import os
 
+from harness.evolve import match_share
 from harness.tournament import build_agents, play
+from harness.tournament import play_rewards as _play_rewards
 
 #: Where the designated champion is recorded (a committed decision artifact).
 CHAMPION_PATH = os.path.join(os.path.dirname(__file__), "champion.json")
@@ -147,16 +149,47 @@ def round_robin_rank(agents, games=20, play_fn=play):
     return ranking
 
 
-def top_contender(ranking, benchmarks):
-    """The highest-ranked label in `ranking` that is not a benchmark opponent.
+def pool_share_rank(candidates, pool, games=2, seed_base=0,
+                    rewards_fn=_play_rewards, benchmarks=None):
+    """Rank `candidates` by mean score share against `pool`, best first.
 
-    `ranking` is best-first `(label, win_rate, wins, played)` rows. Benchmarks
-    shape the ranking (as opponents) but can never be champion, so we skip them.
-    Raises ValueError if every label is a benchmark (no valid champion).
+    Share (`me / (me + opp)`, from #70) instead of win-rate, because win/loss
+    throws away margin: `market_farmer` won 160/160 head-to-head on margins of
+    ~3%, which crowned it champion while it ranked last on the ladder. Share
+    puts it within 0.0015 of two other agents — which is the truth.
+
+    A candidate is never its own opponent: a self-match scores 0.5 by
+    construction and would pull every share toward the mean.
     """
-    for label, *_rest in ranking:
-        if label not in benchmarks:
-            return label
+    if not pool:
+        raise ValueError("cannot rank against an empty pool")
+    benchmarks = benchmarks or set()
+    rows = []
+    for name, agent in candidates.items():
+        opponents = [a for opp_name, a in pool.items() if opp_name != name]
+        rows.append({
+            "name": name,
+            "share": match_share(agent, opponents, games, seed_base, rewards_fn),
+            "benchmark": name in benchmarks,
+        })
+    rows.sort(key=lambda r: r["share"], reverse=True)
+    return rows
+
+
+def top_contender(names, benchmarks):
+    """The first name that is not a benchmark opponent.
+
+    Takes best-first *names*. `pool_share_rank` emits dicts, and unpacking those
+    as `(label, *rest)` tuples would silently iterate their keys instead of
+    raising — so the row shape is names, and callers project explicitly.
+
+    Benchmarks are vendored external agents: they make excellent gate opponents
+    but must never be a submit default (ADR-0005 licensing). Raises ValueError
+    if every name is a benchmark.
+    """
+    for name in names:
+        if name not in benchmarks:
+            return name
     raise ValueError("no non-benchmark contender in ranking")
 
 
@@ -170,7 +203,7 @@ def designate_champion(names, games=20, play_fn=play, build=build_agents, benchm
     """
     benchmarks = benchmarks or set()
     ranking = round_robin_rank(build(names), games=games, play_fn=play_fn)
-    return top_contender(ranking, benchmarks)
+    return top_contender([row[0] for row in ranking], benchmarks)
 
 
 def save_champion(path, name, games, ranking):
@@ -241,7 +274,7 @@ def main(argv=None):  # pragma: no cover
         names = args.names or (list(REGISTRY) + list(BUILTINS))
         print(f"Designating champion among {names} ({args.games} games/pairing)...")
         ranking = round_robin_rank(build_agents(names), games=args.games)
-        champ = top_contender(ranking, benchmark_names())
+        champ = top_contender([row[0] for row in ranking], benchmark_names())
         save_champion(CHAMPION_PATH, champ, args.games, ranking)
         for name, wr, w, p in ranking:
             print(f"  {name:16s} {wr:6.1%}  ({w}/{p})")
