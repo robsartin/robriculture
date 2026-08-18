@@ -12,7 +12,7 @@ see the ADRs in [docs/adr/](docs/adr/).
 - `ROBRICULTURE_STRICT=1 pytest -q` — let strategy exceptions propagate instead of degrading to the fail-safe PASS. **Use this while developing a strategy** — otherwise a bug hides as a silent PASS.
 - `python -m harness.tournament --games 20` — local round-robin (all registered strategies + built-in bots).
 - `python -m harness.promotion <challenger> --champion <name> --games 200` — the ADR-0007 strategy gate (seeded; reports win-rate + binomial p + PROMOTE/REJECT).
-- `python -m harness.promotion --designate` — re-designate the champion from a seeded round-robin.
+- `python -m harness.promotion --designate` — re-designate from **pool share** against the fixed anchors; writes both roles (`gate_opponent`, `submit_default`) to `harness/champion.json` (#76).
 - `python -m harness.rounds --games 20` — play a round, append it to `harness/rounds.json`, and re-designate by pool share (#12, #76).
 - `python -m harness.genome_bench --genome <path> --games 4` — score one genome against the fixed anchors only (no Hall-of-Fame, no population sample). The **comparable** number across evolution runs; `evolve`'s own fitness is not (#70).
 - `python -m build.package <strategy>` — build a submittable tarball (runs a post-build smoke test).

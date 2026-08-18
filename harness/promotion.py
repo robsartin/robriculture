@@ -303,7 +303,7 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--bar", type=float, default=0.55, help="win-rate bar (default 0.55)")
     ap.add_argument("--alpha", type=float, default=0.05, help="significance level (default 0.05)")
     ap.add_argument("--designate", action="store_true",
-                    help="run a round-robin and record the strongest as champion")
+                    help="rank all strategies by pool share against the fixed anchors and record both roles (gate_opponent, submit_default)")
     ap.add_argument("names", nargs="*", help="agents to rank (for --designate; default: all + built-ins)")
     args = ap.parse_args(argv)
 
