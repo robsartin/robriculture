@@ -100,28 +100,29 @@ reproducible writeup — the writeup becomes a byproduct rather than a scramble.
   bar keeps us honest better than judgment does.
 - Engine experiments stay lightweight (green tests, no tournament), so
   correctness work isn't taxed by strategy-grade ceremony.
-- **Ladder scores carry a ~90-point noise band, so a single ladder comparison is
-  weak evidence (#74, measured 2026-08-16).** `ranch_hands` has been submitted
-  four times and scored **536.8, 515.4, 509.5, 600.0** — a 90.5-point spread on
-  code that did not change. Verified by `git log`, not assumed: between the 509.5
-  and 600.0 submissions there is no commit touching `kaggisim/`, `build/`,
-  `strategies/ranch_hands.py`, or its three strategy dependencies. The agent was
-  byte-identical; only the opponent draw and rating settling differed.
+- **Ladder scores carry a ~98-point noise band, so a single ladder comparison is
+  weak evidence (#74, measured 2026-08-16; widened by #80).** `ranch_hands` has
+  been submitted five times and scored **536.8, 515.4, 509.5, 600.0, 501.6** — a
+  98.4-point spread (501.6-600.0) on code that did not change. Verified by
+  `git log`, not assumed: between the 509.5 and 600.0 submissions there is no
+  commit touching `kaggisim/`, `build/`, `strategies/ranch_hands.py`, or its
+  three strategy dependencies. The agent was byte-identical; only the opponent
+  draw and rating settling differed.
 
   This decision already distrusts variance in *local* games — that is what the
   binomial gate is for. The same distrust must extend to the ladder. **Treat a
-  ladder gap under ~90 points as no evidence at all**, and settle those
+  ladder gap under ~98 points as no evidence at all**, and settle those
   comparisons with the seeded local gate instead, which is both cheaper and
   reproducible. Gaps well outside the band remain informative: the evolved
   neuropilot at 422.3 against `ranch_hands` at 600.0 is ~180 points, and the
   local benchmark had already predicted that ordering.
 
-  This retroactively weakens any past reasoning that leaned on a sub-90-point
+  This retroactively weakens any past reasoning that leaned on a sub-98-point
   ladder gap — see [ADR-0008](0008-neuroevolution-against-a-diverse-pool.md)'s
   ~522-vs-~482 comparison, which is inside the band.
 
   Corollary worth exploiting: **re-submitting a known agent measures the band for
-  free.** These four data points cost nothing beyond submissions already spent.
+  free.** These five data points cost nothing beyond submissions already spent.
 - **The gate opponent changed mid-stream, so promotion results are not comparable
   across it (#76, 2026-08-16).** Until now the gate ran against `market_farmer`,
   designated on a 160/160 head-to-head record that turned out to be ~3% margins
