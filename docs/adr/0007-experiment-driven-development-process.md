@@ -132,6 +132,76 @@ reproducible writeup — the writeup becomes a byproduct rather than a scramble.
   compare those (N, win-rate, p) records with later ones. Designation is now by
   pool share, and the champion's two roles are recorded separately as
   `gate_opponent` and `submit_default`.
+- **The promotion gate's 200 seeded games are not 200 independent trials — most
+  pairings never flip outcome across seeds (#77, measured 2026-08-18).**
+  `harness/flip_rate.py` played every pairing among the six `DEFAULT_ANCHORS`
+  (`meta_bot`, `ranch_hands`, `market_farmer`, `ranch_adaptive`, `wheat_hands`,
+  `spoiler` — the pool `designate()` already uses to rank candidates) over 10
+  fixed seeds each, 15 pairings / 150 games total, and counted how many
+  *distinct* outcomes (win/loss/tie) each pairing produced:
+
+  ```
+  market_farmer  vs ranch_adaptive  outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  market_farmer  vs spoiler         outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  market_farmer  vs wheat_hands     outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  meta_bot       vs market_farmer   outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  meta_bot       vs ranch_adaptive  outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  meta_bot       vs ranch_hands     outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  meta_bot       vs spoiler         outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  meta_bot       vs wheat_hands     outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  ranch_adaptive vs spoiler         outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  ranch_adaptive vs wheat_hands     outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  ranch_hands    vs market_farmer   outcomes=(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1) distinct=1
+  ranch_hands    vs ranch_adaptive  outcomes=(0,0,0,0,0,0,0,0,0,0)  distinct=1
+  ranch_hands    vs spoiler         outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  ranch_hands    vs wheat_hands     outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+  wheat_hands    vs spoiler         outcomes=(1,1,1,1,1,1,1,1,1,1)  distinct=1
+
+  0/15 pairings flipped across 10 seeds (flip-rate = 0.0%)
+  ```
+
+  **Zero of 15 pairings produced more than one distinct outcome.** This was a
+  bounded, labelled measurement, not a claim about every strategy: it covers
+  the 6-agent anchor pool `designate()` already treats as representative, at
+  10 seeds/pairing (150 games); it does not cover all 24 registered
+  strategies pairwise (276 pairings), which would cost roughly two hours of
+  wall time for a question this measurement already answers unambiguously.
+  Reward magnitude does vary with the seed (ADR-0002's economy is
+  stochastic); the win/loss/tie *outcome* derived from it does not, because
+  the margin between two given agents consistently exceeds the per-seed
+  variance in reward. An independent, larger-scale signal points the same
+  way: a 12-generation neuroevolution run (#70 validation, 2026-08-18)
+  improved its mean score share against these same six anchors from 0.3700 to
+  0.4069 — a real, measured gain in strength — while its win-rate against them
+  stayed pinned at exactly 0.1667 throughout; not one win changed hands. Two
+  different measurements at two different scales agree: outcome is
+  insensitive to real changes in relative strength here, until a challenger
+  crosses whatever margin threshold flips a specific pairing.
+
+  This means the promotion gate's `N=200` seeded games are, for a typical
+  pairing, one repeated observation wearing 200 different seeds, not 200
+  independent trials. The binomial test still computes a p-value, and that
+  p-value is still arithmetically correct — but its premise (200 i.i.d.
+  Bernoulli draws) is false for a pairing like these, so a passing p < 0.05
+  does **not** carry the evidentiary weight 200 independent trials would.
+  Effective sample size for a non-flipping pairing is close to 1, not 200.
+
+  **What the gate is still good for:** it reliably answers "does this
+  challenger beat that specific opponent, on these maps, at this strength
+  gap" — the outcome is *reproducible* (ADR-0005) even where it isn't
+  *independent* across seeds, and a challenger that cannot win a single
+  seeded game against the champion is not being promoted on noise. What it
+  does **not** establish is the statistical confidence the p-value implies:
+  a PROMOTE verdict is closer to "won the one deterministic-ish matchup we
+  checked" than to "beat a fair coin 200 times running." The gate is neither
+  worthless (it still gates on real, reproducible outcomes) nor as rigorous
+  as it presents (the significance test's independence assumption does not
+  hold here). This is a documentation fix, not a gate change: the 55% bar,
+  the binomial test, and N=200 are unchanged (#77) — issue #80 found the
+  two candidate replacement statistics (score share vs ladder score) both sit
+  at only n=6, Spearman ρ = 0.6377, short of the ≈0.886 significance
+  threshold, so neither is validated evidence for changing what the gate
+  measures.
 
 ## Alternatives considered
 
