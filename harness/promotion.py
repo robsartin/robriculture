@@ -181,6 +181,35 @@ def pool_share_rank(candidates, pool, games=2, seed_base=0,
     return rows
 
 
+CRITERION = "pool_share"
+
+
+def designate(candidates, pool, games=2, seed_base=0,
+              rewards_fn=_play_rewards, benchmarks=None):
+    """Rank by pool share and split the result into the champion's two roles.
+
+    `gate_opponent` is the outright leader — benchmarks included, because the
+    gate wants the most demanding representative bar available.
+
+    `submit_default` is the leading non-benchmark. `scripts/submit.py` packages
+    it with no arguments, so a vendored external agent must never land here:
+    submitting a competitor's code is pointless and an ADR-0005 licensing and
+    attribution problem. One field cannot answer both questions, which is why
+    there are two.
+    """
+    benchmarks = benchmarks or set()
+    ranking = pool_share_rank(candidates, pool, games=games, seed_base=seed_base,
+                              rewards_fn=rewards_fn, benchmarks=benchmarks)
+    return {
+        "criterion": CRITERION,
+        "gate_opponent": ranking[0]["name"],
+        "submit_default": top_contender([r["name"] for r in ranking], benchmarks),
+        "games": games,
+        "pool": list(pool),
+        "ranking": ranking,
+    }
+
+
 def top_contender(names, benchmarks):
     """The first name that is not a benchmark opponent.
 
@@ -211,29 +240,33 @@ def designate_champion(names, games=20, play_fn=play, build=build_agents, benchm
     return top_contender([row[0] for row in ranking], benchmarks)
 
 
-def save_champion(path, name, games, ranking):
-    """Record the designated champion + the ranking that chose it (JSON)."""
-    payload = {
-        "champion": name,
-        "games": games,
-        "ranking": [
-            {"name": n, "win_rate": wr, "wins": w, "played": p}
-            for (n, wr, w, p) in ranking
-        ],
-    }
+def save_champion(path, body):
+    """Write the designation artifact (a `designate()` body) as JSON."""
     with open(path, "w") as fh:
-        json.dump(payload, fh, indent=2)
+        json.dump(body, fh, indent=2)
         fh.write("\n")
 
 
-def load_champion(path):
+def _read_role(path, field):
+    """Read one role from the artifact, failing loudly on the old single-field format."""
     with open(path) as fh:
-        return json.load(fh)["champion"]
+        data = json.load(fh)
+    if field not in data:
+        raise ValueError(
+            f"{path!r} has no {field!r} — it predates the two-role split (#76). "
+            f"re-designate with: python -m harness.promotion --designate"
+        )
+    return data[field]
 
 
-def current_champion(path=CHAMPION_PATH):
-    """The champion an experiment measures against, per ADR-0007."""
-    return load_champion(path)
+def gate_opponent(path=CHAMPION_PATH):
+    """The opponent an ADR-0007 promotion test measures against. May be a benchmark."""
+    return _read_role(path, "gate_opponent")
+
+
+def submit_default(path=CHAMPION_PATH):
+    """The strategy `scripts/submit.py` packages by default. Never a benchmark."""
+    return _read_role(path, "submit_default")
 
 
 def promotion_test(
@@ -247,7 +280,7 @@ def promotion_test(
 ):
     """Run the ADR-0007 promotion test: challenger vs champion over seeded games."""
     if champion_name is None:
-        champion_name = current_champion()
+        champion_name = gate_opponent()
     agents = build([challenger_name, champion_name])
     record = run_match(
         agents[challenger_name], agents[champion_name], games=games, play_fn=play_fn
@@ -275,15 +308,20 @@ def main(argv=None):  # pragma: no cover
     args = ap.parse_args(argv)
 
     if args.designate:
-        from harness.tournament import BUILTINS, benchmark_names
-        names = args.names or (list(REGISTRY) + list(BUILTINS))
-        print(f"Designating champion among {names} ({args.games} games/pairing)...")
-        ranking = round_robin_rank(build_agents(names), games=args.games)
-        champ = top_contender([row[0] for row in ranking], benchmark_names())
-        save_champion(CHAMPION_PATH, champ, args.games, ranking)
-        for name, wr, w, p in ranking:
-            print(f"  {name:16s} {wr:6.1%}  ({w}/{p})")
-        print(f"\nChampion: {champ}  -> {CHAMPION_PATH}")
+        from harness.evolve import DEFAULT_ANCHORS
+        from harness.tournament import benchmark_names
+        from strategies import REGISTRY
+
+        bench = benchmark_names()
+        pool = build_agents(list(DEFAULT_ANCHORS))
+        candidates = build_agents(list(REGISTRY))
+        body = designate(candidates, pool, games=args.games, benchmarks=bench)
+        save_champion(CHAMPION_PATH, body)
+        for row in body["ranking"]:
+            mark = " (benchmark)" if row["benchmark"] else ""
+            print(f"  {row['name']:16s} share={row['share']:.4f}{mark}")
+        print(f"\ngate_opponent:  {body['gate_opponent']}")
+        print(f"submit_default: {body['submit_default']}")
         return 0
 
     if not args.challenger:

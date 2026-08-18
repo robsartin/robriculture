@@ -17,7 +17,8 @@ from __future__ import annotations
 import json
 import os
 
-from harness.promotion import CHAMPION_PATH, round_robin_rank, save_champion, top_contender
+from harness import promotion
+from harness.promotion import CHAMPION_PATH, round_robin_rank, save_champion
 from harness.tournament import BUILTINS, build_agents, play
 
 #: Default recent-round window for champion selection (see #12; confirmed N=3).
@@ -77,7 +78,7 @@ def designate_from_history(path=ROUNDS_PATH, window=DEFAULT_WINDOW, decay=None, 
     returned as champion (see `harness.promotion.top_contender`).
     """
     ranking = windowed_ranking(load_rounds(path), window=window, decay=decay)
-    return top_contender([row[0] for row in ranking], benchmarks or set())
+    return promotion.top_contender([row[0] for row in ranking], benchmarks or set())
 
 
 def run_round(names, games=20, play_fn=play, build=build_agents):
@@ -89,20 +90,28 @@ def run_round(names, games=20, play_fn=play, build=build_agents):
     }
 
 
-def run_and_record(names, games=20, window=DEFAULT_WINDOW, decay=None,
-                   rounds_path=ROUNDS_PATH, champion_path=CHAMPION_PATH,
-                   play_fn=play, build=build_agents, benchmarks=None):
-    """Play a round, append it to history, re-designate the champion from the window.
+def run_and_record(names, games=20, rounds_path=ROUNDS_PATH,
+                   champion_path=CHAMPION_PATH, play_fn=play, rewards_fn=None,
+                   build=build_agents, benchmarks=None, pool=None):
+    """Play a round, append it to history, and re-designate by pool share.
 
-    `benchmarks` (a set of names) are opponents in the round but never champion.
+    Designation delegates to `promotion.designate` rather than ranking the round
+    itself. If this routine kept designating from round win-rate, one ordinary run
+    would silently overwrite the share-based champion and re-crown market_farmer
+    (#76) — a fix undone invisibly is worse than no fix.
     """
     benchmarks = benchmarks or set()
     rnd = run_round(names, games=games, play_fn=play_fn, build=build)
     append_round(rounds_path, rnd)
-    ranking = windowed_ranking(load_rounds(rounds_path), window=window, decay=decay)
-    champion = top_contender([row[0] for row in ranking], benchmarks)
-    save_champion(champion_path, champion, games, ranking)
-    return champion, ranking
+
+    agents = build(names)
+    pool_agents = build(list(pool)) if pool is not None else agents
+    kw = {"games": games, "benchmarks": benchmarks}
+    if rewards_fn is not None:
+        kw["rewards_fn"] = rewards_fn
+    body = promotion.designate(agents, pool_agents, **kw)
+    save_champion(champion_path, body)
+    return body["gate_opponent"], body
 
 
 def main(argv=None):  # pragma: no cover
@@ -111,21 +120,20 @@ def main(argv=None):  # pragma: no cover
     from harness.tournament import benchmark_names
     from strategies import REGISTRY
 
-    ap = argparse.ArgumentParser(description="run a round and update the champion (windowed)")
+    ap = argparse.ArgumentParser(description="run a round and re-designate the champion (pool share)")
     ap.add_argument("names", nargs="*", help="agents (default: all strategies + built-ins)")
     ap.add_argument("--games", type=int, default=20, help="games per pairing (default 20)")
-    ap.add_argument("--window", type=int, default=DEFAULT_WINDOW, help=f"recent-round window (default {DEFAULT_WINDOW})")
-    ap.add_argument("--decay", type=float, default=None, help="optional recency decay in (0,1]")
     args = ap.parse_args(argv)
     names = args.names or (list(REGISTRY) + list(BUILTINS))
     print(f"Running a round over {names} ({args.games} games/pairing)...")
-    champion, ranking = run_and_record(
-        names, games=args.games, window=args.window, decay=args.decay,
-        benchmarks=benchmark_names(),
+    gate_opponent, body = run_and_record(
+        names, games=args.games, benchmarks=benchmark_names(),
     )
-    for name, wr, w, p in ranking:
-        print(f"  {name:16s} {wr:6.1%}  ({w:g}/{p:g})")
-    print(f"\nChampion (window={args.window}): {champion}")
+    for row in body["ranking"]:
+        mark = " (benchmark)" if row["benchmark"] else ""
+        print(f"  {row['name']:16s} share={row['share']:.4f}{mark}")
+    print(f"\ngate_opponent:  {body['gate_opponent']}")
+    print(f"submit_default: {body['submit_default']}")
     return 0
 
 

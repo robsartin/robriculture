@@ -9,6 +9,8 @@ cover the statistics and the game-tallying independently, using an injected
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from harness import promotion
@@ -20,7 +22,6 @@ from harness.promotion import (
     round_robin_rank,
     designate_champion,
     save_champion,
-    load_champion,
     promotion_test,
 )
 
@@ -152,15 +153,6 @@ def test_designate_champion_picks_the_strongest():
     assert champ == "A"
 
 
-# --- champion persistence ---
-
-def test_save_and_load_champion(tmp_path):
-    path = tmp_path / "champion.json"
-    ranking = [("greedy", 0.7, 14, 20), ("lean", 0.3, 6, 20)]
-    save_champion(path, "greedy", games=20, ranking=ranking)
-    assert load_champion(path) == "greedy"
-
-
 # --- integration smoke: real games wire together end to end (slow-ish) ---
 
 def test_promotion_test_runs_real_games():
@@ -169,27 +161,20 @@ def test_promotion_test_runs_real_games():
     assert res.challenger == "greedy" and res.champion == "random"
 
 
-def test_current_champion_reads_the_recorded_file():
-    import json
-
-    from harness.promotion import CHAMPION_PATH, current_champion
-
-    # Don't pin the champion's identity (it changes as strategies evolve) — just
-    # assert current_champion() reflects whatever is recorded in champion.json.
-    assert current_champion() == json.load(open(CHAMPION_PATH))["champion"]
-
-
-def test_promotion_test_defaults_to_the_recorded_champion():
-    from harness.promotion import current_champion
-
-    # No real games: inject a fake play and a fake agent-builder.
+def test_promotion_test_defaults_to_the_recorded_champion(monkeypatch):
+    # No real games: inject a fake play, a fake agent-builder, and a stub
+    # gate_opponent so this test verifies the *resolution mechanism* without
+    # depending on the real committed champion.json's format (it is only
+    # re-designated in the new two-role shape once scripts/submit.py has been
+    # migrated — see Task 3/Task 5 of #76).
+    monkeypatch.setattr(promotion, "gate_opponent", lambda: "greedy")
     res = promotion_test(
         "greedy",
         games=2,
         play_fn=lambda a, b, seed: 1,
         build=lambda names: {n: n for n in names},
     )
-    assert res.champion == current_champion()
+    assert res.champion == "greedy"
     assert res.record.games == 2
 
 
@@ -279,3 +264,63 @@ def test_top_contender_raises_when_every_name_is_a_benchmark():
     """There is no valid submit default if everything is external."""
     with pytest.raises(ValueError):
         promotion.top_contender(["meta_bot"], {"meta_bot"})
+
+
+# --- designate: split the champion into gate_opponent / submit_default ---
+
+def test_designate_allows_a_benchmark_as_gate_opponent():
+    """The gate is a bar, and a real competitor is the best bar available."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards,
+                               benchmarks={"aaa"})
+    assert body["gate_opponent"] == "aaa"
+
+
+def test_designate_never_puts_a_benchmark_in_submit_default():
+    """Submitting a vendored competitor's agent is an ADR-0005 licensing problem."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards,
+                               benchmarks={"aaa"})
+    assert body["submit_default"] == "a"
+
+
+def test_designate_records_the_criterion_and_pool():
+    """The artifact says how it was produced, so a future reader can reproduce it."""
+    cands = {"aaa": _named("aaa")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards)
+    assert body["criterion"] == "pool_share"
+    assert body["pool"] == ["aa"]
+    assert body["games"] == 2
+
+
+def test_save_champion_round_trips_both_roles(tmp_path):
+    """Both readers return their own field from a saved artifact."""
+    p = tmp_path / "champion.json"
+    body = {"criterion": "pool_share", "gate_opponent": "meta_bot",
+            "submit_default": "meta_rancher", "games": 2, "pool": [], "ranking": []}
+    promotion.save_champion(str(p), body)
+    assert promotion.gate_opponent(str(p)) == "meta_bot"
+    assert promotion.submit_default(str(p)) == "meta_rancher"
+
+
+def test_gate_opponent_raises_on_an_old_format_artifact(tmp_path):
+    """A stale file must fail loudly, never silently fall back to `champion`.
+
+    A silent fallback re-points the gate at market_farmer without anyone
+    noticing — the exact bug #76 exists to fix.
+    """
+    p = tmp_path / "champion.json"
+    p.write_text(json.dumps({"champion": "market_farmer", "games": 20, "ranking": []}))
+    with pytest.raises(ValueError, match="re-designate"):
+        promotion.gate_opponent(str(p))
+
+
+def test_submit_default_raises_on_an_old_format_artifact(tmp_path):
+    """Same loud failure for the submit side."""
+    p = tmp_path / "champion.json"
+    p.write_text(json.dumps({"champion": "market_farmer", "games": 20, "ranking": []}))
+    with pytest.raises(ValueError, match="re-designate"):
+        promotion.submit_default(str(p))

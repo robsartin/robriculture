@@ -58,22 +58,21 @@ def test_designate_from_history_excludes_benchmark(tmp_path):
     assert champ == "ranch_hands"
 
 
-def test_run_and_record_writes_a_non_benchmark_champion(tmp_path):
-    # meta_bot dominates the round, but champion.json must name a contender.
-    def fake_play(a, b, seed=None):
-        return 1 if a == "meta_bot" else 0
+def test_run_and_record_writes_a_non_benchmark_submit_default(tmp_path, monkeypatch):
+    """A benchmark may be the gate opponent; it must never be the submit default."""
+    from harness import rounds
 
-    def fake_build(names):
-        return {n: n for n in names}
+    monkeypatch.setattr(rounds.promotion, "designate", lambda candidates, pool, **kw: {
+        "criterion": "pool_share", "gate_opponent": "meta_bot",
+        "submit_default": "ranch_hands", "games": 2, "pool": [], "ranking": []})
 
-    rounds_path = tmp_path / "rounds.json"
     champ_path = tmp_path / "champion.json"
-    champ, ranking = rounds.run_and_record(
+    rounds.run_and_record(
         ["meta_bot", "ranch_hands"], games=2,
-        rounds_path=str(rounds_path), champion_path=str(champ_path),
-        play_fn=fake_play, build=fake_build, benchmarks={"meta_bot"},
+        rounds_path=str(tmp_path / "rounds.json"), champion_path=str(champ_path),
+        play_fn=lambda a, b, seed=None: 1, build=lambda names: {n: n for n in names},
+        benchmarks={"meta_bot"},
     )
-    assert champ != "meta_bot"
-    assert json.loads(champ_path.read_text())["champion"] != "meta_bot"
-    # The benchmark still appears in the recorded ranking (it shaped the round).
-    assert any(row[0] == "meta_bot" for row in ranking)
+    saved = json.loads(champ_path.read_text())
+    assert saved["gate_opponent"] == "meta_bot"
+    assert saved["submit_default"] != "meta_bot"

@@ -103,13 +103,25 @@ def test_run_round_records_wins_and_played():
     assert rnd["results"]["B"]["wins"] == 0
 
 
-def test_run_and_record_appends_history_and_writes_champion(tmp_path):
+def test_run_and_record_appends_history_and_writes_champion(tmp_path, monkeypatch):
+    """run_and_record appends the round and writes the designated gate_opponent.
+
+    Designation itself is `promotion.designate`'s job (covered in
+    tests/test_promotion.py); here we only verify run_and_record wires the round
+    history and the artifact write together, so the designation is stubbed.
+    """
     import json
+
+    from harness import rounds
+
+    monkeypatch.setattr(rounds.promotion, "designate", lambda candidates, pool, **kw: {
+        "criterion": "pool_share", "gate_opponent": "A",
+        "submit_default": "A", "games": 2, "pool": [], "ranking": []})
 
     rounds_path = tmp_path / "rounds.json"
     champ_path = tmp_path / "champion.json"
     strength = {"A": 2, "B": 1}
-    champ, ranking = run_and_record(
+    champ, body = run_and_record(
         ["A", "B"],
         games=2,
         rounds_path=str(rounds_path),
@@ -119,5 +131,34 @@ def test_run_and_record_appends_history_and_writes_champion(tmp_path):
     )
     assert champ == "A"
     assert rounds_path.exists() and champ_path.exists()
-    assert json.load(open(champ_path))["champion"] == "A"
-    assert ranking[0][0] == "A"
+    assert json.load(open(champ_path))["gate_opponent"] == "A"
+    assert body["gate_opponent"] == "A"
+
+
+def test_run_and_record_forwards_rewards_fn_and_pool_to_designate(tmp_path, monkeypatch):
+    """The optional rewards_fn/pool kwargs reach promotion.designate unchanged."""
+    from harness import rounds
+
+    seen = {}
+
+    def fake_designate(candidates, pool, **kw):
+        seen["pool"] = pool
+        seen["kw"] = kw
+        return {"criterion": "pool_share", "gate_opponent": "A",
+                "submit_default": "A", "games": 2, "pool": [], "ranking": []}
+
+    monkeypatch.setattr(rounds.promotion, "designate", fake_designate)
+    stub_rewards = lambda a, b, seed=None: (1.0, 0.0)
+
+    run_and_record(
+        ["A", "B"],
+        games=2,
+        rounds_path=str(tmp_path / "rounds.json"),
+        champion_path=str(tmp_path / "champion.json"),
+        play_fn=lambda a, b, seed: 0,
+        build=lambda names: {n: n for n in names},
+        rewards_fn=stub_rewards,
+        pool=["A"],
+    )
+    assert seen["pool"] == {"A": "A"}
+    assert seen["kw"]["rewards_fn"] is stub_rewards
