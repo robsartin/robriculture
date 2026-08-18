@@ -1,10 +1,11 @@
-"""Round history + windowed champion selection (#12).
+"""Round history + champion designation (#12, rerouted by #76).
 
-`harness/promotion.py` designates a champion from a *single* round-robin. As our
-strategies evolve, one snapshot is noisy and ignores recency — a round we ran
-today (with better agents) should count more than a stale one. This module keeps
-an append-only history of rounds and picks the champion by aggregated win-rate
-over the current + recent `window` rounds (default 3), optionally recency-weighted.
+Designation is by pool share (`harness/promotion.designate`), not round history —
+`harness/promotion.py` designates a champion from a single round-robin against a
+fixed anchor pool. This module keeps an append-only history of rounds as a
+committed record; `run_and_record` plays a round, appends it to that history,
+and then re-designates by delegating to `promotion.designate`. The history is no
+longer read for designation.
 
 A round is:  {"round": int, "games": int, "results": {name: {"wins", "played"}}}
 Round ids are integer and increasing (no wall-clock — keeps the history
@@ -20,9 +21,6 @@ import os
 from harness import promotion
 from harness.promotion import CHAMPION_PATH, round_robin_rank, save_champion
 from harness.tournament import BUILTINS, build_agents, play
-
-#: Default recent-round window for champion selection (see #12; confirmed N=3).
-DEFAULT_WINDOW = 3
 
 #: Append-only round history (a committed decision trail).
 ROUNDS_PATH = os.path.join(os.path.dirname(__file__), "rounds.json")
@@ -45,40 +43,6 @@ def append_round(path, round_result):
         json.dump(rounds, fh, indent=2)
         fh.write("\n")
     return rnd
-
-
-def windowed_ranking(rounds, window=DEFAULT_WINDOW, decay=None):
-    """Rank agents by win-rate aggregated over the last `window` rounds.
-
-    `decay` (0 < decay <= 1) weights older rounds down: the most recent round has
-    weight 1, the one before it `decay`, then `decay**2`, ... Default (None) is
-    equal weight. Returns `(name, win_rate, wtd_wins, wtd_played)` best first.
-    """
-    recent = rounds[-window:] if window else list(rounds)
-    n = len(recent)
-    agg: dict[str, list[float]] = {}
-    for idx, rnd in enumerate(recent):
-        age = n - 1 - idx  # 0 == most recent
-        weight = (decay ** age) if decay is not None else 1.0
-        for name, res in rnd["results"].items():
-            slot = agg.setdefault(name, [0.0, 0.0])
-            slot[0] += weight * res["wins"]
-            slot[1] += weight * res["played"]
-    ranking = [
-        (name, (w / p if p else 0.0), w, p) for name, (w, p) in agg.items()
-    ]
-    ranking.sort(key=lambda row: row[1], reverse=True)
-    return ranking
-
-
-def designate_from_history(path=ROUNDS_PATH, window=DEFAULT_WINDOW, decay=None, benchmarks=None):
-    """The champion implied by the recent-round window.
-
-    `benchmarks` (a set of names) shape the ranking as opponents but are never
-    returned as champion (see `harness.promotion.top_contender`).
-    """
-    ranking = windowed_ranking(load_rounds(path), window=window, decay=decay)
-    return promotion.top_contender([row[0] for row in ranking], benchmarks or set())
 
 
 def run_round(names, games=20, play_fn=play, build=build_agents):
@@ -126,8 +90,12 @@ def main(argv=None):  # pragma: no cover
     args = ap.parse_args(argv)
     names = args.names or (list(REGISTRY) + list(BUILTINS))
     print(f"Running a round over {names} ({args.games} games/pairing)...")
-    gate_opponent, body = run_and_record(
+
+    from harness.evolve import DEFAULT_ANCHORS
+
+    champion, body = run_and_record(
         names, games=args.games, benchmarks=benchmark_names(),
+        pool=list(DEFAULT_ANCHORS),
     )
     for row in body["ranking"]:
         mark = " (benchmark)" if row["benchmark"] else ""
