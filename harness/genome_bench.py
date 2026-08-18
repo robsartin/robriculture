@@ -11,6 +11,11 @@ them visible instead of assumed away.
 
 Usage:
     python -m harness.genome_bench --genome strategies/champion_genome.json --games 4
+
+``--include-external`` additionally benchmarks against real competitor agents
+fetched locally into the gitignored ``external_agents/`` directory (#78, see
+``scripts/fetch_external_agents.py``). Off by default, and opt-in only: the
+named anchors alone remain the frozen, reproducible comparability bar.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from harness import external_pool
 from harness.evolve import (DEFAULT_ANCHORS, genome_agent, load_genome,
                             opponent_record)
 from harness.tournament import build_agents
@@ -56,16 +62,44 @@ def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
     }
 
 
+def build_bench_agents(anchor_names, include_external=False, discover_fn=None, build=build_agents):
+    """Resolve the opponent set for a genome_bench run.
+
+    Default (``include_external=False``) is exactly the named anchors, built
+    the normal way -- this is the reproducible frozen bar every evolution run
+    is compared against (CLAUDE.md), and it must never depend on what
+    happens to be sitting in the gitignored, un-fetched
+    ``external_agents/`` directory. Discovery is not even attempted on this
+    path.
+
+    ``include_external=True`` additionally folds in whatever real competitor
+    agents ``harness.external_pool.discover_external_agents`` finds locally
+    (#78) -- opt-in only, measurement-only; never wired into
+    ``DEFAULT_ANCHORS``, ``harness.promotion.designate``, or ``evolve()``.
+    """
+    agents = build(list(anchor_names))
+    if include_external:
+        discover_fn = discover_fn or external_pool.discover_external_agents
+        agents.update(discover_fn())
+    return agents
+
+
 def main(argv=None):  # pragma: no cover
     ap = argparse.ArgumentParser(description="benchmark one genome vs the fixed anchors (#70)")
     ap.add_argument("--genome", required=True, help="path to a genome artifact")
     ap.add_argument("--games", type=int, default=4)
     ap.add_argument("--seed-base", type=int, default=0)
     ap.add_argument("--anchors", nargs="*", default=list(DEFAULT_ANCHORS))
+    ap.add_argument("--include-external", action="store_true",
+                    help="also benchmark against real competitor agents fetched locally "
+                         "into external_agents/ (#78); measurement only, off by default "
+                         "so the frozen bar stays reproducible")
     args = ap.parse_args(argv)
 
+    agents = build_bench_agents(args.anchors, include_external=args.include_external)
     out = benchmark_genome(load_genome(args.genome), anchor_names=args.anchors,
-                           games=args.games, seed_base=args.seed_base)
+                           games=args.games, seed_base=args.seed_base,
+                           agents_override=agents)
     for r in out["per_opponent"]:
         print(f"{r['name']:16s} W{r['w']} T{r['t']} L{r['l']}  "
               f"rate={r['win_rate']:.3f} share={r['share']:.3f}")

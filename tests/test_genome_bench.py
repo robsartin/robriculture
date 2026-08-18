@@ -56,3 +56,33 @@ def test_benchmark_is_reproducible():
     agents = {"weak": _tagged(""), "strong": _tagged("strong")}
     kw = dict(games=2, agents_override=agents, rewards_fn=_rewards)
     assert gb.benchmark_genome(_tagged("me"), **kw) == gb.benchmark_genome(_tagged("me"), **kw)
+
+
+# --- build_bench_agents: --include-external opt-in (#78) ---
+
+def test_build_bench_agents_default_excludes_external_and_never_calls_discover():
+    """The frozen comparability bar (CLAUDE.md) must not depend on what a
+    gitignored, un-fetched directory happens to contain — default OFF."""
+    calls = []
+
+    def fake_discover():
+        calls.append(True)
+        return {"external_x": _tagged("x")}
+
+    agents = gb.build_bench_agents(
+        ["meta_bot"], include_external=False, discover_fn=fake_discover,
+        build=lambda names: {n: _tagged(n) for n in names},
+    )
+    assert "external_x" not in agents
+    assert calls == []  # discovery is never even attempted on the default path
+
+
+def test_build_bench_agents_include_external_merges_discovered_agents():
+    def fake_discover():
+        return {"external_x": _tagged("x")}
+
+    agents = gb.build_bench_agents(
+        ["meta_bot"], include_external=True, discover_fn=fake_discover,
+        build=lambda names: {n: _tagged(n) for n in names},
+    )
+    assert set(agents) == {"meta_bot", "external_x"}
