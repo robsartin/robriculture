@@ -139,6 +139,11 @@ def test_blended_fitness_full_anchor_weight_ignores_the_pool():
     assert ev.blended_fitness(0.6, 0.9, 1.0) == 0.6
 
 
+def test_default_anchors_excludes_spoiler_when_pool_is_built():
+    """spoiler is a labelled adversarial stress test (#78), not a fitness-defining anchor."""
+    assert "spoiler" not in ev.DEFAULT_ANCHORS
+
+
 def test_evolve_fitness_is_dominated_by_the_anchors():
     """The #70 regression guard: beating siblings must NOT be able to mask
     losing to every anchor. This is the exact failure that pinned fitness at

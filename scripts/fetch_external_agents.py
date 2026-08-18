@@ -1,0 +1,197 @@
+"""Fetch real external competitor agents for local measurement only (#78).
+
+The owner decided against vendoring external agents into this repo at all
+(ADR-0008 amendment, 2026-08-18): no third-party code is ever committed to
+git. Instead this script reads ``harness/external_agents.json`` -- the single
+source of truth for which agents to fetch, their licenses, and required
+attribution -- and downloads each into a gitignored local directory
+(``external_agents/`` by default). ``harness/external_pool.py`` then
+discovers agents there for measurement tools that opt in
+(``harness/genome_bench.py --include-external``); nothing else ever reads
+this directory.
+
+Two source kinds:
+
+- ``github_file`` -- a single ``.py`` file, fetched via ``gh api`` (raw
+  content).
+- ``kaggle_kernel`` -- a Kaggle notebook, pulled via ``kaggle kernels pull``.
+  Kaggle simulation-competition notebooks conventionally write their
+  submittable agent through a ``%%writefile`` or ``%%agentfile`` cell magic;
+  everything else in the notebook is narrative/plotting for the writeup. This
+  script extracts *only* that tagged cell -- the rest of the notebook is
+  never fetched into a runnable form.
+
+Every download gets a ``<dest_filename>.meta.json`` sidecar recording its
+name, license, attribution, and source URL, so the license obligation travels
+with the file even though the file itself is gitignored.
+
+Usage (from repo root, venv active, ``gh`` and ``kaggle`` CLIs authenticated):
+
+    python -m scripts.fetch_external_agents
+    python -m scripts.fetch_external_agents --dest /tmp/other_dir
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+#: The single source of truth for what gets fetched (#78).
+MANIFEST_PATH = os.path.join(REPO_ROOT, "harness", "external_agents.json")
+
+#: Kept in sync with .gitignore and harness/external_pool.py's DEFAULT_DIR.
+DEST_DIR = os.path.join(REPO_ROOT, "external_agents")
+
+#: Cell-magic markers that tag a Kaggle notebook's actual submittable agent.
+_AGENT_CELL_MAGICS = ("%%agentfile", "%%writefile")
+
+
+def load_manifest(path=MANIFEST_PATH):
+    """The list of agent entries to fetch. Pure parsing, no I/O beyond the read."""
+    with open(path) as fh:
+        data = json.load(fh)
+    return data["agents"]
+
+
+def dest_path(entry, dest_dir=DEST_DIR):
+    return os.path.join(dest_dir, entry["dest_filename"])
+
+
+def meta_path(entry, dest_dir=DEST_DIR):
+    return dest_path(entry, dest_dir) + ".meta.json"
+
+
+def write_meta(entry, dest_dir=DEST_DIR):
+    """Record license + attribution alongside the (gitignored) downloaded file."""
+    meta = {
+        "name": entry["name"],
+        "source_type": entry["source_type"],
+        "license": entry["license"],
+        "attribution": entry["attribution"],
+        "url": entry.get("url", ""),
+    }
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(meta_path(entry, dest_dir), "w") as fh:
+        json.dump(meta, fh, indent=2)
+        fh.write("\n")
+    return meta_path(entry, dest_dir)
+
+
+def extract_agent_cell(notebook):
+    """Return the source of the notebook's tagged agent cell, magic line stripped.
+
+    Raises ValueError if no cell is tagged ``%%agentfile``/``%%writefile`` --
+    a notebook that doesn't follow the convention must fail loudly at fetch
+    time rather than silently vendoring the wrong (narrative/plotting) cell.
+    """
+    for cell in notebook.get("cells", []):
+        if cell.get("cell_type") != "code":
+            continue
+        # nbformat allows a code cell's `source` to be either a single string
+        # or a list of line strings; normalize before splitting on lines.
+        raw = cell.get("source", [])
+        text = raw if isinstance(raw, str) else "".join(raw)
+        lines = text.splitlines(keepends=True)
+        if not lines:
+            continue
+        first = lines[0].strip()
+        if any(first.startswith(magic) for magic in _AGENT_CELL_MAGICS):
+            return "".join(lines[1:])
+    raise ValueError(
+        "no cell tagged %%agentfile or %%writefile found in notebook -- "
+        "cannot identify the submittable agent"
+    )
+
+
+def fetch_github_file(entry, dest_dir=DEST_DIR, runner=subprocess.run):
+    """Fetch a single file's raw content from GitHub via `gh api`."""
+    url = f"repos/{entry['repo']}/contents/{entry['path']}"
+    # --method GET is required: gh api defaults to POST whenever -F/-f fields
+    # are present, which 404s against the read-only contents endpoint.
+    args = ["gh", "api", "--method", "GET", "-H", "Accept: application/vnd.github.raw", url]
+    if entry.get("ref"):
+        args += ["-F", f"ref={entry['ref']}"]
+    result = runner(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(
+            f"gh api failed for {entry['name']!r} (exit {result.returncode}): "
+            f"{result.stderr.strip()}"
+        )
+    os.makedirs(dest_dir, exist_ok=True)
+    path = dest_path(entry, dest_dir)
+    with open(path, "w") as fh:
+        fh.write(result.stdout)
+    return path
+
+
+def fetch_kaggle_kernel(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
+    """Pull a Kaggle notebook, extract its tagged agent cell, write it as a .py file."""
+    with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
+        args = ["kaggle", "kernels", "pull", entry["kernel_ref"], "-p", tmp]
+        result = runner(args, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise SystemExit(
+                f"kaggle kernels pull failed for {entry['name']!r} "
+                f"(exit {result.returncode}): {result.stderr.strip()}"
+            )
+        notebooks = [f for f in os.listdir(tmp) if f.endswith(".ipynb")]
+        if not notebooks:
+            raise SystemExit(
+                f"kaggle kernels pull for {entry['name']!r} produced no .ipynb file"
+            )
+        with open(os.path.join(tmp, notebooks[0])) as fh:
+            notebook = json.load(fh)
+        source = extract_agent_cell(notebook)
+
+    os.makedirs(dest_dir, exist_ok=True)
+    path = dest_path(entry, dest_dir)
+    with open(path, "w") as fh:
+        fh.write(source)
+    return path
+
+
+def fetch_one(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
+    """Fetch one manifest entry and write its license/attribution sidecar."""
+    source_type = entry.get("source_type")
+    if source_type == "github_file":
+        path = fetch_github_file(entry, dest_dir, runner=runner)
+    elif source_type == "kaggle_kernel":
+        path = fetch_kaggle_kernel(entry, dest_dir, runner=runner, work_dir=work_dir)
+    else:
+        raise ValueError(f"unknown source_type {source_type!r} for agent {entry.get('name')!r}")
+    write_meta(entry, dest_dir)
+    return path
+
+
+def main(argv=None):  # pragma: no cover - orchestration, shells out to gh/kaggle
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--manifest", default=MANIFEST_PATH, help="path to the agent manifest")
+    ap.add_argument("--dest", default=DEST_DIR, help="local (gitignored) directory to fetch into")
+    args = ap.parse_args(argv)
+
+    entries = load_manifest(args.manifest)
+    failures = 0
+    for entry in entries:
+        print(f"fetching {entry['name']} ({entry['source_type']}) ...")
+        try:
+            path = fetch_one(entry, dest_dir=args.dest)
+        except (SystemExit, ValueError, OSError) as exc:
+            print(f"  FAILED: {exc}", file=sys.stderr)
+            failures += 1
+            continue
+        print(f"  -> {path}  [{entry['license']}]")
+
+    if failures:
+        print(f"{failures} of {len(entries)} agent(s) failed to fetch", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

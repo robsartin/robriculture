@@ -196,7 +196,7 @@ def blended_fitness(anchor_share, pool_share, anchor_weight=DEFAULT_ANCHOR_WEIGH
         return anchor_share
     return anchor_weight * anchor_share + (1.0 - anchor_weight) * pool_share
 
-DEFAULT_ANCHORS = ("meta_bot", "ranch_hands", "market_farmer", "ranch_adaptive", "wheat_hands", "spoiler")
+DEFAULT_ANCHORS = ("meta_bot", "ranch_hands", "market_farmer", "ranch_adaptive", "wheat_hands")
 
 def anchor_agents(names):
     """Return the agent callables for the given registered strategy names."""

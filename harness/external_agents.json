@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "Single source of truth for real external competitor agents used for",
+    "MEASUREMENT ONLY (#78, ADR-0008 amendment 2026-08-18). These are never",
+    "vendored into this repo -- scripts/fetch_external_agents.py reads this",
+    "file and downloads each entry into a gitignored local directory",
+    "(external_agents/ by default). No third-party code is committed to git.",
+    "Every entry's license was checked by the #67 survey before being added",
+    "here; do not add an entry without a confirmed permissive license."
+  ],
+  "agents": [
+    {
+      "name": "pilkwang_structured_economic_policy",
+      "source_type": "kaggle_kernel",
+      "kernel_ref": "pilkwang/kaggriculture-structured-economic-policy",
+      "url": "https://www.kaggle.com/code/pilkwang/kaggriculture-structured-economic-policy",
+      "license": "Apache-2.0",
+      "attribution": "pilkwang, \"Kaggriculture: Structured Economic Policy\" (https://www.kaggle.com/code/pilkwang/kaggriculture-structured-economic-policy), Apache License 2.0.",
+      "dest_filename": "pilkwang_structured_economic_policy.py",
+      "notes": "Kaggle notebook; the submittable agent lives in the single code cell tagged with the `%%agentfile` cell magic (writes kaggle's main.py). The fetch script extracts that cell only -- the rest of the notebook is narrative/plotting for the writeup and is not fetched or executed."
+    },
+    {
+      "name": "madhur_sabherwal_hub_geometry_agent",
+      "source_type": "github_file",
+      "repo": "Madhur-Sabherwal/kaggriculture-hub-geometry-agent",
+      "path": "src/agent.py",
+      "ref": "main",
+      "url": "https://github.com/Madhur-Sabherwal/kaggriculture-hub-geometry-agent/blob/main/src/agent.py",
+      "license": "MIT",
+      "attribution": "Madhur Sabherwal, kaggriculture-hub-geometry-agent (https://github.com/Madhur-Sabherwal/kaggriculture-hub-geometry-agent), MIT License.",
+      "dest_filename": "madhur_sabherwal_hub_geometry_agent.py",
+      "notes": "Structurally distinct job-scoring approach (hub geometry), picked for strategic diversity per the #67 survey."
+    },
+    {
+      "name": "seyamalam_candidate_v6_adaptive_livestock",
+      "source_type": "github_file",
+      "repo": "Seyamalam/Kaggriculture",
+      "path": "agents/candidate_v6_adaptive_livestock.py",
+      "ref": "main",
+      "url": "https://github.com/Seyamalam/Kaggriculture/blob/main/agents/candidate_v6_adaptive_livestock.py",
+      "license": "MIT",
+      "attribution": "Seyamalam, Kaggriculture (https://github.com/Seyamalam/Kaggriculture), agents/candidate_v6_adaptive_livestock.py, MIT License.",
+      "dest_filename": "seyamalam_candidate_v6_adaptive_livestock.py",
+      "notes": "DO NOT fetch this author's candidate_v7_public_v18/v19/v20/v21 -- those are 300KB+ compressed-blob replayers, explicitly rejected by the #67 survey. Only v1-v6 (plain heuristic agents) are in scope, and only v6 is vendored here."
+    },
+    {
+      "name": "alexandergremyakov_harvest_pulse_goose_dividend_v2",
+      "source_type": "kaggle_kernel",
+      "kernel_ref": "alexandergremyakov/harvest-pulse-goose-dividend-v2",
+      "url": "https://www.kaggle.com/code/alexandergremyakov/harvest-pulse-goose-dividend-v2",
+      "license": "Apache-2.0",
+      "attribution": "Alexander Gremyakov, \"harvest-pulse-goose-dividend-v2\" (https://www.kaggle.com/code/alexandergremyakov/harvest-pulse-goose-dividend-v2), Apache License 2.0.",
+      "dest_filename": "alexandergremyakov_harvest_pulse_goose_dividend_v2.py",
+      "notes": "Kaggle notebook; single code cell tagged `%%writefile /kaggle/working/main.py`. The fetch script extracts that cell only."
+    }
+  ]
+}
