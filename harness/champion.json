@@ -8,78 +8,67 @@
     "ranch_hands",
     "market_farmer",
     "ranch_adaptive",
-    "wheat_hands",
-    "spoiler"
+    "wheat_hands"
   ],
   "ranking": [
     {
       "name": "meta_bot",
-      "share": 0.6299561214776046,
+      "share": 0.6036909103127297,
       "benchmark": true
     },
     {
       "name": "meta_rancher",
-      "share": 0.6066045254381328,
+      "share": 0.5809220372983386,
       "benchmark": false
     },
     {
       "name": "market_farmer",
-      "share": 0.5106053634693316,
+      "share": 0.48638654365068934,
       "benchmark": false
     },
     {
       "name": "ranch_adaptive",
-      "share": 0.5080868460197712,
+      "share": 0.47118705383493054,
       "benchmark": false
     },
     {
       "name": "ranch_hands",
-      "share": 0.5080868460197712,
+      "share": 0.47118705383493054,
       "benchmark": false
     },
     {
       "name": "livestock_hand",
-      "share": 0.4946173592953282,
+      "share": 0.4645473835308646,
       "benchmark": false
     },
     {
       "name": "wheat_hands",
-      "share": 0.4913689824130142,
+      "share": 0.4492961180152629,
       "benchmark": false
     },
     {
       "name": "mixed_hands",
-      "share": 0.4781123280899067,
+      "share": 0.44435282513485214,
       "benchmark": false
     },
     {
       "name": "dairy_hands",
-      "share": 0.4536589881103166,
+      "share": 0.42533068245267786,
       "benchmark": false
     },
     {
       "name": "catch_hands",
-      "share": 0.4091123920839918,
+      "share": 0.3754048393928696,
       "benchmark": false
     },
     {
       "name": "wide_hands",
-      "share": 0.37978088886457373,
+      "share": 0.3528547686688691,
       "benchmark": false
     },
     {
       "name": "neuropilot",
-      "share": 0.37055766723146305,
-      "benchmark": false
-    },
-    {
-      "name": "fertilized_hands",
-      "share": 0.34062238132993655,
-      "benchmark": false
-    },
-    {
-      "name": "hired_hands",
-      "share": 0.33751890445281846,
+      "share": 0.34322011218036913,
       "benchmark": false
     },
     {
@@ -89,47 +78,57 @@
     },
     {
       "name": "routed",
-      "share": 0.33092432448102077,
+      "share": 0.31568717642843147,
+      "benchmark": false
+    },
+    {
+      "name": "fertilized_hands",
+      "share": 0.3138168050113421,
+      "benchmark": false
+    },
+    {
+      "name": "hired_hands",
+      "share": 0.3112128069616497,
       "benchmark": false
     },
     {
       "name": "geese_income",
-      "share": 0.1376547433769415,
+      "share": 0.12770349066806302,
       "benchmark": false
     },
     {
       "name": "smart_seller",
-      "share": 0.13648053301445717,
+      "share": 0.12645465786805454,
       "benchmark": false
     },
     {
       "name": "greedy_horizon",
-      "share": 0.1339944800122677,
+      "share": 0.12415656963831971,
       "benchmark": false
     },
     {
       "name": "capital_rush",
-      "share": 0.08054028084402459,
+      "share": 0.0738190167518548,
       "benchmark": false
     },
     {
       "name": "greedy",
-      "share": 0.08054028084402459,
+      "share": 0.0738190167518548,
       "benchmark": false
     },
     {
       "name": "lean",
-      "share": 0.08054028084402459,
+      "share": 0.0738190167518548,
       "benchmark": false
     },
     {
       "name": "market_timer",
-      "share": 0.08054028084402459,
+      "share": 0.0738190167518548,
       "benchmark": false
     },
     {
       "name": "planner",
-      "share": 0.08054028084402459,
+      "share": 0.0738190167518548,
       "benchmark": false
     }
   ]
