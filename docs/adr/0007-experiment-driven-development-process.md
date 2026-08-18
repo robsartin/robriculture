@@ -117,12 +117,12 @@ reproducible writeup — the writeup becomes a byproduct rather than a scramble.
   neuropilot at 422.3 against `ranch_hands` at 600.0 is ~180 points, and the
   local benchmark had already predicted that ordering.
 
-  This retroactively weakens any past reasoning that leaned on a sub-90-point
+  This retroactively weakens any past reasoning that leaned on a sub-98-point
   ladder gap — see [ADR-0008](0008-neuroevolution-against-a-diverse-pool.md)'s
   ~522-vs-~482 comparison, which is inside the band.
 
   Corollary worth exploiting: **re-submitting a known agent measures the band for
-  free.** These four data points cost nothing beyond submissions already spent.
+  free.** These five data points cost nothing beyond submissions already spent.
 - **The gate opponent changed mid-stream, so promotion results are not comparable
   across it (#76, 2026-08-16).** Until now the gate ran against `market_farmer`,
   designated on a 160/160 head-to-head record that turned out to be ~3% margins
