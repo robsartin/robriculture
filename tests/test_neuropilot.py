@@ -1,6 +1,7 @@
 """neuropilot — NN-guided agent (neuroevolution Phase 1, #64)."""
 from __future__ import annotations
 import math
+from kaggisim import economy
 from strategies import neuropilot as np
 
 
@@ -128,6 +129,57 @@ def test_controller_sells_lead_the_market_list():
     sells = [i for i, o in enumerate(a["market"]) if o[0] == "SELL"]
     non_sells = [i for i, o in enumerate(a["market"]) if o[0] != "SELL"]
     assert not non_sells or (not sells) or max(sells) < min(non_sells)
+
+
+# --- #89: marginal-price-aware selling (replaces the all-or-nothing dump) ---
+
+def test_sells_entire_shed_when_threshold_is_zero():
+    """A zero sell_throttle floors the stopping price at 0 — every held unit
+    clears the market's own price floor, so the whole shed still sells."""
+    orders = np._sell_orders({"MELON": 60}, {}, sell_throttle=0.0)
+    assert orders == [["SELL", "MELON", 60]]
+
+
+def test_caps_quantity_when_marginal_price_falls_below_threshold():
+    """Melon's quadratic over-supply penalty (economy.MARKET_PARAMS['MELON'],
+    above_func='sq') means a high sell_throttle stops the walk part-way
+    through a flooded shed instead of dumping it all in one order."""
+    I0 = economy.MARKET_PARAMS["MELON"]["I0"]
+    orders = np._sell_orders(
+        {"MELON": 60}, {"MELON": I0 + 50}, sell_throttle=0.7
+    )
+    assert orders == [["SELL", "MELON", 37]]
+
+
+def test_sells_in_full_for_a_deep_market_even_at_a_high_threshold():
+    """WHEAT's near-bottomless log curve clears the whole shed at the same
+    threshold that caps melon — only the steep curves get held back."""
+    I0 = economy.MARKET_PARAMS["WHEAT"]["I0"]
+    orders = np._sell_orders(
+        {"WHEAT": 60}, {"WHEAT": I0 + 50}, sell_throttle=0.7
+    )
+    assert orders == [["SELL", "WHEAT", 60]]
+
+
+def test_omits_an_item_the_walk_caps_to_zero():
+    """When even the first unit clears below threshold, no order is emitted
+    at all (never a ['SELL', item, 0])."""
+    I0 = economy.MARKET_PARAMS["MELON"]["I0"]
+    orders = np._sell_orders(
+        {"MELON": 10}, {"MELON": I0 + 500}, sell_throttle=0.99
+    )
+    assert orders == []
+
+
+def test_reads_current_market_inventory_not_a_stale_snapshot():
+    """The cap is driven by the live market_inventory argument, not a cached
+    price ratio — an unlisted item defaults to the curve's own I0 anchor."""
+    orders_at_anchor = np._sell_orders({"MELON": 60}, {}, sell_throttle=0.7)
+    I0 = economy.MARKET_PARAMS["MELON"]["I0"]
+    orders_flooded = np._sell_orders(
+        {"MELON": 60}, {"MELON": I0 + 40}, sell_throttle=0.7
+    )
+    assert orders_flooded[0][2] < orders_at_anchor[0][2]
 
 
 def test_hire_target_scales_the_hire_count():

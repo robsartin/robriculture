@@ -6,6 +6,7 @@ from __future__ import annotations
 import collections, json, math, os, random
 from kaggisim import actions as acts
 from kaggisim import economy
+from kaggisim import pricing
 from kaggisim.strategy import Strategy
 
 TURNS_PER_DAY = economy.CONFIG_DEFAULTS["turnsPerDay"]
@@ -261,24 +262,35 @@ def _plot_action(tile, day: int, crop):
     return ["PASS"]
 
 
-def _sell_orders(shed: dict, prices: dict, sell_throttle: float) -> list:
+def _sell_orders(shed: dict, market_inventory: dict, sell_throttle: float) -> list:
     """SELL orders liquidating the shed, deterministic (sorted by item).
 
-    Melon is held back when its price has slumped below `sell_throttle` of its
-    base price (a low `sell_throttle` sells freely; a high one waits for a
-    better price) — every other sellable product clears in full.
+    Each item's quantity comes from `kaggisim.pricing.sell_quantity` (#89),
+    which walks the *marginal* realised price down that item's own market
+    curve and stops once the next unit would clear below `sell_throttle` of
+    its base price — a low `sell_throttle` sells freely (down to the market
+    floor), a high one holds back hard. This replaces the old all-or-nothing
+    dump, which only gated MELON (binarily, on a stale price ratio) and sold
+    every other item's whole shed in one order regardless of market depth.
+    Steep, shallow curves (MELON, WOOL — `above_func: "sq"`) get capped the
+    hardest; deep curves (log/sqrt) clear in full at any sane threshold, so
+    unifying the walk across every item costs those markets nothing.
+
+    `sell_throttle` is a bare fraction-of-base *parameter*, not a constant
+    baked into this function — the seam #90 (endgame liquidation, e.g. force
+    it to 0 near the last day) and #91 (per-item reserve fractions, e.g.
+    shrink `have` before the walk) build on without touching this walk.
     """
     orders = []
     for item in sorted(shed):
-        n = shed.get(item, 0)
-        if item not in _SELLABLE or n <= 0:
+        have = shed.get(item, 0)
+        if item not in _SELLABLE or have <= 0:
             continue
-        if item == _MELON:
-            base = economy.base_price(_MELON) or 1.0
-            ratio = prices.get(_MELON, base) / base
-            if ratio < sell_throttle:
-                continue
-        orders.append(["SELL", item, n])
+        base = economy.base_price(item) or 1.0
+        inv = market_inventory.get(item, economy.MARKET_PARAMS[item]["I0"])
+        qty = pricing.sell_quantity(item, inv, have, sell_throttle * base)
+        if qty > 0:
+            orders.append(["SELL", item, qty])
     return orders
 
 
@@ -580,7 +592,7 @@ def controller(knobs: Knobs, state) -> dict:
     hands = me.get("hands", []) or []
     seeds = private.get("seeds", {})
     shed = private.get("shed", {})
-    prices = state.get("market", {}).get("prices", {})
+    market_inventory = state.get("market", {}).get("inventory", {})
     unlocked = me.get("unlocked_quadrants", ["NW"])
     inventories = private.get("inventories", [])
 
@@ -630,7 +642,7 @@ def controller(knobs: Knobs, state) -> dict:
 
     # --- Market: sells first, then hire, then seed, then livestock/fertilizer
     # (lowest priority) — sells are never truncated by the 10-order cap. ---
-    market: list = _sell_orders(shed, prices, knobs.sell_throttle)
+    market: list = _sell_orders(shed, market_inventory, knobs.sell_throttle)
 
     if hour == 0:
         n_hire = max(0, round(knobs.hire_target * MAX_HANDS))
