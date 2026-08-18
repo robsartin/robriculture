@@ -158,7 +158,15 @@ def opponent_record(agent, opponent, games, seed_base, rewards_fn=_play_rewards)
 
 
 def match_share(agent, opponents, games, seed_base, rewards_fn=_play_rewards):
-    """Mean score share across every opponent — each opponent weighted equally."""
+    """Mean score share across every opponent — each opponent weighted equally.
+
+    Opponent `oi` gets `seed_base + oi * 100000`, and evolve()'s own anchor vs.
+    sibling-pool matches are separated by `+ 50000` (#72) — both rely on the
+    unstated invariant `games < 50000` (the tighter of the two gaps) so that no
+    two of these seed ranges ever overlap. Violating it reuses maps across
+    opponents/pools rather than producing wrong scores, so there is no guard,
+    just this note.
+    """
     if not opponents:
         return 0.5
     return sum(
@@ -237,7 +245,11 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
         hof_agents = [genome_agent(g) for g in hof_genomes]
         scored = []
         for i, g in enumerate(population):
-            base = seed + gen * 7919 + i
+            # No `+ i` here: every genome in the generation shares the same seed
+            # base, so all of them are scored on identical maps (a paired
+            # comparison / common random numbers, #72). Seeds still rotate per
+            # generation via `gen * 7919`.
+            base = seed + gen * 7919
             siblings = build_opponents([pa for j, pa in enumerate(pop_agents) if j != i],
                                        [], hof_agents, sample_k, rng)
             a_share = match_share(pop_agents[i], anchors, games, base, rewards_fn)
