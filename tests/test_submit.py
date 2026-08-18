@@ -33,11 +33,14 @@ def test_load_submit_default_raises_on_an_old_format_artifact(tmp_path):
 
 
 def test_prepare_refuses_a_benchmark_strategy():
-    """Belt and braces: even a hand-edited artifact cannot submit a vendored agent.
+    """Belt and braces: even a hand-edited artifact cannot submit a benchmark opponent.
 
-    meta_bot is someone else's code, vendored readonly under their license
-    (ADR-0005). Packaging it under our name is a licensing problem, not a bad
-    score, so the cost of getting this wrong is asymmetric.
+    meta_bot is our own reconstruction of a composition observed in the field
+    (#59, #78) -- not vendored third-party code. The guard here is still
+    right on forward-looking licensing grounds (ADR-0005): a future benchmark
+    *could* be a real vendored competitor, and packaging one under our name
+    would be a licensing problem, not a bad score, so the cost of getting
+    this wrong is asymmetric.
     """
     with pytest.raises(SystemExit, match="benchmark"):
         submit.prepare("meta_bot", out=None)
