@@ -370,7 +370,7 @@ def test_evolve_checkpoints_best_so_far_not_current_generation_best():
     pop_size=1 and hof_cap=0 keep the population's single genome unchanged across
     generations, and the sole opponent pool is empty until the anchor supplies it —
     so the only thing that varies per generation is the seed evolve derives as
-    `seed + gen * 7919 + i`. The stub reward keys off that seed to make generation 1
+    `seed + gen * 7919`. The stub reward keys off that seed to make generation 1
     collapse (share 0.1) and generation 2 only partially recover (share 0.5), both
     well below generation 0's 0.9. A checkpoint that tracked the current
     generation's best (the #70 regression this guards against) would record
@@ -391,3 +391,69 @@ def test_evolve_checkpoints_best_so_far_not_current_generation_best():
               checkpoint_fn=lambda g, f, h: calls.append(f))
     assert len(calls) == 3
     assert calls == [0.9, 0.9, 0.9]
+
+
+def _recording_rewards(calls):
+    """Return a rewards_fn that appends (seed, agent_a, agent_b) per call and
+    reports a flat tie, so the test can inspect exactly what evolve() called
+    without any share/fitness computation muddying the seeds."""
+    def rewards(a, b, seed=None):
+        calls.append((seed, a, b))
+        return (100.0, 100.0)
+    return rewards
+
+
+def test_two_genomes_in_the_same_generation_play_identical_maps_when_paired():
+    """#72: dropping the per-genome `+ i` offset means every genome in a
+    generation is scored on the same seeds (common random numbers) — a paired
+    comparison. Before the fix, genome i's seed base was shifted by i, so no
+    two genomes in a population ever played the same map and truncation
+    selection was partly ranking on map luck rather than genome quality."""
+    calls = []
+    ev.evolve(generations=1, pop_size=2, games=3, sigma=0.1, sample_k=0, hof_cap=0,
+              anchor_names=(), seed=1, rewards_fn=_recording_rewards(calls),
+              anchor_agents_override=[_tagged("anchor")])
+    seeds = [seed for seed, _, _ in calls]
+    assert len(seeds) == 6                     # pop_size(2) * games(3), one anchor
+    genome0_seeds, genome1_seeds = seeds[:3], seeds[3:]
+    assert genome0_seeds == genome1_seeds
+
+
+def test_opponent_record_calls_rewards_fn_once_per_game_with_distinct_seeds():
+    """The genuinely load-bearing property: one rewards_fn call per game, each
+    on a distinct seed. A regression to `oi * games` instead of `oi * 100000`,
+    or to dropping the per-game `+ g`, would collapse `--games 4` into replaying
+    a single map four times and silently inflating confidence four-fold. A
+    regression to two rewards_fn calls per game (the #70 single-pass gap) would
+    fail the call-count assertion here."""
+    calls = []
+    ev.opponent_record(_tagged(""), _tagged(""), games=4, seed_base=10,
+                       rewards_fn=_recording_rewards(calls))
+    seeds = [seed for seed, _, _ in calls]
+    assert len(seeds) == 4                     # call count == games
+    assert seeds == [10, 11, 12, 13]            # distinct seeds within one opponent
+
+
+def test_match_share_offsets_each_opponent_by_100000():
+    """Each opponent's seed base is shifted by `oi * 100000` so opponents never
+    replay each other's maps. A regression to `oi * games` would collide the
+    moment two opponents shared a seed_base close enough together."""
+    calls = []
+    ev.match_share(_tagged(""), [_tagged("o0"), _tagged("o1")], games=2, seed_base=5,
+                   rewards_fn=_recording_rewards(calls))
+    seeds = [seed for seed, _, _ in calls]
+    assert seeds == [5, 6, 100005, 100006]
+
+
+def test_evolve_offsets_the_sibling_pool_seeds_by_50000_from_the_anchor_seeds():
+    """The sibling-pool match is seeded 50000 above the anchor match so anchors
+    and Hall-of-Fame/siblings never replay identical games. sample_k=1 with
+    pop_size=2 gives genome 0 exactly one sibling opponent: genome 1."""
+    calls = []
+    ev.evolve(generations=1, pop_size=2, games=1, sigma=0.1, sample_k=1, hof_cap=0,
+              anchor_names=(), seed=1, rewards_fn=_recording_rewards(calls),
+              anchor_agents_override=[_tagged("anchor")])
+    seeds = [seed for seed, _, _ in calls]
+    # genome 0: one anchor game (seed 1), one sibling game (seed 1 + 50000);
+    # genome 1: identical seeds, since the generation's base is now paired (#72).
+    assert seeds == [1, 50001, 1, 50001]
