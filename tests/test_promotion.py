@@ -9,8 +9,11 @@ cover the statistics and the game-tallying independently, using an injected
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
+from harness import promotion
 from harness.promotion import (
     Record,
     PromotionResult,
@@ -19,7 +22,6 @@ from harness.promotion import (
     round_robin_rank,
     designate_champion,
     save_champion,
-    load_champion,
     promotion_test,
 )
 
@@ -151,15 +153,6 @@ def test_designate_champion_picks_the_strongest():
     assert champ == "A"
 
 
-# --- champion persistence ---
-
-def test_save_and_load_champion(tmp_path):
-    path = tmp_path / "champion.json"
-    ranking = [("greedy", 0.7, 14, 20), ("lean", 0.3, 6, 20)]
-    save_champion(path, "greedy", games=20, ranking=ranking)
-    assert load_champion(path) == "greedy"
-
-
 # --- integration smoke: real games wire together end to end (slow-ish) ---
 
 def test_promotion_test_runs_real_games():
@@ -168,25 +161,228 @@ def test_promotion_test_runs_real_games():
     assert res.challenger == "greedy" and res.champion == "random"
 
 
-def test_current_champion_reads_the_recorded_file():
-    import json
-
-    from harness.promotion import CHAMPION_PATH, current_champion
-
-    # Don't pin the champion's identity (it changes as strategies evolve) — just
-    # assert current_champion() reflects whatever is recorded in champion.json.
-    assert current_champion() == json.load(open(CHAMPION_PATH))["champion"]
-
-
-def test_promotion_test_defaults_to_the_recorded_champion():
-    from harness.promotion import current_champion
-
-    # No real games: inject a fake play and a fake agent-builder.
+def test_promotion_test_defaults_to_the_recorded_champion(monkeypatch):
+    # No real games: inject a fake play, a fake agent-builder, and a stub
+    # gate_opponent so this test verifies the *resolution mechanism* without
+    # depending on the real committed champion.json's format (it is only
+    # re-designated in the new two-role shape once scripts/submit.py has been
+    # migrated — see Task 3/Task 5 of #76).
+    monkeypatch.setattr(promotion, "gate_opponent", lambda: "greedy")
     res = promotion_test(
         "greedy",
         games=2,
         play_fn=lambda a, b, seed: 1,
         build=lambda names: {n: n for n in names},
     )
-    assert res.champion == current_champion()
+    assert res.champion == "greedy"
     assert res.record.games == 2
+
+
+# --- pool_share_rank: rank by score share (#70), not win-rate ---
+
+def _named(tag):
+    """A stub agent carrying a tag the stub rewards_fn can key off."""
+    def agent(obs):
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+    agent.tag = tag
+    return agent
+
+
+def _stub_rewards(a, b, seed=None):
+    """Reward equals the agent's tag length — longer tag scores higher."""
+    return (float(len(getattr(a, "tag", ""))), float(len(getattr(b, "tag", ""))))
+
+
+def test_pool_share_rank_orders_by_share_descending():
+    """The strongest agent by score share ranks first."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    rows = promotion.pool_share_rank(cands, pool, games=2, rewards_fn=_stub_rewards)
+    assert [r["name"] for r in rows] == ["aaa", "a"]
+    assert rows[0]["share"] > rows[1]["share"]
+
+
+def test_pool_share_rank_never_plays_a_candidate_against_itself():
+    """A candidate that is also in the pool must not be its own opponent —
+    a self-match always scores 0.5 and would drag every share toward the mean."""
+    seen = []
+
+    def recording_rewards(a, b, seed=None):
+        seen.append((getattr(a, "tag", ""), getattr(b, "tag", "")))
+        return (100.0, 100.0)
+
+    cands = {"x": _named("x")}
+    pool = {"x": _named("x"), "y": _named("y")}
+    promotion.pool_share_rank(cands, pool, games=2, rewards_fn=recording_rewards)
+    assert all("x" not in (a, b) or a != b for a, b in seen)
+    assert all({a, b} != {"x"} for a, b in seen)
+
+
+def test_pool_share_rank_uses_the_same_seeds_for_every_candidate_against_a_given_opponent():
+    """Regression guard for the whole-branch review's Finding 1.
+
+    Seeds must derive from an opponent's position in the *pool*, stable
+    across every candidate — not from its position in a candidate's own
+    filtered opponent list. Before the fix, `pool_share_rank` routed through
+    `match_share`, which seeds by list index: a candidate that is itself in
+    the pool (like `meta_bot` in the real anchor pool) gets that opponent
+    removed from its list, shifting every later opponent's index — and
+    therefore its seed — down by one slot relative to a candidate that is
+    NOT in the pool. Two candidates then measure their share against the
+    "same" opponent on different games entirely, which is exactly what
+    produced the stale `champion.json`'s 0.026 gap.
+
+    This test pins it with a recording rewards_fn: one candidate ("x") is
+    itself a pool member (the regression case), the other ("outside") is
+    not, and both must face the shared opponent "market_farmer" at
+    identical seeds.
+    """
+    calls = []
+
+    def recording_rewards(a, b, seed=None):
+        calls.append((getattr(a, "tag", ""), getattr(b, "tag", ""), seed))
+        return (1.0, 1.0)
+
+    pool = {"x": _named("x"), "market_farmer": _named("market_farmer"), "y": _named("y")}
+    cands = {"x": pool["x"], "outside": _named("outside")}
+    promotion.pool_share_rank(cands, pool, games=2, rewards_fn=recording_rewards)
+
+    def seeds_faced(candidate_tag, opponent_tag):
+        return sorted(
+            seed for a, b, seed in calls
+            if candidate_tag in (a, b) and opponent_tag in (a, b)
+        )
+
+    seeds_for_x = seeds_faced("x", "market_farmer")
+    seeds_for_outside = seeds_faced("outside", "market_farmer")
+    assert seeds_for_x != []
+    assert seeds_for_x == seeds_for_outside
+
+
+def test_pool_share_rank_carries_the_benchmark_flag():
+    """The artifact records which rows are external benchmarks."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    rows = promotion.pool_share_rank(cands, pool, games=2,
+                                     rewards_fn=_stub_rewards, benchmarks={"aaa"})
+    flags = {r["name"]: r["benchmark"] for r in rows}
+    assert flags == {"aaa": True, "a": False}
+
+
+def test_pool_share_rank_is_deterministic_for_fixed_seeds():
+    """ADR-0005: same arguments, same ranking."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    kw = dict(games=2, rewards_fn=_stub_rewards)
+    assert promotion.pool_share_rank(cands, pool, **kw) == promotion.pool_share_rank(cands, pool, **kw)
+
+
+def test_pool_share_rank_raises_on_an_empty_pool():
+    """No opponents means no measurement — fail rather than emit 0.5 for everyone."""
+    with pytest.raises(ValueError, match="pool"):
+        promotion.pool_share_rank({"a": _named("a")}, {}, games=2, rewards_fn=_stub_rewards)
+
+
+def test_pool_share_rank_raises_when_a_candidate_is_the_only_pool_entry():
+    """Self-exclusion can empty a candidate's opponent list; that must raise.
+
+    match_share returns 0.5 for an empty opponent list by design (#70). Letting
+    that through here would designate a champion on a number that means
+    "no evidence" rather than "evenly matched".
+    """
+    with pytest.raises(ValueError, match="no opponents"):
+        promotion.pool_share_rank({"x": _named("x")}, {"x": _named("x")},
+                                  games=2, rewards_fn=_stub_rewards)
+
+
+def test_top_contender_takes_names_and_skips_benchmarks():
+    """top_contender now consumes best-first names, not ranking tuples."""
+    assert promotion.top_contender(["meta_bot", "ranch_hands"], {"meta_bot"}) == "ranch_hands"
+    assert promotion.top_contender(["ranch_hands", "meta_bot"], {"meta_bot"}) == "ranch_hands"
+
+
+def test_top_contender_raises_when_every_name_is_a_benchmark():
+    """There is no valid submit default if everything is external."""
+    with pytest.raises(ValueError):
+        promotion.top_contender(["meta_bot"], {"meta_bot"})
+
+
+# --- designate: split the champion into gate_opponent / submit_default ---
+
+def test_designate_allows_a_benchmark_as_gate_opponent():
+    """The gate is a bar, and a real competitor is the best bar available."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards,
+                               benchmarks={"aaa"})
+    assert body["gate_opponent"] == "aaa"
+
+
+def test_designate_never_puts_a_benchmark_in_submit_default():
+    """Submitting a vendored competitor's agent is an ADR-0005 licensing problem."""
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards,
+                               benchmarks={"aaa"})
+    assert body["submit_default"] == "a"
+
+
+def test_designate_without_benchmarks_resolves_the_real_registry(monkeypatch):
+    """Omitting `benchmarks` must not silently mean 'no benchmarks exist' (review Finding 2).
+
+    A caller that forgets to pass `benchmarks` still gets the real set via
+    `harness.tournament.benchmark_names()`, not an empty set — so a known
+    benchmark strategy is still flagged correctly and never lands as
+    `submit_default`. A silent empty-set fallback here is the same failure
+    class `_read_role` exists to forbid on the read side.
+    """
+    import harness.tournament as tournament
+
+    monkeypatch.setattr(tournament, "benchmark_names", lambda: {"aaa"})
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards)
+    flags = {r["name"]: r["benchmark"] for r in body["ranking"]}
+    assert flags["aaa"] is True
+    assert body["gate_opponent"] == "aaa"
+    assert body["submit_default"] == "a"
+
+
+def test_designate_records_the_criterion_and_pool():
+    """The artifact says how it was produced, so a future reader can reproduce it."""
+    cands = {"aaa": _named("aaa")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards)
+    assert body["criterion"] == "pool_share"
+    assert body["pool"] == ["aa"]
+    assert body["games"] == 2
+
+
+def test_save_champion_round_trips_both_roles(tmp_path):
+    """Both readers return their own field from a saved artifact."""
+    p = tmp_path / "champion.json"
+    body = {"criterion": "pool_share", "gate_opponent": "meta_bot",
+            "submit_default": "meta_rancher", "games": 2, "pool": [], "ranking": []}
+    promotion.save_champion(str(p), body)
+    assert promotion.gate_opponent(str(p)) == "meta_bot"
+    assert promotion.submit_default(str(p)) == "meta_rancher"
+
+
+def test_gate_opponent_raises_on_an_old_format_artifact(tmp_path):
+    """A stale file must fail loudly, never silently fall back to `champion`.
+
+    A silent fallback re-points the gate at market_farmer without anyone
+    noticing — the exact bug #76 exists to fix.
+    """
+    p = tmp_path / "champion.json"
+    p.write_text(json.dumps({"champion": "market_farmer", "games": 20, "ranking": []}))
+    with pytest.raises(ValueError, match="re-designate"):
+        promotion.gate_opponent(str(p))
+
+
+def test_submit_default_raises_on_an_old_format_artifact(tmp_path):
+    """Same loud failure for the submit side."""
+    p = tmp_path / "champion.json"
+    p.write_text(json.dumps({"champion": "market_farmer", "games": 20, "ranking": []}))
+    with pytest.raises(ValueError, match="re-designate"):
+        promotion.submit_default(str(p))

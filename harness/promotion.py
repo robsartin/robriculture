@@ -92,7 +92,9 @@ class PromotionResult:
 import itertools
 import os
 
+from harness.evolve import opponent_record
 from harness.tournament import build_agents, play
+from harness.tournament import play_rewards as _play_rewards
 
 #: Where the designated champion is recorded (a committed decision artifact).
 CHAMPION_PATH = os.path.join(os.path.dirname(__file__), "champion.json")
@@ -147,16 +149,109 @@ def round_robin_rank(agents, games=20, play_fn=play):
     return ranking
 
 
-def top_contender(ranking, benchmarks):
-    """The highest-ranked label in `ranking` that is not a benchmark opponent.
+def pool_share_rank(candidates, pool, games=2, seed_base=0,
+                    rewards_fn=_play_rewards, benchmarks=None):
+    """Rank `candidates` by mean score share against `pool`, best first.
 
-    `ranking` is best-first `(label, win_rate, wins, played)` rows. Benchmarks
-    shape the ranking (as opponents) but can never be champion, so we skip them.
-    Raises ValueError if every label is a benchmark (no valid champion).
+    Share (`me / (me + opp)`, from #70) instead of win-rate, because win/loss
+    throws away margin: `market_farmer` won 160/160 head-to-head on margins of
+    ~3%, which crowned it champion while it ranked last on the ladder. Share
+    puts it within 0.0015 of two other agents — which is the truth.
+
+    A candidate is never its own opponent: a self-match scores 0.5 by
+    construction and would pull every share toward the mean.
+
+    The per-opponent seed offset comes from that opponent's position in the
+    *pool*, stable across every candidate — not from its position in any one
+    candidate's filtered opponent list. This calls `opponent_record` directly
+    rather than routing through `match_share`: `match_share` derives its seed
+    offset from list index, so a pool member's self-exclusion shifts every
+    opponent after it down one slot, and two candidates end up measured on
+    different seeded games against the "same" opponent (#76). Keying off pool
+    position instead means every candidate meets a given opponent at
+    identical seeds, so shares are actually comparable across candidates.
+
+    This does NOT equalize the *field*: a candidate that is itself in the
+    pool plays N-1 opponents (itself excluded) while one outside the pool
+    plays all N, so pool members never meet a peer of their own strength.
+    That is pool-composition, not seeding, and is left to #78.
     """
-    for label, *_rest in ranking:
-        if label not in benchmarks:
-            return label
+    if not pool:
+        raise ValueError("cannot rank against an empty pool")
+    benchmarks = benchmarks or set()
+    rows = []
+    for name, agent in candidates.items():
+        shares = []
+        for oi, (opp_name, opp) in enumerate(pool.items()):
+            if opp_name == name:
+                continue
+            shares.append(
+                opponent_record(agent, opp, games, seed_base + oi * 100000,
+                                rewards_fn)["share"]
+            )
+        if not shares:
+            raise ValueError(
+                f"candidate {name!r} has no opponents: it is the only entry in the pool, "
+                f"and a candidate never plays itself"
+            )
+        rows.append({"name": name, "share": sum(shares) / len(shares),
+                     "benchmark": name in benchmarks})
+    rows.sort(key=lambda r: r["share"], reverse=True)
+    return rows
+
+
+CRITERION = "pool_share"
+
+
+def designate(candidates, pool, games=2, seed_base=0,
+              rewards_fn=_play_rewards, benchmarks=None):
+    """Rank by pool share and split the result into the champion's two roles.
+
+    `gate_opponent` is the outright leader — benchmarks included, because the
+    gate wants the most demanding representative bar available.
+
+    `submit_default` is the leading non-benchmark. `scripts/submit.py` packages
+    it with no arguments, so a vendored external agent must never land here:
+    submitting a competitor's code is pointless and an ADR-0005 licensing and
+    attribution problem. One field cannot answer both questions, which is why
+    there are two.
+
+    `benchmarks` omitted (None) resolves to the real registry via
+    `harness.tournament.benchmark_names()`, not an empty set. Defaulting to
+    "no benchmarks exist" would let a caller write a committed `champion.json`
+    that stamps every row `"benchmark": false` and can hand `submit_default` a
+    vendored competitor — silently, the same failure mode `_read_role` exists
+    to forbid. Pass an explicit `benchmarks=set()` to opt out deliberately.
+    """
+    if benchmarks is None:
+        from harness.tournament import benchmark_names
+        benchmarks = benchmark_names()
+    ranking = pool_share_rank(candidates, pool, games=games, seed_base=seed_base,
+                              rewards_fn=rewards_fn, benchmarks=benchmarks)
+    return {
+        "criterion": CRITERION,
+        "gate_opponent": ranking[0]["name"],
+        "submit_default": top_contender([r["name"] for r in ranking], benchmarks),
+        "games": games,
+        "pool": list(pool),
+        "ranking": ranking,
+    }
+
+
+def top_contender(names, benchmarks):
+    """The first name that is not a benchmark opponent.
+
+    Takes best-first *names*. `pool_share_rank` emits dicts, and unpacking those
+    as `(label, *rest)` tuples would silently iterate their keys instead of
+    raising — so the row shape is names, and callers project explicitly.
+
+    Benchmarks are vendored external agents: they make excellent gate opponents
+    but must never be a submit default (ADR-0005 licensing). Raises ValueError
+    if every name is a benchmark.
+    """
+    for name in names:
+        if name not in benchmarks:
+            return name
     raise ValueError("no non-benchmark contender in ranking")
 
 
@@ -170,32 +265,36 @@ def designate_champion(names, games=20, play_fn=play, build=build_agents, benchm
     """
     benchmarks = benchmarks or set()
     ranking = round_robin_rank(build(names), games=games, play_fn=play_fn)
-    return top_contender(ranking, benchmarks)
+    return top_contender([row[0] for row in ranking], benchmarks)
 
 
-def save_champion(path, name, games, ranking):
-    """Record the designated champion + the ranking that chose it (JSON)."""
-    payload = {
-        "champion": name,
-        "games": games,
-        "ranking": [
-            {"name": n, "win_rate": wr, "wins": w, "played": p}
-            for (n, wr, w, p) in ranking
-        ],
-    }
+def save_champion(path, body):
+    """Write the designation artifact (a `designate()` body) as JSON."""
     with open(path, "w") as fh:
-        json.dump(payload, fh, indent=2)
+        json.dump(body, fh, indent=2)
         fh.write("\n")
 
 
-def load_champion(path):
+def _read_role(path, field):
+    """Read one role from the artifact, failing loudly on the old single-field format."""
     with open(path) as fh:
-        return json.load(fh)["champion"]
+        data = json.load(fh)
+    if field not in data:
+        raise ValueError(
+            f"{path!r} has no {field!r} — it predates the two-role split (#76). "
+            f"re-designate with: python -m harness.promotion --designate --games 2"
+        )
+    return data[field]
 
 
-def current_champion(path=CHAMPION_PATH):
-    """The champion an experiment measures against, per ADR-0007."""
-    return load_champion(path)
+def gate_opponent(path=CHAMPION_PATH):
+    """The opponent an ADR-0007 promotion test measures against. May be a benchmark."""
+    return _read_role(path, "gate_opponent")
+
+
+def submit_default(path=CHAMPION_PATH):
+    """The strategy `scripts/submit.py` packages by default. Never a benchmark."""
+    return _read_role(path, "submit_default")
 
 
 def promotion_test(
@@ -209,7 +308,7 @@ def promotion_test(
 ):
     """Run the ADR-0007 promotion test: challenger vs champion over seeded games."""
     if champion_name is None:
-        champion_name = current_champion()
+        champion_name = gate_opponent()
     agents = build([challenger_name, champion_name])
     record = run_match(
         agents[challenger_name], agents[champion_name], games=games, play_fn=play_fn
@@ -232,20 +331,25 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--bar", type=float, default=0.55, help="win-rate bar (default 0.55)")
     ap.add_argument("--alpha", type=float, default=0.05, help="significance level (default 0.05)")
     ap.add_argument("--designate", action="store_true",
-                    help="run a round-robin and record the strongest as champion")
+                    help="rank all strategies by pool share against the fixed anchors and record both roles (gate_opponent, submit_default)")
     ap.add_argument("names", nargs="*", help="agents to rank (for --designate; default: all + built-ins)")
     args = ap.parse_args(argv)
 
     if args.designate:
-        from harness.tournament import BUILTINS, benchmark_names
-        names = args.names or (list(REGISTRY) + list(BUILTINS))
-        print(f"Designating champion among {names} ({args.games} games/pairing)...")
-        ranking = round_robin_rank(build_agents(names), games=args.games)
-        champ = top_contender(ranking, benchmark_names())
-        save_champion(CHAMPION_PATH, champ, args.games, ranking)
-        for name, wr, w, p in ranking:
-            print(f"  {name:16s} {wr:6.1%}  ({w}/{p})")
-        print(f"\nChampion: {champ}  -> {CHAMPION_PATH}")
+        from harness.evolve import DEFAULT_ANCHORS
+        from harness.tournament import benchmark_names
+        from strategies import REGISTRY
+
+        bench = benchmark_names()
+        pool = build_agents(list(DEFAULT_ANCHORS))
+        candidates = build_agents(list(REGISTRY))
+        body = designate(candidates, pool, games=args.games, benchmarks=bench)
+        save_champion(CHAMPION_PATH, body)
+        for row in body["ranking"]:
+            mark = " (benchmark)" if row["benchmark"] else ""
+            print(f"  {row['name']:16s} share={row['share']:.4f}{mark}")
+        print(f"\ngate_opponent:  {body['gate_opponent']}")
+        print(f"submit_default: {body['submit_default']}")
         return 0
 
     if not args.challenger:

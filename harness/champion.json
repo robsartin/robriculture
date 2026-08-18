@@ -1,60 +1,136 @@
 {
-  "champion": "market_farmer",
-  "games": 20,
+  "criterion": "pool_share",
+  "gate_opponent": "meta_bot",
+  "submit_default": "meta_rancher",
+  "games": 2,
+  "pool": [
+    "meta_bot",
+    "ranch_hands",
+    "market_farmer",
+    "ranch_adaptive",
+    "wheat_hands",
+    "spoiler"
+  ],
   "ranking": [
     {
+      "name": "meta_bot",
+      "share": 0.6299561214776046,
+      "benchmark": true
+    },
+    {
+      "name": "meta_rancher",
+      "share": 0.6066045254381328,
+      "benchmark": false
+    },
+    {
       "name": "market_farmer",
-      "win_rate": 1.0,
-      "wins": 160,
-      "played": 160
+      "share": 0.5106053634693316,
+      "benchmark": false
+    },
+    {
+      "name": "ranch_adaptive",
+      "share": 0.5080868460197712,
+      "benchmark": false
     },
     {
       "name": "ranch_hands",
-      "win_rate": 0.875,
-      "wins": 140,
-      "played": 160
+      "share": 0.5080868460197712,
+      "benchmark": false
     },
     {
       "name": "livestock_hand",
-      "win_rate": 0.75,
-      "wins": 120,
-      "played": 160
+      "share": 0.4946173592953282,
+      "benchmark": false
     },
     {
       "name": "wheat_hands",
-      "win_rate": 0.625,
-      "wins": 100,
-      "played": 160
+      "share": 0.4913689824130142,
+      "benchmark": false
     },
     {
       "name": "mixed_hands",
-      "win_rate": 0.5,
-      "wins": 80,
-      "played": 160
+      "share": 0.4781123280899067,
+      "benchmark": false
     },
     {
       "name": "dairy_hands",
-      "win_rate": 0.375,
-      "wins": 60,
-      "played": 160
+      "share": 0.4536589881103166,
+      "benchmark": false
     },
     {
       "name": "catch_hands",
-      "win_rate": 0.25,
-      "wins": 40,
-      "played": 160
+      "share": 0.4091123920839918,
+      "benchmark": false
     },
     {
       "name": "wide_hands",
-      "win_rate": 0.125,
-      "wins": 20,
-      "played": 160
+      "share": 0.37978088886457373,
+      "benchmark": false
+    },
+    {
+      "name": "neuropilot",
+      "share": 0.37055766723146305,
+      "benchmark": false
+    },
+    {
+      "name": "fertilized_hands",
+      "share": 0.34062238132993655,
+      "benchmark": false
     },
     {
       "name": "hired_hands",
-      "win_rate": 0.0,
-      "wins": 0,
-      "played": 160
+      "share": 0.33751890445281846,
+      "benchmark": false
+    },
+    {
+      "name": "spoiler",
+      "share": 0.33477413652035704,
+      "benchmark": false
+    },
+    {
+      "name": "routed",
+      "share": 0.33092432448102077,
+      "benchmark": false
+    },
+    {
+      "name": "geese_income",
+      "share": 0.1376547433769415,
+      "benchmark": false
+    },
+    {
+      "name": "smart_seller",
+      "share": 0.13648053301445717,
+      "benchmark": false
+    },
+    {
+      "name": "greedy_horizon",
+      "share": 0.1339944800122677,
+      "benchmark": false
+    },
+    {
+      "name": "capital_rush",
+      "share": 0.08054028084402459,
+      "benchmark": false
+    },
+    {
+      "name": "greedy",
+      "share": 0.08054028084402459,
+      "benchmark": false
+    },
+    {
+      "name": "lean",
+      "share": 0.08054028084402459,
+      "benchmark": false
+    },
+    {
+      "name": "market_timer",
+      "share": 0.08054028084402459,
+      "benchmark": false
+    },
+    {
+      "name": "planner",
+      "share": 0.08054028084402459,
+      "benchmark": false
     }
   ]
 }

@@ -2,15 +2,15 @@
 
 One command: build the submission tarball (via ``build.package``, which runs a
 post-build smoke test) and submit it with the Kaggle CLI. The strategy defaults
-to the current champion (``harness/champion.json``) and the message to
-``"<strategy> <short-sha>"``. ``--dry-run`` builds + smoke-tests only.
+to the recorded ``submit_default`` (``harness/champion.json``) and the message
+to ``"<strategy> <short-sha>"``. ``--dry-run`` builds + smoke-tests only.
 
 **Rob runs this**, not the agent: ``kaggle competitions submit`` needs Kaggle CLI
 credentials (``kaggle.json``, gitignored) and competition-rules acceptance. Only
 the **latest 2** submissions are active on the ladder, so run it for the two best
-(champion + challenger).
+(submit default + challenger).
 
-    python scripts/submit.py                        # champion, auto message
+    python scripts/submit.py                        # submit_default, auto message
     python scripts/submit.py dairy_hands -m "note"   # explicit strategy + message
     python scripts/submit.py --dry-run               # build + smoke test only, no submit
 """
@@ -32,15 +32,21 @@ from build import package as build_package  # noqa: E402
 #: The Kaggle competition slug we submit to.
 COMPETITION = "kaggriculture"
 
-#: The recorded champion (default strategy) and where built tarballs land.
+#: The recorded submit_default (default strategy) and where built tarballs land.
 CHAMPION_PATH = os.path.join(REPO_ROOT, "harness", "champion.json")
 DIST_DIR = os.path.join(REPO_ROOT, "dist")
 
 
-def load_champion(path=CHAMPION_PATH):
-    """The strategy name recorded as the current champion."""
+def load_submit_default(path=CHAMPION_PATH):
+    """The strategy recorded as the default to submit (never a benchmark, #76)."""
     with open(path) as fh:
-        return json.load(fh)["champion"]
+        data = json.load(fh)
+    if "submit_default" not in data:
+        raise ValueError(
+            f"{path!r} has no 'submit_default' — it predates the two-role split (#76). "
+            f"re-designate with: python -m harness.promotion --designate --games 2"
+        )
+    return data["submit_default"]
 
 
 def default_message(strategy, sha):
@@ -66,8 +72,21 @@ def short_git_sha(repo_root=REPO_ROOT):  # pragma: no cover - shells out to git
 
 
 def prepare(strategy=None, out=None, champion_path=CHAMPION_PATH):
-    """Resolve the (strategy, tarball-path) to build, defaulting to the champion."""
-    strategy = strategy or load_champion(champion_path)
+    """Resolve the (strategy, tarball-path) to build, defaulting to the submit default.
+
+    Refuses benchmark-flagged strategies outright. They are vendored external
+    competitors; packaging one under our name is an ADR-0005 licensing and
+    attribution problem, so this guard holds even when the name is given
+    explicitly.
+    """
+    from harness.tournament import benchmark_names
+
+    strategy = strategy or load_submit_default(champion_path)
+    if strategy in benchmark_names():
+        raise SystemExit(
+            f"{strategy!r} is a readonly benchmark opponent (vendored external agent) "
+            f"— refusing to package it for submission"
+        )
     out = out or os.path.join(DIST_DIR, f"{strategy}.tar.gz")
     return strategy, out
 
@@ -107,7 +126,7 @@ def main(argv=None):  # pragma: no cover - CLI wiring
     ap = argparse.ArgumentParser(
         description="build + submit a strategy to the kaggriculture competition"
     )
-    ap.add_argument("strategy", nargs="?", help="strategy name (default: current champion)")
+    ap.add_argument("strategy", nargs="?", help="strategy name (default: the recorded submit_default)")
     ap.add_argument("-m", "--message", help="submission message (default: '<strategy> <sha>')")
     ap.add_argument("-o", "--out", help="tarball output path (default: dist/<strategy>.tar.gz)")
     ap.add_argument("--dry-run", action="store_true", help="build + smoke test only; do not submit")

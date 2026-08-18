@@ -122,6 +122,15 @@ reproducible writeup — the writeup becomes a byproduct rather than a scramble.
 
   Corollary worth exploiting: **re-submitting a known agent measures the band for
   free.** These four data points cost nothing beyond submissions already spent.
+- **The gate opponent changed mid-stream, so promotion results are not comparable
+  across it (#76, 2026-08-16).** Until now the gate ran against `market_farmer`,
+  designated on a 160/160 head-to-head record that turned out to be ~3% margins
+  amplified by binary scoring — its pool share is 0.5082, within 0.0015 of two
+  other agents, and it scored 476.7 on the ladder, our worst. Any challenger
+  promoted before this date cleared a weaker and unrepresentative bar; do not
+  compare those (N, win-rate, p) records with later ones. Designation is now by
+  pool share, and the champion's two roles are recorded separately as
+  `gate_opponent` and `submit_default`.
 
 ## Alternatives considered
 
