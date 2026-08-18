@@ -51,8 +51,8 @@ python -m build.package greedy
 kaggle competitions submit kaggriculture -f dist/greedy.tar.gz -m "greedy v1"
 ```
 
-Or do both in one command with `scripts/submit.py` (defaults to the current
-champion from `harness/champion.json`; message defaults to `"<strategy> <sha>"`):
+Or do both in one command with `scripts/submit.py` (defaults to the recorded
+`submit_default` from `harness/champion.json`; message defaults to `"<strategy> <sha>"`):
 
 ```bash
 python scripts/submit.py                 # build + submit the champion
