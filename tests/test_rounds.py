@@ -1,16 +1,17 @@
-"""Tests for round history + windowed champion selection (#12).
+"""Tests for round history + delegated champion designation (#12, rerouted by #76).
 
-The champion is chosen from win-rate over the current + recent rounds, not a
-single snapshot, so a lucky round doesn't crown a weak agent and recent (better)
-agents are weighted appropriately. Aggregation is tested with synthetic rounds —
-no real games.
+`run_and_record` plays one round, appends it to the committed history in
+`harness/rounds.json` as a record, and then re-designates the champion by
+delegating to `harness.promotion.designate` (pool share against a fixed anchor
+pool) — not from the round's own win-rate. These tests verify the wiring
+(history append + artifact write + forwarded kwargs) with synthetic rounds and
+a stubbed `designate`; the designation math itself is covered in
+`tests/test_promotion.py`.
 """
 
 from __future__ import annotations
 
 import json
-
-import pytest
 
 from harness import rounds
 from harness.rounds import (

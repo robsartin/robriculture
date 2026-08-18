@@ -218,6 +218,47 @@ def test_pool_share_rank_never_plays_a_candidate_against_itself():
     assert all({a, b} != {"x"} for a, b in seen)
 
 
+def test_pool_share_rank_uses_the_same_seeds_for_every_candidate_against_a_given_opponent():
+    """Regression guard for the whole-branch review's Finding 1.
+
+    Seeds must derive from an opponent's position in the *pool*, stable
+    across every candidate — not from its position in a candidate's own
+    filtered opponent list. Before the fix, `pool_share_rank` routed through
+    `match_share`, which seeds by list index: a candidate that is itself in
+    the pool (like `meta_bot` in the real anchor pool) gets that opponent
+    removed from its list, shifting every later opponent's index — and
+    therefore its seed — down by one slot relative to a candidate that is
+    NOT in the pool. Two candidates then measure their share against the
+    "same" opponent on different games entirely, which is exactly what
+    produced the stale `champion.json`'s 0.026 gap.
+
+    This test pins it with a recording rewards_fn: one candidate ("x") is
+    itself a pool member (the regression case), the other ("outside") is
+    not, and both must face the shared opponent "market_farmer" at
+    identical seeds.
+    """
+    calls = []
+
+    def recording_rewards(a, b, seed=None):
+        calls.append((getattr(a, "tag", ""), getattr(b, "tag", ""), seed))
+        return (1.0, 1.0)
+
+    pool = {"x": _named("x"), "market_farmer": _named("market_farmer"), "y": _named("y")}
+    cands = {"x": pool["x"], "outside": _named("outside")}
+    promotion.pool_share_rank(cands, pool, games=2, rewards_fn=recording_rewards)
+
+    def seeds_faced(candidate_tag, opponent_tag):
+        return sorted(
+            seed for a, b, seed in calls
+            if candidate_tag in (a, b) and opponent_tag in (a, b)
+        )
+
+    seeds_for_x = seeds_faced("x", "market_farmer")
+    seeds_for_outside = seeds_faced("outside", "market_farmer")
+    assert seeds_for_x != []
+    assert seeds_for_x == seeds_for_outside
+
+
 def test_pool_share_rank_carries_the_benchmark_flag():
     """The artifact records which rows are external benchmarks."""
     cands = {"aaa": _named("aaa"), "a": _named("a")}
@@ -283,6 +324,27 @@ def test_designate_never_puts_a_benchmark_in_submit_default():
     pool = {"aa": _named("aa")}
     body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards,
                                benchmarks={"aaa"})
+    assert body["submit_default"] == "a"
+
+
+def test_designate_without_benchmarks_resolves_the_real_registry(monkeypatch):
+    """Omitting `benchmarks` must not silently mean 'no benchmarks exist' (review Finding 2).
+
+    A caller that forgets to pass `benchmarks` still gets the real set via
+    `harness.tournament.benchmark_names()`, not an empty set — so a known
+    benchmark strategy is still flagged correctly and never lands as
+    `submit_default`. A silent empty-set fallback here is the same failure
+    class `_read_role` exists to forbid on the read side.
+    """
+    import harness.tournament as tournament
+
+    monkeypatch.setattr(tournament, "benchmark_names", lambda: {"aaa"})
+    cands = {"aaa": _named("aaa"), "a": _named("a")}
+    pool = {"aa": _named("aa")}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards)
+    flags = {r["name"]: r["benchmark"] for r in body["ranking"]}
+    assert flags["aaa"] is True
+    assert body["gate_opponent"] == "aaa"
     assert body["submit_default"] == "a"
 
 

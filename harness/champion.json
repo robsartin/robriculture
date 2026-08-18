@@ -14,7 +14,7 @@
   "ranking": [
     {
       "name": "meta_bot",
-      "share": 0.6325255639642176,
+      "share": 0.6299561214776046,
       "benchmark": true
     },
     {
@@ -23,18 +23,18 @@
       "benchmark": false
     },
     {
-      "name": "ranch_hands",
-      "share": 0.5085394988139111,
-      "benchmark": false
-    },
-    {
       "name": "market_farmer",
-      "share": 0.5081563184845759,
+      "share": 0.5106053634693316,
       "benchmark": false
     },
     {
       "name": "ranch_adaptive",
-      "share": 0.507017784531276,
+      "share": 0.5080868460197712,
+      "benchmark": false
+    },
+    {
+      "name": "ranch_hands",
+      "share": 0.5080868460197712,
       "benchmark": false
     },
     {
@@ -44,7 +44,7 @@
     },
     {
       "name": "wheat_hands",
-      "share": 0.49064117632278625,
+      "share": 0.4913689824130142,
       "benchmark": false
     },
     {

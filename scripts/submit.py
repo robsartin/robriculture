@@ -2,15 +2,15 @@
 
 One command: build the submission tarball (via ``build.package``, which runs a
 post-build smoke test) and submit it with the Kaggle CLI. The strategy defaults
-to the current champion (``harness/champion.json``) and the message to
-``"<strategy> <short-sha>"``. ``--dry-run`` builds + smoke-tests only.
+to the recorded ``submit_default`` (``harness/champion.json``) and the message
+to ``"<strategy> <short-sha>"``. ``--dry-run`` builds + smoke-tests only.
 
 **Rob runs this**, not the agent: ``kaggle competitions submit`` needs Kaggle CLI
 credentials (``kaggle.json``, gitignored) and competition-rules acceptance. Only
 the **latest 2** submissions are active on the ladder, so run it for the two best
-(champion + challenger).
+(submit default + challenger).
 
-    python scripts/submit.py                        # champion, auto message
+    python scripts/submit.py                        # submit_default, auto message
     python scripts/submit.py dairy_hands -m "note"   # explicit strategy + message
     python scripts/submit.py --dry-run               # build + smoke test only, no submit
 """
@@ -32,7 +32,7 @@ from build import package as build_package  # noqa: E402
 #: The Kaggle competition slug we submit to.
 COMPETITION = "kaggriculture"
 
-#: The recorded champion (default strategy) and where built tarballs land.
+#: The recorded submit_default (default strategy) and where built tarballs land.
 CHAMPION_PATH = os.path.join(REPO_ROOT, "harness", "champion.json")
 DIST_DIR = os.path.join(REPO_ROOT, "dist")
 
@@ -44,7 +44,7 @@ def load_submit_default(path=CHAMPION_PATH):
     if "submit_default" not in data:
         raise ValueError(
             f"{path!r} has no 'submit_default' — it predates the two-role split (#76). "
-            f"re-designate with: python -m harness.promotion --designate"
+            f"re-designate with: python -m harness.promotion --designate --games 2"
         )
     return data["submit_default"]
 

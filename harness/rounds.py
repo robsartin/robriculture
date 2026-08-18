@@ -20,7 +20,7 @@ import os
 
 from harness import promotion
 from harness.promotion import CHAMPION_PATH, round_robin_rank, save_champion
-from harness.tournament import BUILTINS, build_agents, play
+from harness.tournament import BUILTINS, benchmark_names, build_agents, play
 
 #: Append-only round history (a committed decision trail).
 ROUNDS_PATH = os.path.join(os.path.dirname(__file__), "rounds.json")
@@ -63,8 +63,16 @@ def run_and_record(names, games=20, rounds_path=ROUNDS_PATH,
     itself. If this routine kept designating from round win-rate, one ordinary run
     would silently overwrite the share-based champion and re-crown market_farmer
     (#76) — a fix undone invisibly is worse than no fix.
+
+    `benchmarks` omitted (None) resolves to the real registry via
+    `harness.tournament.benchmark_names()`, not an empty set — an empty-set
+    default would let a routine call write a `champion.json` where every row
+    is stamped `"benchmark": false` and `submit_default` could land on a
+    vendored competitor. See `promotion.designate`'s docstring for the same
+    reasoning.
     """
-    benchmarks = benchmarks or set()
+    if benchmarks is None:
+        benchmarks = benchmark_names()
     rnd = run_round(names, games=games, play_fn=play_fn, build=build)
     append_round(rounds_path, rnd)
 

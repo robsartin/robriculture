@@ -92,7 +92,7 @@ class PromotionResult:
 import itertools
 import os
 
-from harness.evolve import match_share
+from harness.evolve import opponent_record
 from harness.tournament import build_agents, play
 from harness.tournament import play_rewards as _play_rewards
 
@@ -160,23 +160,42 @@ def pool_share_rank(candidates, pool, games=2, seed_base=0,
 
     A candidate is never its own opponent: a self-match scores 0.5 by
     construction and would pull every share toward the mean.
+
+    The per-opponent seed offset comes from that opponent's position in the
+    *pool*, stable across every candidate — not from its position in any one
+    candidate's filtered opponent list. This calls `opponent_record` directly
+    rather than routing through `match_share`: `match_share` derives its seed
+    offset from list index, so a pool member's self-exclusion shifts every
+    opponent after it down one slot, and two candidates end up measured on
+    different seeded games against the "same" opponent (#76). Keying off pool
+    position instead means every candidate meets a given opponent at
+    identical seeds, so shares are actually comparable across candidates.
+
+    This does NOT equalize the *field*: a candidate that is itself in the
+    pool plays N-1 opponents (itself excluded) while one outside the pool
+    plays all N, so pool members never meet a peer of their own strength.
+    That is pool-composition, not seeding, and is left to #78.
     """
     if not pool:
         raise ValueError("cannot rank against an empty pool")
     benchmarks = benchmarks or set()
     rows = []
     for name, agent in candidates.items():
-        opponents = [a for opp_name, a in pool.items() if opp_name != name]
-        if not opponents:
+        shares = []
+        for oi, (opp_name, opp) in enumerate(pool.items()):
+            if opp_name == name:
+                continue
+            shares.append(
+                opponent_record(agent, opp, games, seed_base + oi * 100000,
+                                rewards_fn)["share"]
+            )
+        if not shares:
             raise ValueError(
                 f"candidate {name!r} has no opponents: it is the only entry in the pool, "
                 f"and a candidate never plays itself"
             )
-        rows.append({
-            "name": name,
-            "share": match_share(agent, opponents, games, seed_base, rewards_fn),
-            "benchmark": name in benchmarks,
-        })
+        rows.append({"name": name, "share": sum(shares) / len(shares),
+                     "benchmark": name in benchmarks})
     rows.sort(key=lambda r: r["share"], reverse=True)
     return rows
 
@@ -196,8 +215,17 @@ def designate(candidates, pool, games=2, seed_base=0,
     submitting a competitor's code is pointless and an ADR-0005 licensing and
     attribution problem. One field cannot answer both questions, which is why
     there are two.
+
+    `benchmarks` omitted (None) resolves to the real registry via
+    `harness.tournament.benchmark_names()`, not an empty set. Defaulting to
+    "no benchmarks exist" would let a caller write a committed `champion.json`
+    that stamps every row `"benchmark": false` and can hand `submit_default` a
+    vendored competitor — silently, the same failure mode `_read_role` exists
+    to forbid. Pass an explicit `benchmarks=set()` to opt out deliberately.
     """
-    benchmarks = benchmarks or set()
+    if benchmarks is None:
+        from harness.tournament import benchmark_names
+        benchmarks = benchmark_names()
     ranking = pool_share_rank(candidates, pool, games=games, seed_base=seed_base,
                               rewards_fn=rewards_fn, benchmarks=benchmarks)
     return {
@@ -254,7 +282,7 @@ def _read_role(path, field):
     if field not in data:
         raise ValueError(
             f"{path!r} has no {field!r} — it predates the two-role split (#76). "
-            f"re-designate with: python -m harness.promotion --designate"
+            f"re-designate with: python -m harness.promotion --designate --games 2"
         )
     return data[field]
 

@@ -43,6 +43,19 @@ def test_prepare_refuses_a_benchmark_strategy():
         submit.prepare("meta_bot", out=None)
 
 
+def test_prepare_refuses_a_hand_edited_artifact_with_a_benchmark_submit_default(tmp_path):
+    """The no-strategy-argument path must be guarded too, not just the explicit name.
+
+    A hand-edited `champion.json` could set `submit_default` to a vendored
+    benchmark directly; `prepare(None, ...)` resolves that default and must
+    refuse it exactly as it refuses an explicit benchmark name.
+    """
+    p = tmp_path / "champion.json"
+    p.write_text(json.dumps({"gate_opponent": "meta_bot", "submit_default": "meta_bot"}))
+    with pytest.raises(SystemExit, match="benchmark"):
+        submit.prepare(None, out=None, champion_path=str(p))
+
+
 def test_default_message_is_strategy_then_short_sha():
     assert submit.default_message("dairy_hands", "abc1234") == "dairy_hands abc1234"
 

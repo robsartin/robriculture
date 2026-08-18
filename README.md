@@ -55,13 +55,13 @@ Or do both in one command with `scripts/submit.py` (defaults to the recorded
 `submit_default` from `harness/champion.json`; message defaults to `"<strategy> <sha>"`):
 
 ```bash
-python scripts/submit.py                 # build + submit the champion
+python scripts/submit.py                 # build + submit the recorded submit_default
 python scripts/submit.py dairy_hands      # a specific strategy
 python scripts/submit.py --dry-run        # build + smoke test only, no submit
 ```
 
 Only your **latest 2** submissions are active on the ladder — treat them as
-champion + challenger and promote deliberately.
+submit_default + challenger and promote deliberately.
 
 ## License
 
