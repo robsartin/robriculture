@@ -7,6 +7,7 @@ the Kaggle CLI, or the real packaging subprocess.
 
 from __future__ import annotations
 
+import json
 import types
 
 import pytest
@@ -16,10 +17,30 @@ from scripts import submit
 
 # --- pure helpers ---
 
-def test_load_champion_reads_the_champion_field(tmp_path):
+def test_load_submit_default_reads_the_submit_default_field(tmp_path):
+    """submit.py packages the submit default, never the gate opponent."""
     p = tmp_path / "champion.json"
-    p.write_text('{"champion": "mixed_hands", "games": 20, "ranking": []}')
-    assert submit.load_champion(str(p)) == "mixed_hands"
+    p.write_text(json.dumps({"gate_opponent": "meta_bot", "submit_default": "mixed_hands"}))
+    assert submit.load_submit_default(str(p)) == "mixed_hands"
+
+
+def test_load_submit_default_raises_on_an_old_format_artifact(tmp_path):
+    """A stale artifact must not silently resolve to the old champion field."""
+    p = tmp_path / "champion.json"
+    p.write_text(json.dumps({"champion": "market_farmer"}))
+    with pytest.raises(ValueError, match="re-designate"):
+        submit.load_submit_default(str(p))
+
+
+def test_prepare_refuses_a_benchmark_strategy():
+    """Belt and braces: even a hand-edited artifact cannot submit a vendored agent.
+
+    meta_bot is someone else's code, vendored readonly under their license
+    (ADR-0005). Packaging it under our name is a licensing problem, not a bad
+    score, so the cost of getting this wrong is asymmetric.
+    """
+    with pytest.raises(SystemExit, match="benchmark"):
+        submit.prepare("meta_bot", out=None)
 
 
 def test_default_message_is_strategy_then_short_sha():
@@ -34,9 +55,9 @@ def test_submit_command_is_the_kaggle_cli_invocation():
     ]
 
 
-def test_prepare_defaults_strategy_to_champion_and_out_to_dist(tmp_path):
+def test_prepare_defaults_strategy_to_submit_default_and_out_to_dist(tmp_path):
     p = tmp_path / "champion.json"
-    p.write_text('{"champion": "wide_hands"}')
+    p.write_text('{"gate_opponent": "meta_bot", "submit_default": "wide_hands"}')
     strategy, out = submit.prepare(None, None, champion_path=str(p))
     assert strategy == "wide_hands"
     assert out.replace("\\", "/").endswith("dist/wide_hands.tar.gz")
