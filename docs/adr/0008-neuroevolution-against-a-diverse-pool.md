@@ -69,6 +69,35 @@ harness; (3) the diverse external-opponent pool; (4) submission integration.
   pinning fitness at 0.5833 while the agent lost to every real anchor. Fitness is
   now an anchor-dominant blend of shaped score shares. Win/loss alone gives no
   gradient below the finish line.
+- **The pool has never contained a genuinely external agent (#78, 2026-08-18).**
+  The Decision above describes the pool as including "real external competitor
+  agents vendored as readonly benchmark opponents." That was wrong when written
+  and has been wrong since #59: `strategies/meta_bot.py`'s own docstring says it
+  is "hard-coded to the field's top-Elo comp" — **our reconstruction** of a
+  composition observed in the field, written by us. It is not vendored
+  third-party code. So the anchor pool has contained zero external agents from
+  the start; phase 3 was never begun, not merely incomplete.
+- **Phase 3 as specified is not happening (#78, 2026-08-18).** The repo owner has
+  decided against vendoring external agents into this repo at all, on licensing
+  grounds — see the #67 survey. Real competitor agents will live in a gitignored
+  local directory, outside the repo, and be used for **measurement only**: never
+  as promotion gates, designation opponents, or evolution anchors. Fitness will
+  therefore keep being measured against our own bots, for the foreseeable future.
+  This is a correction of the Decision, not a status update on a pending task —
+  there is no plan to resume vendoring.
+- **`spoiler` removed from `DEFAULT_ANCHORS` (#78, 2026-08-18).** By its own
+  docstring, `spoiler` is "a test opponent, not a contender" — a melon-market
+  flooder built to stress one specific weakness. Its pool share (0.3348) sat well
+  below the 0.47–0.63 field and it was the only anchor the evolved neuropilot
+  ever beat (#70), making it the pool's free win rather than a fair bar. It
+  remains a registered strategy, available as an explicit opponent, but no
+  longer votes on fitness.
+- **The remaining pool is narrower than "five agents" suggests (#78, 2026-08-18).**
+  Of the five default anchors (`meta_bot`, `ranch_hands`, `market_farmer`,
+  `ranch_adaptive`, `wheat_hands`), three — `ranch_hands`, `ranch_adaptive`, and
+  `wheat_hands` — are near-duplicate forks of one lineage. The pool has fewer
+  independent voices than its count implies, on top of being entirely
+  self-authored (see above).
 
 ## Alternatives considered
 
