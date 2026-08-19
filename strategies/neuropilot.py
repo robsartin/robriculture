@@ -414,21 +414,37 @@ def _livestock_worker_action(pos, beat: list, tiles, inv: dict, shed: dict, unlo
 
 
 def _land_order(unlocked, money: float, pace: float) -> list:
-    """At most one `BUY_LAND` this turn, paced by `livestock_pace`.
+    """At most one `BUY_LAND` this turn, paced continuously by `livestock_pace`
+    (#97 — no hard cliff).
 
-    Below a pace of 0.5, land is never pursued; above it, the required money
-    buffer above the price shrinks toward 0 as pace climbs to 1 (buy as soon
-    as affordable). Follows the sim's fixed NE -> SW unlock order
-    (`kaggisim.economy.LAND_COSTS`), capped at those two extra quadrants —
-    no `ANIMAL_TILES` tile lives in the $4000 SE quadrant, so it's never
-    worth buying (mirrors `meta_bot.land_orders`' `n_extra >= 2` guard,
-    by value, not import). `[]` once NE and SW are both owned.
+    The required money buffer above the price is `price * 4 * (1/pace - 1)`:
+    at pace 1.0 the buffer is 0 (buy as soon as affordable); it grows without
+    bound as pace falls toward 0, monotonically, with no discontinuity
+    anywhere in (0, 1] — every pace value has *some* money level that buys,
+    so a genome below the old 0.5 gate has a gradient to climb instead of a
+    flat, fitness-invisible region. `pace` is floored at a small epsilon so
+    the formula stays defined (never divides by zero) at pace == 0.
+
+    This is deliberately *not* a hard cutoff, but low pace still behaves as
+    "effectively never" inside one 720-turn game: at pace 0.05 the buffer
+    alone is 76x the price (order of $76,000 for the $1,000 NE quadrant),
+    far beyond what the diagnosed champion ever accumulated (#96 measured
+    $19,594 unspent across a full game never buying land at all) — so a
+    genome parked near zero still can't casually stumble into a purchase,
+    while evolution *can* still discover the gradient and climb it.
+
+    Follows the sim's fixed NE -> SW unlock order (`kaggisim.economy.LAND_COSTS`),
+    capped at those two extra quadrants — no `ANIMAL_TILES` tile lives in the
+    $4000 SE quadrant, so it's never worth buying (mirrors `meta_bot.land_orders`'
+    `n_extra >= 2` guard, by value, not import). `[]` once NE and SW are both
+    owned.
     """
     n_extra = len(unlocked) - 1  # NW is always unlocked; 0 => only NW owned
-    if n_extra < 0 or n_extra >= 2 or pace < 0.5:
+    if n_extra < 0 or n_extra >= 2:
         return []  # already own NE and SW — never reach for the $4000 SE
     price = economy.LAND_COSTS[n_extra]
-    buffer = (1.0 - pace) * price * 4
+    p = max(pace, 1e-6)  # guard div-by-zero; keeps the curve continuous, not a gate
+    buffer = price * 4.0 * (1.0 / p - 1.0)
     if money >= price + buffer:
         return [["BUY_LAND"]]
     return []
@@ -509,22 +525,46 @@ def _fertilize_or_fetch(tile, day: int, inv: dict, shed: dict):
     return None
 
 
+def _fertilize_duty_period(fertilize_pref: float) -> int:
+    """Turn the old `fertilize_pref >= 0.5` on/off gate into a continuous
+    duty-cycle period, in days (#97).
+
+    `period = round(1 / pref)`: at pref 1.0 every day is a fertilize day
+    (period 1); as pref falls the period grows and fertilize days get
+    sparser, but never reach zero of them — a pref below the old 0.5 gate
+    still gets *some* fertilize days instead of none, monotonically fewer as
+    pref falls. `fertilize_pref` is a sigmoid output so it never lands on
+    exactly 0.0, but the `<= 0.0` branch keeps the function total (a huge,
+    not infinite, period) rather than raising.
+    """
+    p = _clamp01(fertilize_pref)
+    if p <= 0.0:
+        return 10**9
+    return max(1, round(1.0 / p))
+
+
+def _is_fertilize_day(fertilize_pref: float, day: int) -> bool:
+    """True on the duty-cycle days `_fertilize_duty_period` selects."""
+    return day % _fertilize_duty_period(fertilize_pref) == 0
+
+
 def _fertilizer_buy_order(knobs: Knobs, state, cap: int) -> list:
     """A single fallback `BUY_PRODUCT FERTILIZER` for the farmer's crop plot,
     or `[]`.
 
-    Gated on `fertilize_pref` and fires only when the plot's crop actually
-    wants fertilizer *and* neither the shed nor the farmer's own inventory
-    already holds a free unit — the herd's `COLLECT_FERTILIZER` byproduct is
-    always preferred over spending money. Mirrors `meta_bot.fertilizer_orders`
-    / `fertilized_hands.should_buy_fertilizer`.
+    Scaled by `fertilize_pref` via a duty-cycle frequency (#97: no hard 0.5
+    gate) and fires only when the plot's crop actually wants fertilizer *and*
+    neither the shed nor the farmer's own inventory already holds a free
+    unit — the herd's `COLLECT_FERTILIZER` byproduct is always preferred over
+    spending money. Mirrors `meta_bot.fertilizer_orders` /
+    `fertilized_hands.should_buy_fertilizer`.
     """
-    if cap <= 0 or knobs.fertilize_pref < 0.5:
+    day = state.get("day", 0)
+    if cap <= 0 or not _is_fertilize_day(knobs.fertilize_pref, day):
         return []
     player = state.get("player", 0)
     me = state["farms"][player]
     private = state.get("private", {})
-    day = state.get("day", 0)
     tiles = me["tiles"]
     shed = private.get("shed", {})
     inventories = private.get("inventories", [])
@@ -618,9 +658,10 @@ def controller(knobs: Knobs, state) -> dict:
                 continue
             tile = _tile_at(tiles, plot)
             action = None
-            if i == 0 and knobs.fertilize_pref >= 0.5:
+            if i == 0 and _is_fertilize_day(knobs.fertilize_pref, day):
                 # Only the shed-adjacent farmer plot (CROP_PLOTS[0]) can
-                # PICKUP + FERTILIZE without leaving its tile.
+                # PICKUP + FERTILIZE without leaving its tile. Duty-cycle
+                # gated (#97), not a hard >= 0.5 switch.
                 action = _fertilize_or_fetch(tile, day, inv, shed)
             if action is None:
                 action = _plot_action(tile, day, crop)
