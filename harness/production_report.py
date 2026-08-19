@@ -12,6 +12,14 @@ which quadrants it unlocked and when, when it bought land and at what money
 level, what it sold and how much, and whether cash sat idle instead of being
 reinvested.
 
+Land purchases are reported as two distinct fields, deliberately not merged:
+`land_purchases` (confirmed -- derived from `unlocked_quadrants` growing) and
+`land_purchase_attempts` (every turn a `BUY_LAND` verb appears in the
+returned action). The sim's `_do_buy_land` silently no-ops a purchase when
+money is insufficient, so the verb alone is only an attempt; keeping the two
+counts separate makes a rejected attempt visible instead of being counted as
+a success.
+
 Design mirrors `harness/genome_bench.py` and `harness/rounds.py`: the pure
 aggregation (`summarize`) is unit-tested against synthetic logs, and every
 real-game/registry/filesystem touch (`play_and_record`'s `play_fn`,
@@ -46,6 +54,9 @@ IDLE_STREAK_TURNS = economy.CONFIG_DEFAULTS["turnsPerDay"]
 #: (LAND_COSTS[0]). Money flat below this floor isn't "idle capital", there
 #: was nothing to spend it on yet.
 IDLE_MONEY_FLOOR = economy.LAND_COSTS[0]
+
+#: Always unlocked, never bought -- see `_confirmed_land_purchases`.
+FREE_QUADRANT = "NW"
 
 
 # --- snapshot_turn / recorder: pure per-turn extraction, then the wrapping seam ---
@@ -168,6 +179,39 @@ def longest_idle_money_streak(money_series):
     return longest
 
 
+def _confirmed_land_purchases(rows):
+    """Confirmed land purchases, derived from `unlocked_quadrants` actually
+    growing -- never from the `BUY_LAND` verb alone. The sim's
+    `_do_buy_land` (kaggriculture.py:689-698) silently no-ops a purchase
+    attempt when money is insufficient, so a `BUY_LAND` verb in the returned
+    action proves only an *attempt*, never a completed purchase. State (the
+    quadrant set growing) is the source of truth here, independent of
+    whether an attempt verb was even captured on some earlier row -- see
+    `_attempted_land_purchases` for that separate, verb-based count.
+    """
+    purchases = []
+    seen = set()
+    for r in rows:
+        for q in r.get("unlocked", ()):
+            if q not in seen:
+                seen.add(q)
+                if q != FREE_QUADRANT:
+                    purchases.append({"quadrant": q, "day": r["day"], "money": r["money"]})
+    return purchases
+
+
+def _attempted_land_purchases(rows):
+    """Turns where a `BUY_LAND` verb appears in the returned action.
+
+    An attempt, not proof of purchase -- see `_confirmed_land_purchases`.
+    Kept as its own field so a policy that tries to buy land it can't afford
+    is visible as a divergence between the two counts, not hidden inside a
+    single number.
+    """
+    return [{"day": r["day"], "money": r["money"]}
+            for r in rows if r.get("verbs", {}).get("BUY_LAND")]
+
+
 def summarize(log, reward, label=""):
     """Pure: turn a recorder log + final reward into a per-agent report dict.
 
@@ -186,10 +230,8 @@ def summarize(log, reward, label=""):
         for q in r.get("unlocked", ()):
             quadrants_unlocked.setdefault(q, r["day"])
 
-    land_purchases = [
-        {"day": r["day"], "money": r["money"]}
-        for r in rows if r.get("verbs", {}).get("BUY_LAND")
-    ]
+    land_purchases = _confirmed_land_purchases(rows)
+    land_purchase_attempts = _attempted_land_purchases(rows)
 
     sold = collections.Counter()
     for r in rows:
@@ -209,6 +251,7 @@ def summarize(log, reward, label=""):
         "hands_peak": max(hands, default=0),
         "quadrants_unlocked": quadrants_unlocked,
         "land_purchases": land_purchases,
+        "land_purchase_attempts": land_purchase_attempts,
         "units_sold": dict(sold),
         "units_sold_total": sum(sold.values()),
         "distinct_products_sold": sum(1 for n in sold.values() if n > 0),
@@ -273,7 +316,8 @@ def _print_report(rep):  # pragma: no cover
     print(f"plants: peak={rep['plants_peak']}  mean={rep['plants_mean']:.1f}   "
           f"animals: peak={rep['animals_peak']}   hands: peak={rep['hands_peak']}")
     print(f"quadrants unlocked (first day seen): {rep['quadrants_unlocked']}")
-    print(f"land purchases (day, money): {rep['land_purchases']}")
+    print(f"land purchases confirmed (quadrant, day, money): {rep['land_purchases']}")
+    print(f"land purchase attempts (day, money): {rep['land_purchase_attempts']}")
     print(f"units sold: {rep['units_sold']}")
     print(f"  total={rep['units_sold_total']}  distinct products={rep['distinct_products_sold']}")
     print(f"money: peak={rep['money_peak']:,.0f}  final={rep['money_final']:,.0f}  "

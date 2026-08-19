@@ -178,14 +178,61 @@ def test_summarize_reports_first_day_each_quadrant_was_seen_unlocked():
     assert rep["quadrants_unlocked"] == {"NW": 1, "NE": 5, "SW": 9}
 
 
-def test_summarize_reports_land_purchases_with_day_and_money_level():
+def test_summarize_reports_confirmed_land_purchases_from_quadrant_growth():
+    # The sim's `_do_buy_land` (kaggriculture.py) silently no-ops on
+    # insufficient funds, so a `BUY_LAND` verb is only an attempt -- the
+    # confirmed record comes from `unlocked_quadrants` actually growing.
+    log = [
+        _row(1, 100, unlocked=("NW",)),
+        _row(3, 1150, unlocked=("NW", "NE"), verbs={"BUY_LAND": 1}),
+        _row(9, 3400, unlocked=("NW", "NE", "SW"), verbs={"BUY_LAND": 1}),
+    ]
+    rep = pr.summarize(log, reward=1000)
+    assert rep["land_purchases"] == [
+        {"quadrant": "NE", "day": 3, "money": 1150},
+        {"quadrant": "SW", "day": 9, "money": 3400},
+    ]
+
+
+def test_summarize_reports_attempted_land_purchases_from_the_buy_land_verb():
+    # Attempts are tracked separately from confirmed purchases so a rejected
+    # attempt is visible rather than silently absorbed or silently dropped.
     log = [
         _row(1, 100, verbs={}),
         _row(3, 1200, verbs={"BUY_LAND": 1}),
         _row(9, 3400, verbs={"BUY_LAND": 1}),
     ]
     rep = pr.summarize(log, reward=1000)
-    assert rep["land_purchases"] == [{"day": 3, "money": 1200}, {"day": 9, "money": 3400}]
+    assert rep["land_purchase_attempts"] == [{"day": 3, "money": 1200}, {"day": 9, "money": 3400}]
+
+
+def test_summarize_does_not_count_a_rejected_land_purchase_as_confirmed():
+    # Pins the bug: a BUY_LAND verb fires (an attempt) but the sim rejects it
+    # for insufficient funds, so unlocked_quadrants never grows. The confirmed
+    # count must stay 0 even though an attempt was recorded -- otherwise a
+    # policy that only ever *tries* to buy land (and never affords it) would
+    # be reported as buying land.
+    log = [
+        _row(1, 50, unlocked=("NW",), verbs={"BUY_LAND": 1}),  # can't afford $1000 NE
+        _row(2, 50, unlocked=("NW",)),                          # still only NW -- rejected
+    ]
+    rep = pr.summarize(log, reward=1000)
+    assert rep["land_purchases"] == []
+    assert rep["land_purchase_attempts"] == [{"day": 1, "money": 50}]
+
+
+def test_summarize_reports_a_confirmed_purchase_even_without_a_captured_attempt_verb():
+    # Confirmation is derived purely from the quadrant set growing, not tied
+    # to having also captured a BUY_LAND verb on some prior row -- e.g. an
+    # error row could have swallowed the turn the verb was issued on. State
+    # is the source of truth, not the log of attempts.
+    log = [
+        _row(1, 100, unlocked=("NW",)),
+        _row(2, 1100, unlocked=("NW", "NE")),  # no BUY_LAND verb recorded anywhere
+    ]
+    rep = pr.summarize(log, reward=1000)
+    assert rep["land_purchases"] == [{"quadrant": "NE", "day": 2, "money": 1100}]
+    assert rep["land_purchase_attempts"] == []
 
 
 def test_summarize_reports_units_sold_per_product_and_distinct_count():
