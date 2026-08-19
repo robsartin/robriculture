@@ -231,6 +231,97 @@ def test_land_order_stops_once_ne_and_sw_are_unlocked():
     assert np._land_order(["NW", "NE", "SW"], money=1_000_000, pace=1.0) == []
 
 
+def test_land_order_no_longer_hard_gates_below_pace_half():
+    """#97: the old `pace < 0.5: return []` cliff is gone. A pace of 0.05
+    still buys land once money clears its (much larger) required buffer --
+    the gate is softened into a continuous requirement, not removed."""
+    assert np._land_order(["NW"], money=50_000, pace=0.05) == []
+    assert np._land_order(["NW"], money=50_000, pace=0.5) == [["BUY_LAND"]]
+
+
+def test_land_order_buys_eventually_at_low_but_nonzero_pace_given_enough_money():
+    """The property the old hard cutoff made impossible: a genome stuck
+    below the old 0.5 gate is not stuck forever -- given a big enough money
+    buffer, even a small pace like 0.05 still produces BUY_LAND."""
+    assert np._land_order(["NW"], money=10_000_000, pace=0.05) == [["BUY_LAND"]]
+
+
+def test_land_order_required_money_is_monotonic_in_pace():
+    """No cliff anywhere in [0, 1]: once a fixed money level buys land at
+    some pace, every higher pace also buys at that same money level (the
+    required buffer only shrinks as pace rises)."""
+    paces = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0]
+    money = 2_000_000
+    results = [np._land_order(["NW"], money=money, pace=p) == [["BUY_LAND"]] for p in paces]
+    # Once True, must stay True for every higher pace (no flat-then-cliff region).
+    seen_true = False
+    for buys in results:
+        if buys:
+            seen_true = True
+        assert buys or not seen_true
+
+
+def test_land_order_pace_near_zero_is_effectively_never_within_a_season_budget():
+    """Pace near zero isn't a hard cutoff, but it must still be effectively
+    unreachable within a realistic 720-turn game's money -- $19,594 was the
+    diagnosed champion's entire unspent end-of-game cash pile (#96)."""
+    assert np._land_order(["NW"], money=19_594, pace=0.01) == []
+
+
+def test_fertilize_duty_period_shrinks_as_pref_rises():
+    """No hard 0.5 gate: the duty-cycle period is a continuous, monotonic
+    function of fertilize_pref -- higher pref means an equal-or-shorter
+    period (fertilizing at least as often), never a flat off/on switch."""
+    assert np._fertilize_duty_period(0.9) <= np._fertilize_duty_period(0.5)
+    assert np._fertilize_duty_period(0.5) <= np._fertilize_duty_period(0.1)
+    assert np._fertilize_duty_period(0.1) <= np._fertilize_duty_period(0.01)
+
+
+def test_is_fertilize_day_true_for_a_low_but_nonzero_pref_on_its_period_day():
+    """A pref stuck below the old 0.5 gate still gets fertilize days -- just
+    less often than a high pref, never zero of them."""
+    pref = 0.1
+    period = np._fertilize_duty_period(pref)
+    assert period == 10
+    assert np._is_fertilize_day(pref, day=period) is True
+    assert np._is_fertilize_day(pref, day=period - 1) is False
+
+
+def test_fertilizer_buy_order_fires_on_a_low_pref_duty_day():
+    """The buy-fallback gate no longer requires pref >= 0.5 -- a low-but-
+    nonzero pref still issues the order on its duty-cycle day."""
+    tiles = [[None] * 10 for _ in range(10)]
+    x, y = np.CROP_PLOTS[0]
+    tiles[y][x] = {"kind": "PLANT", "fertilized_until_day": -1}
+    k = np.decode_knobs([0.5, 0.5, 0.5, 0.5, 0.5, 0.1, 0.5, 0.5])  # fertilize_pref = 0.1
+    period = np._fertilize_duty_period(k.fertilize_pref)
+    state = _obs(day=period, money=3000, tiles=tiles)
+    assert np._fertilizer_buy_order(k, state, cap=1) == [["BUY_PRODUCT", "FERTILIZER", 1]]
+
+
+def test_fertilizer_buy_order_skips_an_off_duty_day_for_a_low_pref():
+    """Same low pref, a day that isn't a multiple of its duty-cycle period:
+    no buy order this turn -- frequency, not an unconditional switch."""
+    tiles = [[None] * 10 for _ in range(10)]
+    x, y = np.CROP_PLOTS[0]
+    tiles[y][x] = {"kind": "PLANT", "fertilized_until_day": -1}
+    k = np.decode_knobs([0.5, 0.5, 0.5, 0.5, 0.5, 0.1, 0.5, 0.5])  # fertilize_pref = 0.1, period 10
+    state = _obs(day=1, money=3000, tiles=tiles)
+    assert np._fertilizer_buy_order(k, state, cap=1) == []
+
+
+def test_controller_fertilizes_farmer_plot_on_a_low_pref_duty_day():
+    """The worker-action gate (previously `fertilize_pref >= 0.5`) now fires
+    on the pref's duty-cycle day even for a pref below the old threshold."""
+    tiles = [[None] * 10 for _ in range(10)]
+    x, y = np.CROP_PLOTS[0]
+    tiles[y][x] = {"kind": "PLANT", "fertilized_until_day": -1}
+    k = np.decode_knobs([0.5, 0.5, 0.0, 0.0, 0.0, 0.1, 0.5, 0.5])  # fertilize_pref = 0.1
+    period = np._fertilize_duty_period(k.fertilize_pref)
+    a = np.controller(k, _obs(day=period, hour=0, money=3000, tiles=tiles, shed={"FERTILIZER": 5}))
+    assert a["farmer"] == ["PICKUP", "FERTILIZER", 1]
+
+
 def test_load_champion_genome_valid_and_invalid(tmp_path):
     """load_champion_genome returns the genome if file exists & length is correct; None otherwise."""
     import json
