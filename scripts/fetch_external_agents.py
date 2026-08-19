@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -130,10 +131,36 @@ def fetch_github_file(entry, dest_dir=DEST_DIR, runner=subprocess.run):
     return path
 
 
+def resolve_kaggle_cmd(executable=None, which=shutil.which):
+    """Resolve the argv prefix for invoking the `kaggle` CLI (#92).
+
+    A bare "kaggle" only resolves via ambient PATH -- and the invocation form
+    this repo documents everywhere, ``.venv/bin/python script.py``, does not
+    put the venv's ``bin/`` on PATH. So resolution is anchored to the
+    *running interpreter* instead of the environment:
+
+    1. A ``kaggle`` script next to ``sys.executable`` (how venvs install
+       console-script entry points) -- found without touching PATH at all.
+    2. ``shutil.which("kaggle")`` -- an explicit, one-time PATH lookup, for
+       interpreters that aren't in a venv with a sibling script.
+    3. ``[sys.executable, "-m", "kaggle"]`` -- the module entrypoint of the
+       *same* interpreter, which needs no PATH or filesystem lookup at all.
+       Verified locally that ``kernels pull`` works through this form too.
+    """
+    executable = executable if executable is not None else sys.executable
+    sibling = os.path.join(os.path.dirname(executable), "kaggle")
+    if os.path.isfile(sibling):
+        return [sibling]
+    found = which("kaggle")
+    if found:
+        return [found]
+    return [executable, "-m", "kaggle"]
+
+
 def fetch_kaggle_kernel(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
     """Pull a Kaggle notebook, extract its tagged agent cell, write it as a .py file."""
     with tempfile.TemporaryDirectory(dir=work_dir) as tmp:
-        args = ["kaggle", "kernels", "pull", entry["kernel_ref"], "-p", tmp]
+        args = resolve_kaggle_cmd() + ["kernels", "pull", entry["kernel_ref"], "-p", tmp]
         result = runner(args, capture_output=True, text=True)
         if result.returncode != 0:
             raise SystemExit(
@@ -169,6 +196,16 @@ def fetch_one(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
     return path
 
 
+def failure_summary(failed_names, total):
+    """Build the exit-time summary line, naming exactly which agents are
+    missing (#92) -- a bare "N of M failed" leaves a half-populated
+    external_agents/ silently ambiguous about *which* competitors a later
+    `genome_bench --include-external` run will quietly be missing.
+    """
+    names = ", ".join(failed_names)
+    return f"{len(failed_names)} of {total} agent(s) failed to fetch: {names}"
+
+
 def main(argv=None):  # pragma: no cover - orchestration, shells out to gh/kaggle
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--manifest", default=MANIFEST_PATH, help="path to the agent manifest")
@@ -176,19 +213,19 @@ def main(argv=None):  # pragma: no cover - orchestration, shells out to gh/kaggl
     args = ap.parse_args(argv)
 
     entries = load_manifest(args.manifest)
-    failures = 0
+    failed_names = []
     for entry in entries:
         print(f"fetching {entry['name']} ({entry['source_type']}) ...")
         try:
             path = fetch_one(entry, dest_dir=args.dest)
         except (SystemExit, ValueError, OSError) as exc:
             print(f"  FAILED: {exc}", file=sys.stderr)
-            failures += 1
+            failed_names.append(entry["name"])
             continue
         print(f"  -> {path}  [{entry['license']}]")
 
-    if failures:
-        print(f"{failures} of {len(entries)} agent(s) failed to fetch", file=sys.stderr)
+    if failed_names:
+        print(failure_summary(failed_names, len(entries)), file=sys.stderr)
         return 1
     return 0
 

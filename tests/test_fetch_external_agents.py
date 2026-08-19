@@ -184,6 +184,92 @@ def test_fetch_kaggle_kernel_raises_when_no_ipynb_is_produced(tmp_path):
         fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=runner)
 
 
+# --- resolve_kaggle_cmd: must not depend on ambient PATH (#92) ---
+#
+# The bug: the script shelled out to a bare "kaggle", which only resolves
+# when the venv's bin/ happens to be on PATH -- and the documented
+# ".venv/bin/python script.py" invocation form does NOT put it there. These
+# tests pin that the resolved command is derived from sys.executable (or an
+# explicit shutil.which lookup), never a bare string handed to PATH search,
+# and that an empty PATH cannot change the outcome.
+
+def test_resolve_kaggle_cmd_prefers_the_sibling_of_sys_executable(tmp_path):
+    """A `kaggle` script living next to the interpreter (as venv installs it)
+    must be found via sys.executable's directory, not via PATH search."""
+    venv_bin = tmp_path / "bin"
+    venv_bin.mkdir()
+    fake_kaggle = venv_bin / "kaggle"
+    fake_kaggle.write_text("#!/bin/sh\n")
+    fake_kaggle.chmod(0o755)
+    fake_python = venv_bin / "python"
+    fake_python.write_text("")
+
+    cmd = fea.resolve_kaggle_cmd(executable=str(fake_python), which=lambda name: None)
+    assert cmd == [str(fake_kaggle)]
+
+
+def test_resolve_kaggle_cmd_ignores_ambient_path_entirely(tmp_path, monkeypatch):
+    """Wiping PATH must not change the resolution when the sibling script
+    exists -- proof the lookup no longer depends on the environment."""
+    venv_bin = tmp_path / "bin"
+    venv_bin.mkdir()
+    fake_kaggle = venv_bin / "kaggle"
+    fake_kaggle.write_text("#!/bin/sh\n")
+    fake_kaggle.chmod(0o755)
+    fake_python = venv_bin / "python"
+    fake_python.write_text("")
+
+    monkeypatch.delenv("PATH", raising=False)
+    cmd = fea.resolve_kaggle_cmd(executable=str(fake_python), which=lambda name: None)
+    assert cmd == [str(fake_kaggle)]
+
+
+def test_resolve_kaggle_cmd_falls_back_to_which_when_no_sibling_script(tmp_path):
+    """No script next to the interpreter (e.g. a system python) -- fall back
+    to an explicit shutil.which lookup rather than assuming PATH search
+    happened implicitly inside subprocess."""
+    empty_bin = tmp_path / "bin"
+    empty_bin.mkdir()
+    fake_python = empty_bin / "python"
+    fake_python.write_text("")
+
+    cmd = fea.resolve_kaggle_cmd(executable=str(fake_python), which=lambda name: "/usr/local/bin/kaggle")
+    assert cmd == ["/usr/local/bin/kaggle"]
+
+
+def test_resolve_kaggle_cmd_falls_back_to_module_invocation_as_last_resort(tmp_path):
+    """Neither a sibling script nor a PATH hit -- invoke the kaggle package
+    as a module of the *same* interpreter, which needs no PATH at all."""
+    empty_bin = tmp_path / "bin"
+    empty_bin.mkdir()
+    fake_python = empty_bin / "python"
+    fake_python.write_text("")
+
+    cmd = fea.resolve_kaggle_cmd(executable=str(fake_python), which=lambda name: None)
+    assert cmd == [str(fake_python), "-m", "kaggle"]
+
+
+def test_fetch_kaggle_kernel_uses_resolved_command_not_bare_kaggle(tmp_path, monkeypatch):
+    """End-to-end: fetch_kaggle_kernel must build its subprocess argv from
+    resolve_kaggle_cmd, so a bare 'kaggle' never appears as argv[0]."""
+    notebook = {"cells": [{"cell_type": "code", "source": ["%%agentfile\n", "x = 1\n"]}]}
+    entry = {"name": "foo", "kernel_ref": "someone/kernel", "dest_filename": "foo.py"}
+    monkeypatch.setattr(fea, "resolve_kaggle_cmd", lambda: ["/opt/venv/bin/kaggle"])
+
+    seen = {}
+
+    def runner(args, **kwargs):
+        seen["args"] = args
+        outdir = args[args.index("-p") + 1]
+        with open(f"{outdir}/kernel.ipynb", "w") as fh:
+            json.dump(notebook, fh)
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=runner)
+    assert seen["args"][0] == "/opt/venv/bin/kaggle"
+    assert seen["args"] != ["kaggle"]
+
+
 # --- fetch_one: dispatch + meta sidecar ---
 
 def test_fetch_one_dispatches_github_file_and_writes_meta(tmp_path):
@@ -211,3 +297,20 @@ def test_fetch_one_raises_on_an_unknown_source_type(tmp_path):
     entry = {"name": "foo", "source_type": "carrier_pigeon", "dest_filename": "foo.py"}
     with pytest.raises(ValueError, match="carrier_pigeon"):
         fea.fetch_one(entry, str(tmp_path))
+
+
+# --- failure_summary: names the missing agents, not just a count (#92) ---
+
+def test_failure_summary_names_each_failed_agent():
+    """A bare '2 of 4 failed' leaves an operator unable to tell which
+    competitors are missing from a half-populated external_agents/ without
+    re-reading the whole log; the summary must name them."""
+    msg = fea.failure_summary(["pilkwang_structured_economic_policy", "alexandergremyakov_harvest_pulse_goose_dividend_v2"], 4)
+    assert msg == (
+        "2 of 4 agent(s) failed to fetch: "
+        "pilkwang_structured_economic_policy, alexandergremyakov_harvest_pulse_goose_dividend_v2"
+    )
+
+
+def test_failure_summary_reports_zero_when_the_failed_list_is_empty():
+    assert fea.failure_summary([], 4) == "0 of 4 agent(s) failed to fetch: "
