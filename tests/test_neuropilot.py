@@ -233,10 +233,15 @@ def test_land_order_stops_once_ne_and_sw_are_unlocked():
 
 def test_land_order_no_longer_hard_gates_below_pace_half():
     """#97: the old `pace < 0.5: return []` cliff is gone. A pace of 0.05
-    still buys land once money clears its (much larger) required buffer --
-    the gate is softened into a continuous requirement, not removed."""
-    assert np._land_order(["NW"], money=50_000, pace=0.05) == []
-    assert np._land_order(["NW"], money=50_000, pace=0.5) == [["BUY_LAND"]]
+    still doesn't buy at a modest, realistic money level, while a higher
+    pace does at that same level -- the gate is a continuous requirement,
+    not a discontinuity at 0.5. (#100 recalibrated the buffer's *size* --
+    see test_land_order_buys_late_when_low_but_nonzero_pace_given_realistic_money
+    for why $50k, the old test's money level, no longer makes the point: it
+    cleared even the old 0.05 requirement's neighborhood under the new,
+    flat-dollar buffer.)"""
+    assert np._land_order(["NW"], money=5_000, pace=0.05) == []
+    assert np._land_order(["NW"], money=5_000, pace=0.5) == [["BUY_LAND"]]
 
 
 def test_land_order_buys_eventually_at_low_but_nonzero_pace_given_enough_money():
@@ -244,6 +249,29 @@ def test_land_order_buys_eventually_at_low_but_nonzero_pace_given_enough_money()
     below the old 0.5 gate is not stuck forever -- given a big enough money
     buffer, even a small pace like 0.05 still produces BUY_LAND."""
     assert np._land_order(["NW"], money=10_000_000, pace=0.05) == [["BUY_LAND"]]
+
+
+def test_land_order_buys_when_high_pace_near_broke_like_observed_competitor():
+    """#100: `pilkwang` (harness/production_report.py measurement, #95/#101),
+    the external agent that outscores us ~9:1, buys land near-broke as soon
+    as it can afford it -- day 7 at ~$1.3k-2.4k for the $1,000 NE quadrant.
+    A high pace (0.9) should demand a comparably small, single-digit-
+    thousands buffer, not the tens of thousands the pre-#100 curve required
+    even near pace=1."""
+    assert np._land_order(["NW"], money=2_500, pace=0.9) == [["BUY_LAND"]]
+
+
+def test_land_order_buys_late_when_low_but_nonzero_pace_given_realistic_money():
+    """#100: the pre-recalibration curve demanded ~$37k at the evolved
+    genome's observed pace (~0.097) -- far beyond the ~$17.9k-$39k the
+    champion ever accumulates in a 720-turn game (#95/#96 measurement), so
+    the region evolution actually explored was flat and unbuyable. The
+    recalibrated flat-dollar buffer (independent of price, matching how
+    little `meta_rancher`'s real NE/SW buys differ in required cash --
+    #101) puts a low-but-nonzero pace like 0.05 inside that envelope: it
+    buys late, once money nears the accumulated peak, rather than never."""
+    assert np._land_order(["NW"], money=16_500, pace=0.05) == [["BUY_LAND"]]
+    assert np._land_order(["NW"], money=10_000, pace=0.05) == []
 
 
 def test_land_order_required_money_is_monotonic_in_pace():
