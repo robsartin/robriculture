@@ -229,9 +229,17 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
            seed_genome=None, checkpoint_fn=None):
     """Run the neuroevolution loop; return best genome/fitness and per-generation history.
 
-    Fitness is the anchor-dominant blend of score shares (#70), not win-rate:
-    win/loss gives no gradient at all until the agent starts winning, and it was
-    not winning.
+    WITHIN a generation, genomes are ranked by the anchor-dominant blend of
+    score shares (#70), not win-rate: win/loss gives no gradient at all until
+    the agent starts winning, and it was not winning.
+
+    ACROSS generations, `best_genome` is selected by anchor-only share, not
+    the blend (#107): the blend is frequency-dependent (see blended_fitness),
+    so a cross-generation `>` comparison against it systematically picks a
+    generation-0 genome. `best_fitness` in the return value is therefore the
+    anchor share of the selected genome (the comparable, interpretable
+    figure); `best_fitness_blended` is that same genome's blend, kept for
+    inspection only.
     """
     rng = random.Random(seed)
     anchors = (anchor_agents_override if anchor_agents_override is not None
@@ -239,7 +247,7 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
     population = (seeded_population(seed_genome, pop_size, sigma, rng)
                   if seed_genome is not None else initial_population(pop_size, seed))
     hof_genomes = []
-    best_genome, best_fit, history = None, -1.0, []
+    best_genome, best_anchor, best_fit_blend, history = None, -1.0, -1.0, []
     for gen in range(generations):
         pop_agents = [genome_agent(g) for g in population]
         hof_agents = [genome_agent(g) for g in hof_genomes]
@@ -270,14 +278,30 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
         # already-computed a_share through here (no extra evaluations) keeps
         # progress legible without changing what evolve() optimizes.
         history.append({"gen": gen, "best": gen_best_f, "anchor": gen_best_a, "mean": mean_f})
-        if gen_best_f > best_fit:
-            best_fit, best_genome = gen_best_f, gen_best_g
+        # #107: the CROSS-generation comparison must use the anchor-only
+        # share, not the blend. The blend is frequency-dependent (peaks at
+        # generation 0, when the population is diverse, and collapses toward
+        # a constant as it converges — see blended_fitness and #104), so a
+        # `>` comparison against it across generations systematically keeps
+        # generation 0's genome. Anchor share is comparable across
+        # generations, so it is what "best" means here. Within a generation,
+        # `scored` above is still sorted by the blend — that comparison is
+        # apples-to-apples (every genome in a generation faces the same
+        # pool) and the sibling pressure is deliberate (ADR-0008); this only
+        # changes what evolve() *keeps*, not what it optimizes.
+        if gen_best_a > best_anchor:
+            best_anchor, best_fit_blend, best_genome = gen_best_a, gen_best_f, gen_best_g
         if checkpoint_fn is not None:
-            checkpoint_fn(best_genome, best_fit, list(history))
+            checkpoint_fn(best_genome, best_anchor, list(history))
         elites = [g for g, *_ in scored[:max(1, pop_size // 4)]]
         hof_genomes = update_hof(hof_genomes, [gen_best_g], hof_cap)
         population = next_generation(elites, pop_size, sigma, rng)
-    return {"best_genome": best_genome, "best_fitness": best_fit, "history": history}
+    return {
+        "best_genome": best_genome,
+        "best_fitness": best_anchor,
+        "best_fitness_blended": best_fit_blend,
+        "history": history,
+    }
 
 
 def main(argv=None):  # pragma: no cover
@@ -340,8 +364,13 @@ def main(argv=None):  # pragma: no cover
     if args.dry_run:
         print(f"dry-run: best_fitness={result['best_fitness']:.4f} (genome not saved)")
     else:
+        # #107: "fitness" records the anchor-only share — the figure that is
+        # actually comparable across runs and to genome_bench — with the
+        # blend the selected genome scored kept alongside it under
+        # "fitness_blended" so the artifact stays fully interpretable.
         save_genome(args.out, result["best_genome"], {
             "fitness": result["best_fitness"],
+            "fitness_blended": result["best_fitness_blended"],
             **run_settings,
         })
         print(f"saved champion genome to {args.out} (fitness={result['best_fitness']:.4f})")

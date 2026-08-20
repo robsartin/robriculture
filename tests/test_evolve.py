@@ -147,7 +147,14 @@ def test_default_anchors_excludes_spoiler_when_pool_is_built():
 def test_evolve_fitness_is_dominated_by_the_anchors():
     """The #70 regression guard: beating siblings must NOT be able to mask
     losing to every anchor. This is the exact failure that pinned fitness at
-    0.5833 while the agent went 0-for-5 against the real field."""
+    0.5833 while the agent went 0-for-5 against the real field.
+
+    #107 sharpens this further: `best_fitness` is now the ANCHOR-only share
+    (0.10, the true state), not the blend (0.20, which the sibling-tie term
+    inflates). The blend is still available under `best_fitness_blended` for
+    inspection, but it must never be what a cross-generation comparison — or
+    a reader of the saved artifact — sees as "the fitness".
+    """
     def rewards(a, b, seed=None):
         # Every neuropilot genome loses badly to the lone anchor and ties siblings.
         if getattr(a, "tag", "") == "anchor":
@@ -159,8 +166,9 @@ def test_evolve_fitness_is_dominated_by_the_anchors():
     result = ev.evolve(generations=2, pop_size=4, games=2, sigma=0.1, sample_k=2,
                        hof_cap=2, anchor_names=(), seed=1, rewards_fn=rewards,
                        anchor_weight=0.75, anchor_agents_override=[_tagged("anchor")])
-    # anchor share 0.10, sibling share 0.50 -> 0.75*0.10 + 0.25*0.50 = 0.20
-    assert result["best_fitness"] == 0.2
+    # anchor share 0.10, sibling share 0.50 -> blend 0.75*0.10 + 0.25*0.50 = 0.20
+    assert result["best_fitness"] == pytest.approx(0.1)
+    assert result["best_fitness_blended"] == pytest.approx(0.2)
 
 
 def test_evolve_history_reports_anchor_share_unmoved_by_sibling_drift():
@@ -192,6 +200,91 @@ def test_evolve_history_reports_anchor_share_unmoved_by_sibling_drift():
     blended = [h["best"] for h in history]
     assert anchors == pytest.approx([0.8, 0.8, 0.8])          # unmoved by sibling drift
     assert blended == pytest.approx([0.825, 0.775, 0.725])    # blend still falls as siblings converge
+
+
+def test_evolve_selects_the_later_higher_anchor_genome_not_generation_zeros():
+    """#107: the DEFECT ITSELF. Cross-generation selection must track anchor
+    share, not the blend.
+
+    Scripted so the blend is HIGHEST at generation 0 (a saturated 1.0 sibling
+    share masks a low 0.10 anchor share) and FALLS in later generations even
+    as anchor share climbs to 0.35 — the exact shape #104 measured in a real
+    run (population converging while the agent keeps improving). The buggy
+    `gen_best_f > best_fit` comparison latches onto generation 0 forever and
+    never lets go, because nothing ever blends higher again. The fix must
+    instead track the rising anchor share and end up with generation 2's
+    figures, both anchor and blend.
+    """
+    anchor_by_gen = {0: 0.10, 1: 0.20, 2: 0.35}
+    sibling_by_gen = {0: 1.00, 1: 0.50, 2: 0.00}
+
+    def rewards(a, b, seed=None):
+        if getattr(b, "tag", "") == "anchor":
+            gen = seed // 7919
+            share = anchor_by_gen[gen]
+        else:
+            gen = (seed - 50000) // 7919
+            share = sibling_by_gen[gen]
+        return (share, 1.0 - share)
+
+    result = ev.evolve(generations=3, pop_size=4, games=1, sigma=0.05, sample_k=1,
+                       hof_cap=0, anchor_names=(), seed=0, rewards_fn=rewards,
+                       anchor_weight=0.75, anchor_agents_override=[_tagged("anchor")])
+
+    blended = [h["best"] for h in result["history"]]
+    anchors = [h["anchor"] for h in result["history"]]
+    assert blended == pytest.approx([0.325, 0.275, 0.2625])   # falls as gen 0's sibling boost fades
+    assert anchors == pytest.approx([0.10, 0.20, 0.35])       # true progress: rises every generation
+
+    # Generation 0 has the run's highest blend, so the buggy `>` comparison
+    # would have kept generation 0's genome for the whole run.
+    assert max(blended) == blended[0]
+
+    # The fix: best_fitness tracks the rising anchor share, landing on
+    # generation 2 — the fittest genome the search actually found — not
+    # generation 0's inflated blend of 0.325.
+    assert result["best_fitness"] == pytest.approx(0.35)
+    assert result["best_fitness_blended"] == pytest.approx(0.2625)   # gen 2's own blend
+
+
+def test_within_generation_selection_still_ranks_by_the_blend():
+    """#107 changes CROSS-generation selection only. WITHIN a generation the
+    sibling-pressure blend must still decide the winner (ADR-0008) — that
+    comparison is apples-to-apples, since every genome in a generation faces
+    the same pool.
+
+    Genome A has the higher blend (0.4) but the LOWER anchor share (0.2);
+    genome B has the lower blend (0.3375) but the HIGHER anchor share (0.45).
+    If within-generation ranking were ever switched to anchor-only, B would
+    win instead of A, and the recorded 'anchor' history entry would jump to
+    0.45. It must stay 0.2 — A's anchor share — proving A, not B, was picked.
+    """
+    import harness.evolve as E
+    pop_a = [0.0] * ev.GENOME_LEN
+    pop_b = [1.0] * ev.GENOME_LEN
+    orig_init = E.initial_population
+    orig_agent = E.genome_agent
+    E.initial_population = lambda size, seed: [pop_a, pop_b]
+    E.genome_agent = lambda g: _tagged("A" if g[0] == 0.0 else "B")
+    try:
+        def rewards(a, b, seed=None):
+            mine = getattr(a, "tag", "")
+            if getattr(b, "tag", "") == "anchor":
+                share = 0.20 if mine == "A" else 0.45
+            else:
+                share = 1.00 if mine == "A" else 0.00
+            return (share, 1.0 - share)
+
+        result = ev.evolve(generations=1, pop_size=2, games=1, sigma=0.0, sample_k=1,
+                           hof_cap=0, anchor_names=(), seed=0, rewards_fn=rewards,
+                           anchor_weight=0.75, anchor_agents_override=[_tagged("anchor")])
+    finally:
+        E.initial_population = orig_init
+        E.genome_agent = orig_agent
+
+    assert result["history"][0]["best"] == pytest.approx(0.4)      # A's blend won the sort
+    assert result["history"][0]["anchor"] == pytest.approx(0.20)   # A's anchor, not B's 0.45
+    assert result["best_genome"] == pop_a
 
 
 def test_build_opponents_includes_anchors_hof_and_a_pop_sample():
@@ -229,7 +322,7 @@ def test_evolve_is_deterministic_and_reports_history():
         out = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
                        hof_cap=2, anchor_names=[], seed=1, rewards_fn=stub,
                        anchor_agents_override=[_tagged("")])
-        assert set(out) == {"best_genome", "best_fitness", "history"}
+        assert set(out) == {"best_genome", "best_fitness", "best_fitness_blended", "history"}
         assert len(out["history"]) == 3
         out2 = E.evolve(generations=3, pop_size=6, games=1, sigma=0.2, sample_k=2,
                         hof_cap=2, anchor_names=[], seed=1, rewards_fn=stub,
