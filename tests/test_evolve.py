@@ -163,6 +163,37 @@ def test_evolve_fitness_is_dominated_by_the_anchors():
     assert result["best_fitness"] == 0.2
 
 
+def test_evolve_history_reports_anchor_share_unmoved_by_sibling_drift():
+    """#104: the printed 'best' is a blend that deflates as the sibling pool
+    converges, even when the agent's real (anchor) performance holds steady —
+    so the anchor-only figure must be reported too, and must not move when
+    only the sibling term does.
+
+    The stub scores every anchor match (opponent tagged "anchor") at a fixed
+    0.8 share regardless of generation, while sibling matches (untagged
+    population-vs-population, keyed off the generation-derived seed) decay
+    from 0.9 to 0.5 as if the population were converging. If evolve() reports
+    an anchor figure that is really just plumbing the blend, or recomputing
+    something sibling-influenced, it will move; the real anchor share cannot.
+    """
+    def rewards(a, b, seed=None):
+        if getattr(b, "tag", "") == "anchor":
+            return (0.8, 0.2)                      # anchor share always 0.8
+        gen = (seed - 50000) // 7919
+        target = {0: 0.9, 1: 0.7, 2: 0.5}.get(gen, 0.5)
+        return (target, 1.0 - target)               # sibling share decays
+
+    result = ev.evolve(generations=3, pop_size=2, games=1, sigma=0.1, sample_k=1,
+                       hof_cap=0, anchor_names=(), seed=0, rewards_fn=rewards,
+                       anchor_weight=0.75, anchor_agents_override=[_tagged("anchor")])
+    history = result["history"]
+
+    anchors = [h["anchor"] for h in history]
+    blended = [h["best"] for h in history]
+    assert anchors == pytest.approx([0.8, 0.8, 0.8])          # unmoved by sibling drift
+    assert blended == pytest.approx([0.825, 0.775, 0.725])    # blend still falls as siblings converge
+
+
 def test_build_opponents_includes_anchors_hof_and_a_pop_sample():
     rng = random.Random(0)
     pop = [_tagged(f"p{i}") for i in range(5)]

@@ -255,16 +255,26 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
             a_share = match_share(pop_agents[i], anchors, games, base, rewards_fn)
             p_share = (match_share(pop_agents[i], siblings, games, base + 50000, rewards_fn)
                        if siblings else None)
-            scored.append((g, blended_fitness(a_share, p_share, anchor_weight)))
+            scored.append((g, blended_fitness(a_share, p_share, anchor_weight), a_share))
+        # Sort by the blended figure (index 1): selection still optimizes the
+        # blend, unchanged by #104 — only the *readout* below adds the
+        # anchor-only share alongside it.
         scored.sort(key=lambda gf: gf[1], reverse=True)
-        gen_best_g, gen_best_f = scored[0]
-        mean_f = sum(f for _, f in scored) / len(scored)
-        history.append({"gen": gen, "best": gen_best_f, "mean": mean_f})
+        gen_best_g, gen_best_f, gen_best_a = scored[0]
+        mean_f = sum(f for _, f, _ in scored) / len(scored)
+        # anchor_share is comparable across generations and runs (unlike
+        # `best`, the blend — see blended_fitness docstring and #104): the
+        # sibling term collapses toward 0.5 as the population converges,
+        # which is exactly when selection is working, so `best` can fall or
+        # flatline while the agent is still improving. Plumbing the winner's
+        # already-computed a_share through here (no extra evaluations) keeps
+        # progress legible without changing what evolve() optimizes.
+        history.append({"gen": gen, "best": gen_best_f, "anchor": gen_best_a, "mean": mean_f})
         if gen_best_f > best_fit:
             best_fit, best_genome = gen_best_f, gen_best_g
         if checkpoint_fn is not None:
             checkpoint_fn(best_genome, best_fit, list(history))
-        elites = [g for g, _ in scored[:max(1, pop_size // 4)]]
+        elites = [g for g, *_ in scored[:max(1, pop_size // 4)]]
         hof_genomes = update_hof(hof_genomes, [gen_best_g], hof_cap)
         population = next_generation(elites, pop_size, sigma, rng)
     return {"best_genome": best_genome, "best_fitness": best_fit, "history": history}
@@ -322,7 +332,10 @@ def main(argv=None):  # pragma: no cover
     )
 
     for h in result["history"]:
-        print(f"gen {h['gen']}: best={h['best']:.4f} mean={h['mean']:.4f}")
+        # blended = what selection optimizes (frequency-dependent, #104);
+        # anchor = comparable across generations/runs, the honest progress signal.
+        print(f"gen {h['gen']}: blended={h['best']:.4f}  anchor={h['anchor']:.4f}  "
+              f"mean={h['mean']:.4f}")
 
     if args.dry_run:
         print(f"dry-run: best_fitness={result['best_fitness']:.4f} (genome not saved)")
