@@ -413,25 +413,49 @@ def _livestock_worker_action(pos, beat: list, tiles, inv: dict, shed: dict, unlo
     return acts.pass_()
 
 
+#: Flat-dollar reserve added to price, deliberately *not* scaled by price
+#: (#100). #97's `price * 4 * (1/pace - 1)` buffer looked right on paper but
+#: was calibrated against nothing observed: it demanded ~$37,000 at the
+#: evolved genome's actual pace (~0.097) and ~$77,000 at pace 0.05, while the
+#: champion never accumulates more than ~$17,900-$39,000 across a full
+#: 720-turn game (harness/production_report.py measurement, #95/#96/#101) —
+#: every pace value evolution actually visited was unaffordable, so the
+#: "gradient" was flat and fitness-invisible in practice.
+#:
+#: #100 recalibrates by measurement instead of intuition. `production_report`
+#: shows `pilkwang` (outscores us ~9:1) buying both its $1,000 and $2,000
+#: quadrants near-broke, days apart, at similar low-thousands cash levels —
+#: and our own `meta_rancher` buying both quadrants the same day at similar
+#: cash levels too ($10.4k then $4.8k, *less* for the pricier SW). Buffer
+#: size tracks observed reserve behaviour, not sale price, so it's additive
+#: rather than multiplicative: at pace 0.05 (the highest pace the #97 run
+#: ever visited despite it being a dead gene) the buffer is $15,200, putting
+#: the ~$16,200 NE requirement and ~$17,200 SW requirement both inside the
+#: observed money envelope — reachable late in a game, not never.
+_LAND_RESERVE = 800.0
+
+
 def _land_order(unlocked, money: float, pace: float) -> list:
     """At most one `BUY_LAND` this turn, paced continuously by `livestock_pace`
-    (#97 — no hard cliff).
+    (#97 — no hard cliff; #100 — the buffer's *size* recalibrated against
+    measured money, not mathematics).
 
-    The required money buffer above the price is `price * 4 * (1/pace - 1)`:
-    at pace 1.0 the buffer is 0 (buy as soon as affordable); it grows without
-    bound as pace falls toward 0, monotonically, with no discontinuity
-    anywhere in (0, 1] — every pace value has *some* money level that buys,
-    so a genome below the old 0.5 gate has a gradient to climb instead of a
-    flat, fitness-invisible region. `pace` is floored at a small epsilon so
-    the formula stays defined (never divides by zero) at pace == 0.
+    The required money buffer above price is `_LAND_RESERVE * (1/pace - 1)`:
+    at pace 1.0 the buffer is 0 (buy as soon as affordable, matching the
+    near-broke external competitor `pilkwang`); it grows without bound as
+    pace falls toward 0, monotonically, with no discontinuity anywhere in
+    (0, 1] — every pace value has *some* money level that buys, so a genome
+    below the old hard 0.5 gate has a gradient to climb instead of a flat,
+    fitness-invisible region. `pace` is floored at a small epsilon so the
+    formula stays defined (never divides by zero) at pace == 0.
 
     This is deliberately *not* a hard cutoff, but low pace still behaves as
-    "effectively never" inside one 720-turn game: at pace 0.05 the buffer
-    alone is 76x the price (order of $76,000 for the $1,000 NE quadrant),
-    far beyond what the diagnosed champion ever accumulated (#96 measured
-    $19,594 unspent across a full game never buying land at all) — so a
-    genome parked near zero still can't casually stumble into a purchase,
-    while evolution *can* still discover the gradient and climb it.
+    "late, not casual" inside one 720-turn game: at pace 0.05 the buffer
+    alone is $15,200, close to the top of the champion's observed money
+    range — reachable only once cash has actually accumulated, not from
+    turn one, so `pace` still means something across the band evolution
+    explores instead of every value buying immediately (the mirror-image
+    failure mode: too shallow, and the knob stops mattering).
 
     Follows the sim's fixed NE -> SW unlock order (`kaggisim.economy.LAND_COSTS`),
     capped at those two extra quadrants — no `ANIMAL_TILES` tile lives in the
@@ -444,7 +468,7 @@ def _land_order(unlocked, money: float, pace: float) -> list:
         return []  # already own NE and SW — never reach for the $4000 SE
     price = economy.LAND_COSTS[n_extra]
     p = max(pace, 1e-6)  # guard div-by-zero; keeps the curve continuous, not a gate
-    buffer = price * 4.0 * (1.0 / p - 1.0)
+    buffer = _LAND_RESERVE * (1.0 / p - 1.0)
     if money >= price + buffer:
         return [["BUY_LAND"]]
     return []
