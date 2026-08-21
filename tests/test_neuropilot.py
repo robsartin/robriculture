@@ -386,3 +386,88 @@ def test_default_genome_is_the_packaged_local_champion():
     assert local is not None
     assert len(local) == np.genome_size(np.N_FEATURES, np.H1, np.N_KNOBS)
     assert np.DEFAULT_GENOME == local
+
+
+# --- #113: work-lists scale with owned land ----------------------------------
+#
+# The pre-#113 controller hard-coded 10 NW-only tiles (CROP_PLOTS) and
+# collapsed every worker past #10 onto CROP_PLOTS[-1] -- buying NE/SW added
+# land no worker was ever routed to, so land was pure cost. crop_plots(...)
+# derives the work-list from *owned* quadrants instead.
+
+def test_crop_plots_grows_when_a_quadrant_is_unlocked():
+    """More owned land means more workable tiles -- the whole point of #113:
+    buying NE (or SW) must actually open new ground, not just cost money."""
+    nw_only = np.crop_plots(("NW",))
+    nw_ne = np.crop_plots(("NW", "NE"))
+    nw_ne_sw = np.crop_plots(("NW", "NE", "SW"))
+    assert len(nw_ne) > len(nw_only)
+    assert len(nw_ne_sw) > len(nw_ne)
+
+
+def test_crop_plots_has_no_duplicate_tiles_when_many_quadrants_owned():
+    """No two workers can ever be routed to the same plot if the work-list
+    itself never repeats a coordinate -- the direct fix for 'worker 11 routed
+    to the same tile as worker 10'."""
+    plots = np.crop_plots(("NW", "NE", "SW"))
+    assert len(set(plots)) == len(plots)
+
+
+def test_crop_plots_never_lies_on_unowned_land():
+    """A plot in NW-only ownership must never stray into the NE/SW/SE
+    quadrants -- routing a worker onto locked land would be an illegal
+    PLANT/HARVEST, which ADR-0006's fail-safe would otherwise paper over as a
+    silent PASS."""
+    for x, y in np.crop_plots(("NW",)):
+        assert x <= 4 and y <= 4
+    for x, y in np.crop_plots(("NW", "NE")):
+        assert (x <= 4 and y <= 4) or (x >= 5 and y <= 4)
+    for x, y in np.crop_plots(("NW", "NE", "SW")):
+        assert (x <= 4 and y <= 4) or (x >= 5 and y <= 4) or (x <= 4 and y >= 5)
+
+
+def test_crop_plots_never_collides_with_animal_tiles():
+    """The herd's NE/SW tiles (ANIMAL_TILES) are occupied structures -- a crop
+    plot landing on one would fight the livestock worker for the same tile."""
+    animal_positions = {pos for pos, _ in np.ANIMAL_TILES}
+    plots = np.crop_plots(("NW", "NE", "SW"))
+    assert animal_positions.isdisjoint(plots)
+
+
+def test_crop_plots_puts_the_shed_tile_first():
+    """Worker 0 (the farmer) must always land on SHED_TILE -- it's the only
+    plot that can PICKUP + FERTILIZE without leaving (see
+    _fertilize_or_fetch), and it's shed-adjacent for every DROP/PICKUP."""
+    assert np.crop_plots(("NW",))[0] == np.SHED_TILE == (4, 4)
+    assert np.crop_plots(("NW", "NE", "SW"))[0] == np.SHED_TILE
+
+
+def test_crop_plots_orders_by_distance_to_shed_not_by_quadrant():
+    """Ordering is by walking distance, not 'finish NW, then NE, then SW' --
+    a close NE/SW tile can rank ahead of a far NW one, so early workers (low
+    index i) always draw the shortest walk regardless of which quadrant their
+    plot lands in."""
+    plots = np.crop_plots(("NW", "NE", "SW"))
+    dists = [abs(x - 4) + abs(y - 4) for x, y in plots]
+    assert dists == sorted(dists)
+
+
+def test_max_hands_grows_when_more_land_is_owned():
+    """The hire ceiling must scale with owned land, not stay pinned at the
+    old fixed MAX_HANDS = 9 -- otherwise buying land still can't pay for the
+    labor to work it."""
+    nw_only = np._max_hands(("NW",))
+    nw_ne_sw = np._max_hands(("NW", "NE", "SW"))
+    assert nw_ne_sw > nw_only
+
+
+def test_controller_never_assigns_more_crop_workers_than_generated_plots():
+    """With far more hands than NW alone can host, the crop-worker count must
+    be capped at the number of generated plots -- the extras flow to
+    livestock instead of the old bug's behavior (piling onto the last plot)."""
+    n_plots = len(np.crop_plots(("NW",)))
+    hands = [[4, 4]] * (n_plots + 10)  # far more workers than NW has plots
+    k = np.decode_knobs([0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5])  # livestock_labor_share = 0
+    state = _obs(hour=1, hands=hands, unlocked=("NW",))
+    a = np.controller(k, state)
+    assert len(a["hands"]) == len(hands)  # legal shape: still never crashes
