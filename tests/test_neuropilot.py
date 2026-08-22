@@ -407,3 +407,51 @@ def test_default_genome_is_the_packaged_local_champion():
     assert local is not None
     assert len(local) == np.genome_size(np.N_FEATURES, np.H1, np.N_KNOBS)
     assert np.DEFAULT_GENOME == local
+
+
+# --- #71: quadrant-derived crop plots (restored from #113) ---
+
+def test_crop_plots_prefix_matches_the_old_hardcoded_nw_crew():
+    # The generator must reproduce the shipped NW ordering exactly for the
+    # first 10 plots: with MAX_HANDS = 9 that is every plot the controller
+    # could previously reach, so this task changes no behaviour.
+    assert np.crop_plots(("NW",))[:10] == [
+        (4, 4), (3, 4), (4, 3), (2, 4), (3, 3), (4, 2), (1, 4), (2, 3), (3, 2), (4, 1),
+    ]
+
+
+def test_crop_plots_grows_when_a_quadrant_unlocks():
+    # Buying land must add workable tiles -- the whole point of #71.
+    assert len(np.crop_plots(("NW", "NE"))) > len(np.crop_plots(("NW",)))
+
+
+def test_crop_plots_never_yields_a_tile_on_unowned_land():
+    # Every NW plot has x <= 4 and y <= 4; nothing from another quadrant leaks in.
+    assert all(x <= 4 and y <= 4 for x, y in np.crop_plots(("NW",)))
+
+
+def test_crop_plots_never_collides_with_an_animal_tile():
+    # Structural, not checked at use-time: the herd's tiles are filtered out
+    # at construction, so a crop job can never be sent onto a pasture.
+    animal_positions = {pos for pos, _ in np.ANIMAL_TILES}
+    everywhere = np.crop_plots(("NW", "NE", "SW", "SE"))
+    assert animal_positions.isdisjoint(everywhere)
+
+
+def test_crop_plots_is_deterministic_and_nearest_shed_first():
+    # ADR-0005: same input, same list, every time; ordered by walk distance.
+    plots = np.crop_plots(("NW", "NE"))
+    assert plots == np.crop_plots(("NW", "NE"))
+    dists = [np._manhattan(np.SHED_TILE, p) for p in plots]
+    assert dists == sorted(dists)
+    assert plots[0] == np.SHED_TILE
+
+
+def test_crop_plots_returns_empty_for_no_quadrants():
+    # Must degrade, not raise -- the controller turns this into all-PASS.
+    assert np.crop_plots(()) == []
+
+
+def test_manhattan_is_l1_distance():
+    assert np._manhattan((0, 0), (3, 4)) == 7
+    assert np._manhattan((4, 4), (4, 4)) == 0

@@ -163,15 +163,6 @@ def decode_knobs(raw: list[float]) -> Knobs:
 # module's own tiny helpers. Constants that mirror another strategy's layout
 # (e.g. the NW crop-plot crew) are re-declared here BY VALUE, not imported.
 
-#: The champion's 10-tile NW crew (all x,y <= 4, always-unlocked land), nearest
-#: tiles first. Re-declared by value from `wide_hands.PLOTS` / `meta_bot.MELON_PLOTS`
-#: per ADR-0008 — neuropilot must not import another strategy module.
-CROP_PLOTS = [
-    (4, 4),                  # worker 0 (farmer, shed-adjacent)
-    (3, 4), (4, 3),
-    (2, 4), (3, 3), (4, 2),
-    (1, 4), (2, 3), (3, 2), (4, 1),
-]
 
 #: A crop must reach first yield with at least this many days to spare before
 #: the final day, or planting it just strands the tile (and its seed cost).
@@ -318,6 +309,63 @@ assert sum(1 for _, k in ANIMAL_TILES if k == "SHEEP") == N_SHEEP
 #: The one shed-access tile the crop crew also occupies (CROP_PLOTS[0]) — the
 #: only corner every worker can reach a PICKUP/DROP from.
 SHED_TILE = (4, 4)
+
+#: Board quadrant bounds (inclusive), mirroring the sim's own
+#: `_quadrant_of(x, y, board_size)` (board_size=10, half=5): N/S splits on
+#: y < half, W/E splits on x < half. SE is included for completeness even
+#: though `_land_order` never buys it -- no ANIMAL_TILES tile lives there.
+_QUADRANT_BOUNDS = {
+    "NW": (0, 4, 0, 4), "NE": (5, 9, 0, 4), "SW": (0, 4, 5, 9), "SE": (5, 9, 5, 9),
+}
+
+#: Positions occupied by the herd -- never crop-workable.
+_ANIMAL_POSITIONS = frozenset(pos for pos, _ in ANIMAL_TILES)
+
+
+def _manhattan(a, b) -> int:
+    """L1 distance between two board positions (turns to walk, obstacle-free)."""
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _quadrant_tiles(quadrant: str) -> list:
+    """Every tile in `quadrant` that isn't an animal structure's tile."""
+    x0, x1, y0, y1 = _QUADRANT_BOUNDS[quadrant]
+    return [
+        (x, y) for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)
+        if (x, y) not in _ANIMAL_POSITIONS
+    ]
+
+
+#: Every quadrant's crop-eligible tiles, precomputed once at import -- pure
+#: coordinates, no dependency on game state, so `crop_plots` only filters by
+#: ownership and sorts each turn instead of rebuilding tile lists.
+_ALL_QUADRANT_TILES = {q: _quadrant_tiles(q) for q in _QUADRANT_BOUNDS}
+
+
+def crop_plots(unlocked) -> list:
+    """Every crop-workable tile in the owned (`unlocked`) quadrants, nearest
+    `SHED_TILE` first (#113 code, restored by #71 -- replaces the old
+    hard-coded 10-tile NW-only `CROP_PLOTS`).
+
+    Ordered by walking distance to the shed, ties broken by (x, y) for a
+    deterministic layout. Distance, not quadrant, drives the order: a close
+    NE/SW tile can sort ahead of a far NW one, so buying land can hand a
+    worker a *shorter* walk than some NW tile it already had. `SHED_TILE` is
+    always first (distance 0, and NW is always owned). Animal tiles are never
+    included, so a crop plot can never collide with the herd; only tiles in
+    `unlocked` quadrants appear, so a plot can never land on unbought land.
+    Both properties are structural, not checked at use-time.
+    """
+    tiles = [t for q in unlocked for t in _ALL_QUADRANT_TILES.get(q, ())]
+    tiles.sort(key=lambda t: (_manhattan(SHED_TILE, t), t[0], t[1]))
+    return tiles
+
+
+#: NW-only crop-plot ordering, nearest-first -- kept as a plain constant for
+#: callers and tests that just need "the plot at index i with only the
+#: starting quadrant owned". The controller calls `crop_plots(unlocked)`
+#: fresh each turn, since ownership changes mid-game.
+CROP_PLOTS = crop_plots(("NW",))
 
 #: A knob-scaled money floor for livestock spend, sized against the season's
 #: starting capital (mirrors `meta_bot.MELON_RESERVE`'s role, but dialed by
