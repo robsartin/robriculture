@@ -453,5 +453,92 @@ def test_crop_plots_returns_empty_for_no_quadrants():
 
 
 def test_manhattan_is_l1_distance():
+    # Validates that Manhattan distance is the sum of absolute coordinate differences.
     assert np._manhattan((0, 0), (3, 4)) == 7
     assert np._manhattan((4, 4), (4, 4)) == 0
+
+
+# --- #71: job enumeration ---
+
+def _knobs(**over):
+    """A Knobs with every field at a mid value, overridable per test."""
+    base = dict(sell_throttle=0.5, hire_target=0.5, livestock_pace=0.5,
+                livestock_labor_share=0.5, herd_target_scale=0.5,
+                fertilize_pref=0.0, capital_reserve=0.5, crop_mix=0.5)
+    base.update(over)
+    return np.Knobs(**base)
+
+
+def test_candidate_jobs_has_one_crop_job_per_owned_plot():
+    jobs = np.candidate_jobs(_obs(), _knobs())
+    crop = [j for j in jobs if j.kind == "CROP"]
+    assert len(crop) == len(np.crop_plots(("NW",)))
+
+
+def test_candidate_jobs_grows_when_a_quadrant_unlocks():
+    # More land must mean more work available -- the hypothesis under test.
+    few = np.candidate_jobs(_obs(unlocked=("NW",)), _knobs())
+    many = np.candidate_jobs(_obs(unlocked=("NW", "NE")), _knobs())
+    assert len(many) > len(few)
+
+
+def test_candidate_jobs_omits_animal_jobs_on_unowned_land():
+    # Cows live in NE, sheep in SW; owning only NW means no animal work exists.
+    jobs = np.candidate_jobs(_obs(unlocked=("NW",)), _knobs())
+    assert not [j for j in jobs if j.kind in np._ANIMAL_KINDS]
+
+
+def test_candidate_jobs_includes_animal_jobs_once_their_quadrant_is_owned():
+    jobs = np.candidate_jobs(_obs(unlocked=("NW", "NE")), _knobs())
+    cows = [j for j in jobs if j.kind == "COW"]
+    assert len(cows) == sum(1 for _, k in np.ANIMAL_TILES if k == "COW")
+
+
+def test_candidate_jobs_positions_are_unique():
+    # No two workers can ever be routed to the same tile: the fertilize job
+    # REPLACES the shed tile's crop job rather than sitting beside it.
+    jobs = np.candidate_jobs(_obs(unlocked=("NW", "NE", "SW")), _knobs(fertilize_pref=1.0))
+    positions = [j.pos for j in jobs]
+    assert len(positions) == len(set(positions))
+
+
+def test_candidate_jobs_replaces_the_shed_crop_job_with_fertilize_on_a_duty_day():
+    jobs = np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=1.0))
+    at_shed = [j for j in jobs if j.pos == np.SHED_TILE]
+    assert len(at_shed) == 1 and at_shed[0].kind == "FERTILIZE"
+
+
+def test_candidate_jobs_has_no_fertilize_job_when_the_knob_is_off():
+    jobs = np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=0.0))
+    assert not [j for j in jobs if j.kind == "FERTILIZE"]
+
+
+def test_candidate_jobs_fertilize_value_rises_with_fertilize_pref():
+    # The other reinterpreted knob: it now weights the fertilize job instead
+    # of gating a duty cycle, so a keener setting must outbid more jobs.
+    low = [j for j in np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=0.3))
+           if j.kind == "FERTILIZE"]
+    high = [j for j in np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=1.0))
+            if j.kind == "FERTILIZE"]
+    assert low and high and high[0].value > low[0].value
+
+
+def test_candidate_jobs_animal_value_rises_with_livestock_labor_share():
+    # The reinterpreted knob: it now weights animal work instead of peeling
+    # a fixed fraction of workers off the crop crew.
+    o = _obs(unlocked=("NW", "NE"))
+    low = [j for j in np.candidate_jobs(o, _knobs(livestock_labor_share=0.1)) if j.kind == "COW"]
+    high = [j for j in np.candidate_jobs(o, _knobs(livestock_labor_share=0.9)) if j.kind == "COW"]
+    assert high[0].value > low[0].value
+
+
+def test_candidate_jobs_is_sorted_best_first_and_deterministic():
+    o = _obs(unlocked=("NW", "NE"))
+    jobs = np.candidate_jobs(o, _knobs())
+    assert jobs == np.candidate_jobs(o, _knobs())
+    assert [j.value for j in jobs] == sorted((j.value for j in jobs), reverse=True)
+
+
+def test_candidate_jobs_returns_empty_when_nothing_is_owned():
+    # Degrades rather than raising; the controller turns this into all-PASS.
+    assert np.candidate_jobs(_obs(unlocked=()), _knobs()) == []

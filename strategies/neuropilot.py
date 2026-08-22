@@ -620,6 +620,75 @@ def _is_fertilize_day(fertilize_pref: float, day: int) -> bool:
     return day % _fertilize_duty_period(fertilize_pref) == 0
 
 
+# --- #71: jobs replace the worker-index -> plot mapping ---------------------
+#
+# The old controller sent worker `i` to `CROP_PLOTS[i]`. There was no notion
+# of travel cost, of which job was worth most this turn, or of who was
+# nearest to what -- so a worker could walk past a harvest-ready melon to
+# reach "its" bare tile, and a newly-bought quadrant's tiles were reachable
+# only by workers whose index happened to land on them. Every agent we own
+# peaks at 10-11 planted tiles regardless of land owned; `pilkwang` reaches
+# 51. Enumerate the work, then assign it.
+
+#: What one turn of a crop tile is nominally worth. Every other value is
+#: expressed relative to this, so it is the unit rather than a tunable.
+CROP_JOB_VALUE = 1.0
+
+#: Animal-job value at `livestock_labor_share` = 1.0. At the midpoint 0.5 an
+#: animal job is worth exactly one crop job, so the knob's old "what fraction
+#: of effort goes to the herd" meaning survives the reinterpretation.
+ANIMAL_JOB_SCALE = 2.0
+
+#: Value lost per tile of walking. At 0.05 the longest walk on a 10x10 board
+#: (18 tiles) costs 0.9 -- just under one crop job, so distance decides
+#: between comparable jobs but never outranks a genuinely better one.
+#: A constant, not a knob: a ninth knob would be a versioned genome interface
+#: bump, restarting evolution from random to tune one scalar.
+TRAVEL_COST = 0.05
+
+#: Job kinds that mean "work the animal on this tile". The species doubles as
+#: the job kind because `_animal_chore` already takes it as its `kind` arg.
+_ANIMAL_KINDS = frozenset(("COW", "SHEEP"))
+
+#: One piece of work: where it is, what kind, and what it is worth this turn.
+Job = collections.namedtuple("Job", ["pos", "kind", "value"])
+
+
+def candidate_jobs(state, knobs: Knobs) -> list:
+    """Every piece of work the farm owns this turn, best-valued first.
+
+    Pure and deterministic. Positions are unique across the returned list --
+    animal tiles are excluded from `crop_plots` at construction, and the
+    fertilize job *replaces* the shed tile's crop job rather than sitting
+    beside it -- so `assign_workers` can never route two workers to one tile.
+
+    Values are deliberately crude: this experiment tests whether *assignment*
+    unlocks the land, not whether we can price work correctly. Ranking jobs by
+    what they are actually worth is #119.
+    """
+    player = state.get("player", 0)
+    me = state["farms"][player]
+    day = state.get("day", 0)
+    unlocked = me.get("unlocked_quadrants", ["NW"])
+
+    fertilize_day = _is_fertilize_day(knobs.fertilize_pref, day)
+    jobs = []
+    for pos in crop_plots(unlocked):
+        if pos == SHED_TILE and fertilize_day and knobs.fertilize_pref > 0.0:
+            # Only the shed-adjacent tile can PICKUP + FERTILIZE without
+            # leaving, so it is the only tile this job can ever be at.
+            jobs.append(Job(pos, "FERTILIZE", CROP_JOB_VALUE + knobs.fertilize_pref))
+        else:
+            jobs.append(Job(pos, "CROP", CROP_JOB_VALUE))
+    for pos, kind in ANIMAL_TILES:
+        if _needs_quadrant(kind) in unlocked:
+            jobs.append(Job(pos, kind, ANIMAL_JOB_SCALE * knobs.livestock_labor_share))
+    # Ties break positionally so the order never depends on how the lists
+    # above happened to be built (ADR-0005).
+    jobs.sort(key=lambda j: (-j.value, j.pos))
+    return jobs
+
+
 def _fertilizer_buy_order(knobs: Knobs, state, cap: int) -> list:
     """A single fallback `BUY_PRODUCT FERTILIZER` for the farmer's crop plot,
     or `[]`.
