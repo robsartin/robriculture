@@ -13,6 +13,20 @@ TURNS_PER_DAY = economy.CONFIG_DEFAULTS["turnsPerDay"]
 SEASON_DAYS = economy.CONFIG_DEFAULTS["episodeSteps"] // TURNS_PER_DAY
 N_COW, N_SHEEP = 9, 4
 
+#: Fixed denominator for the "hands owned" input feature (features(), below) —
+#: deliberately NOT `_max_hands(unlocked)` (#113 follow-up). A feature is the
+#: genome's input *language*: rescaling it reinterprets every weight trained
+#: against the old scale. `_max_hands` legitimately grows with owned land
+#: because it's an *action bound* (the hire ceiling), not an input -- but
+#: wiring that same growing value into the feature vector silently shifted
+#: this input's scale (5 hands read as 5/9=0.56 pre-#113, 5/24=0.21 once NW's
+#: full plot count was the denominator) under the *same* baked genome,
+#: flipping its land-purchase behavior with no weight change at all. Caught
+#: by tests/test_champion_genome_regression.py. Keep this pinned at the
+#: original MAX_HANDS value so the feature's meaning never moves under an
+#: already-evolved genome.
+_HANDS_FEATURE_SCALE = 9
+
 # Ordered feature list — the plan pins this; changing order changes the genome contract.
 _PRICE_ITEMS = ("MELON", "WHEAT", "MILK", "WOOL")
 
@@ -53,7 +67,7 @@ def features(state) -> list[float]:
             _clamp01(_count_tiles(tiles, lambda t: isinstance(t, dict) and t.get("animal") == "SHEEP") / N_SHEEP),
             1.0 if "NE" in unlocked else 0.0,
             1.0 if "SW" in unlocked else 0.0,
-            _clamp01(len(hands) / _max_hands(unlocked)),
+            _clamp01(len(hands) / _HANDS_FEATURE_SCALE),
             _clamp01(shed.get("MELON", 0) / 50.0),
             _clamp01(shed.get("WHEAT", 0) / 50.0),
             _clamp01(shed.get("FERTILIZER", 0) / 20.0),
@@ -248,17 +262,21 @@ def _max_hands(unlocked) -> int:
     """Hire ceiling (hands, not counting the farmer): one worker per
     currently-workable tile — every generated crop plot, plus every
     already-unlocked animal tile — minus the farmer, who always fills one
-    of those slots himself (#113: replaces the fixed `MAX_HANDS = 9`, which
-    capped hiring independently of how much land was owned).
+    of those slots himself (#113: replaces the old fixed hire cap of 9,
+    which capped hiring independently of how much land was owned).
 
     Searched the installed sim source
     (kaggle_environments/envs/kaggriculture/kaggriculture.py, `_do_hire` /
     `_hire_cost`) and found no hire-count cap — only a per-day Fibonacci cost
     schedule that resets each morning. `pilkwang` (measured via
-    `harness.production_report`) runs 13 hands, confirming `MAX_HANDS = 9`
-    was our own limit, not the sim's. Growing this with owned land, combined
-    with `hire_target` choosing a *fraction* of it, keeps the knob's meaning
-    intact while removing the artificial ceiling.
+    `harness.production_report`) runs 13 hands, confirming the old fixed
+    cap of 9 was our own limit, not the sim's. Growing this with owned land,
+    combined with `hire_target` choosing a *fraction* of it, keeps the
+    knob's meaning intact while removing the artificial ceiling.
+
+    Used ONLY for the hire-order count (controller(), below) — an action
+    bound, free to scale with land. It must NOT feed `features()`'s "hands
+    owned" input; see `_HANDS_FEATURE_SCALE` for why that has to stay fixed.
     """
     n_animal_usable = sum(
         1 for _, kind in ANIMAL_TILES if _needs_quadrant(kind) in unlocked
@@ -725,11 +743,14 @@ def controller(knobs: Knobs, state) -> dict:
     the herd in `ANIMAL_TILES` beats *in principle*, but the crop-worker count
     is capped at the number of generated plots — a worker with no plot left
     to farm flows into livestock instead of idling. Market: sells lead (never
-    displaced by the 10-order cap), then hires up to `hire_target *
-    _max_hands(unlocked)` new hands (mornings only, ceiling scaled by owned
-    land, #113), then restocks seed for empty active crop plots, then
-    livestock/fertilizer market orders (lowest priority) fill whatever slots
-    remain.
+    displaced by the 10-order cap), then the seed the crop crew needs THIS
+    turn is reserved, then hires fill whatever budget is left toward
+    `hire_target * _max_hands(unlocked)` (mornings only, ceiling scaled by
+    owned land, #113) — seed before hire, not hire before seed, so a large
+    land-scaled hire ceiling can never spend the whole 10-order turn on
+    labor and starve planting; reaching a big ceiling just takes more turns
+    instead of one. Livestock/fertilizer market orders (lowest priority)
+    fill whatever slots remain after that.
     """
     player = state.get("player", 0)
     me = state["farms"][player]
@@ -796,14 +817,21 @@ def controller(knobs: Knobs, state) -> dict:
     farmer_action = actions[0]
     hand_actions = actions[1:]
 
-    # --- Market: sells first, then hire, then seed, then livestock/fertilizer
-    # (lowest priority) — sells are never truncated by the 10-order cap. ---
+    # --- Market: sells first (CLAUDE.md: never truncated), then the seed the
+    # crop crew needs THIS turn, then hires with whatever budget remains, then
+    # livestock/fertilizer (lowest priority). Seed must be reserved BEFORE
+    # hire is sized (#113 follow-up): the old fixed `MAX_HANDS = 9` hire
+    # ceiling accidentally left room for a sell + a seed buy under the
+    # 10-order cap (9 hires + 1 sell + 1 seed just fit); a land-scaled
+    # ceiling can legitimately want dozens of hires, and appending that many
+    # HIRE entries before computing seed would silently starve planting on
+    # exactly the turn labor exists to grow the crop. The ceiling itself
+    # still scales with land (that's #113's point) -- reaching it just takes
+    # more turns instead of one, since only the leftover budget goes to
+    # hire. ---
     market: list = _sell_orders(shed, market_inventory, knobs.sell_throttle)
 
-    if hour == 0:
-        n_hire = max(0, round(knobs.hire_target * _max_hands(unlocked)))
-        market.extend([["HIRE"]] * n_hire)
-
+    seed_order: list = []
     if crop is not None and len(market) < 10:
         empty_active = sum(
             1 for plot in plots[:n_crop] if _tile_at(tiles, plot) is None
@@ -814,7 +842,14 @@ def controller(knobs: Knobs, state) -> dict:
             affordable = int(money // seed_cost) if seed_cost > 0 else want_seed
             buy = min(want_seed, affordable, 10 - len(market))
             if buy > 0:
-                market.append(["BUY_SEED", crop, buy])
+                seed_order = [["BUY_SEED", crop, buy]]
+
+    if hour == 0:
+        hire_budget = max(0, 10 - len(market) - len(seed_order))
+        n_hire = min(hire_budget, max(0, round(knobs.hire_target * _max_hands(unlocked))))
+        market.extend([["HIRE"]] * n_hire)
+
+    market.extend(seed_order)
 
     if len(market) < 10:
         market.extend(_livestock_market_orders(knobs, state, len(market)))

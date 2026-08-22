@@ -116,8 +116,21 @@ GOLDEN_ACTIONS = {
         "market": [["HIRE"]] * 9 + [["BUY_SEED", "MELON", 1]],
     },
     "mid_game_full_crew": {
+        # #113 re-bless (reviewed, not silent): `unlocked=("NW", "NE")` in this
+        # scenario. Pre-#113, CROP_PLOTS was hard-coded to 10 NW-only tiles and
+        # never considered NE regardless of ownership, so worker index 3 (the
+        # 4th position: farmer + 3 hands in) walked toward NW's (2, 4)
+        # (distance 2 from the shed) and worker 4 toward (3, 3) -- landing on
+        # SOUTH then PASS. #113's `crop_plots(unlocked)` is distance-sorted
+        # across ALL owned quadrants, and once NE is unlocked its (5, 4) tile
+        # (distance 1) is genuinely closer to the shed than NW's (2, 4)
+        # (distance 2) -- exactly the "land you bought is now worked" fix this
+        # issue is about. That shifts everyone from index 3 on by one plot,
+        # changing worker 4's move from SOUTH to EAST and worker 5's from
+        # PASS to WEST. `farmer` and `market` are byte-identical to the old
+        # golden; only routing to the now-larger work-list changed.
         "farmer": ["PICKUP", "FERTILIZER", 1],
-        "hands": [["EAST"], ["EAST"], ["SOUTH"], ["PASS"]],
+        "hands": [["EAST"], ["EAST"], ["EAST"], ["WEST"]],
         "market": [
             ["SELL", "FERTILIZER", 2], ["SELL", "MELON", 10], ["SELL", "WHEAT", 5],
             ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1],

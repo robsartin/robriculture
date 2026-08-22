@@ -471,3 +471,25 @@ def test_controller_never_assigns_more_crop_workers_than_generated_plots():
     state = _obs(hour=1, hands=hands, unlocked=("NW",))
     a = np.controller(k, state)
     assert len(a["hands"]) == len(hands)  # legal shape: still never crashes
+
+
+def test_seed_and_sell_survive_a_large_hire_ceiling_when_market_is_crowded():
+    """#113 follow-up: a land-scaled hire ceiling must never crowd out the
+    sell or the seed order under the 10-order market cap.
+
+    Old fixed `MAX_HANDS = 9` accidentally left room (9 hires + 1 sell + 1
+    seed just fit under 10); a much larger land-scaled ceiling can want
+    dozens of hires on its own, so the budgeting has to be explicit now:
+    sells first, then the seed the crop crew needs this turn, then hires
+    fill only whatever budget is left."""
+    tiles = [[None] * 10 for _ in range(10)]  # every NW plot empty -> wants seed
+    # hire_target=1.0 (knob index 1) asks for the FULL _max_hands ceiling,
+    # which for NW alone is far bigger than the 10-order cap could ever hold
+    # entirely on its own.
+    k = np.decode_knobs([0.0, 1.0] + [0.5] * 6)  # sell_throttle low, hire_target high
+    state = _obs(hour=0, day=0, money=100_000, tiles=tiles, shed={"WHEAT": 20})
+    a = np.controller(k, state)
+    kinds = [o[0] for o in a["market"]]
+    assert "SELL" in kinds
+    assert "BUY_SEED" in kinds
+    assert len(a["market"]) <= 10
