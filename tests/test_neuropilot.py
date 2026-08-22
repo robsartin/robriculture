@@ -504,25 +504,40 @@ def test_candidate_jobs_positions_are_unique():
     assert len(positions) == len(set(positions))
 
 
+def _shed_tile_wanting_fertilizer():
+    # A live, unfertilized plant at SHED_TILE: the only tile the FERTILIZE
+    # job can ever land on, and #71's filter (finding 1) now requires it to
+    # actually want fertilizer before the job is enumerated at all.
+    tiles = [[None] * 10 for _ in range(10)]
+    x, y = np.SHED_TILE
+    tiles[y][x] = {"kind": "PLANT", "fertilized_until_day": -1}
+    return tiles
+
+
 def test_candidate_jobs_replaces_the_shed_crop_job_with_fertilize_on_a_duty_day():
     # On a fertilize duty day, the shed tile gets a FERTILIZE job, not a CROP job; no position is duplicated.
-    jobs = np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=1.0))
+    # Shed stock is required: `_fertilize_or_fetch` is asked with an empty
+    # inventory (finding 1), so an empty shed would have nothing to fetch.
+    jobs = np.candidate_jobs(_obs(day=0, tiles=_shed_tile_wanting_fertilizer(), shed={"FERTILIZER": 5}),
+                              _knobs(fertilize_pref=1.0))
     at_shed = [j for j in jobs if j.pos == np.SHED_TILE]
     assert len(at_shed) == 1 and at_shed[0].kind == "FERTILIZE"
 
 
 def test_candidate_jobs_has_no_fertilize_job_when_the_knob_is_off():
     # knob=0.0 produces a huge period; day=1 ensures 1 % period != 0, so it is not a fertilize duty day.
-    jobs = np.candidate_jobs(_obs(day=1), _knobs(fertilize_pref=0.0))
+    jobs = np.candidate_jobs(_obs(day=1, tiles=_shed_tile_wanting_fertilizer(), shed={"FERTILIZER": 5}),
+                              _knobs(fertilize_pref=0.0))
     assert not [j for j in jobs if j.kind == "FERTILIZE"]
 
 
 def test_candidate_jobs_fertilize_value_rises_with_fertilize_pref():
     # The other reinterpreted knob: it now weights the fertilize job instead
     # of gating a duty cycle, so a keener setting must outbid more jobs.
-    low = [j for j in np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=0.3))
+    o = _obs(day=0, tiles=_shed_tile_wanting_fertilizer(), shed={"FERTILIZER": 5})
+    low = [j for j in np.candidate_jobs(o, _knobs(fertilize_pref=0.3))
            if j.kind == "FERTILIZE"]
-    high = [j for j in np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=1.0))
+    high = [j for j in np.candidate_jobs(o, _knobs(fertilize_pref=1.0))
             if j.kind == "FERTILIZE"]
     assert low and high and high[0].value > low[0].value
 
@@ -547,6 +562,52 @@ def test_candidate_jobs_is_sorted_best_first_and_deterministic():
 def test_candidate_jobs_returns_empty_when_nothing_is_owned():
     # Degrades rather than raising; the controller turns this into all-PASS.
     assert np.candidate_jobs(_obs(unlocked=()), _knobs()) == []
+
+
+# --- #71 review finding 1: only tiles with actual work are enumerated,
+# so a worker whose tile has gone idle is freed for real work elsewhere ---
+
+def test_candidate_jobs_omits_a_crop_tile_with_nothing_to_do():
+    # A fully-watered, not-yet-mature plant wants nothing this turn: no CROP
+    # job at all, not a job a worker would just camp on.
+    tiles = [[None] * 10 for _ in range(10)]
+    x, y = np.SHED_TILE
+    tiles[y][x] = {"kind": "PLANT", "watered_today": True, "planted_day": 0}
+    jobs = np.candidate_jobs(_obs(day=0, tiles=tiles, unlocked=("NW",)), _knobs())
+    assert not [j for j in jobs if j.pos == np.SHED_TILE]
+
+
+def test_candidate_jobs_enumerates_a_hungry_animal_even_with_no_wheat_carrier():
+    # `_animal_tile_has_work` asks with an empty inventory on purpose: whether
+    # the tile wants work, not whether the asking worker personally can do it
+    # right now. A hungry animal must still show up as work when the shed
+    # (not any one worker) holds the WHEAT to feed it.
+    tiles = [[None] * 10 for _ in range(10)]
+    tiles[0][5] = {"kind": "PASTURE", "animal": "COW", "fed_today": False}
+    jobs = np.candidate_jobs(_obs(tiles=tiles, unlocked=("NW", "NE"), shed={"WHEAT": 5}), _knobs())
+    assert any(j.pos == (5, 0) and j.kind == "COW" for j in jobs)
+
+
+def test_candidate_jobs_enumerates_a_bought_but_unplaced_animal():
+    # A built pasture holding an unplaced animal (bought, sitting in the
+    # shed) must be work: it's the only route left to stand the herd up now
+    # that no worker-peel routes anyone there unconditionally.
+    tiles = [[None] * 10 for _ in range(10)]
+    tiles[0][5] = {"kind": "PASTURE"}
+    jobs = np.candidate_jobs(_obs(tiles=tiles, unlocked=("NW", "NE"), shed={"COW": 1}), _knobs())
+    assert any(j.pos == (5, 0) and j.kind == "COW" for j in jobs)
+
+
+def test_controller_moves_a_worker_off_an_idle_tile_to_a_plantable_one():
+    # The whole point of finding 1: a worker standing on a tile with nothing
+    # left to do this turn (fully watered, not mature) must not just PASS
+    # forever -- it gets reassigned to a nearby empty, plantable tile and
+    # walks there instead.
+    tiles = [[None] * 10 for _ in range(10)]
+    x, y = np.SHED_TILE
+    tiles[y][x] = {"kind": "PLANT", "watered_today": True, "planted_day": 0}
+    out = np.controller(_knobs(crop_mix=1.0), _obs(day=0, tiles=tiles))
+    assert out["farmer"] != ["PASS"]
 
 
 # --- #71: greedy worker assignment ---
@@ -667,9 +728,11 @@ def test_animal_job_action_never_returns_none():
 
 # --- #71: the controller dispatches assigned jobs ---
 
-def test_controller_sends_a_worker_to_a_tile_outside_nw_once_it_is_owned():
-    # The whole point of #71: with 10 workers and only NW owned every worker
-    # stays in NW; owning NE must put at least one of them on an NE tile.
+def test_assign_workers_sends_a_worker_to_a_tile_outside_nw_once_it_is_owned():
+    # This exercises candidate_jobs + assign_workers directly, not
+    # controller() -- see test_controller_routes_a_worker_onto_newly_owned_land
+    # below for the end-to-end version. With 10 workers and only NW owned
+    # every worker stays in NW; owning NE must put at least one on an NE tile.
     hands = [[4, 4]] * 9
     o = _obs(hands=hands, unlocked=("NW", "NE"))
     jobs = np.candidate_jobs(o, _knobs())
@@ -677,12 +740,27 @@ def test_controller_sends_a_worker_to_a_tile_outside_nw_once_it_is_owned():
     assert any(j is not None and j.pos[0] >= 5 for j in got)
 
 
-def test_controller_never_sends_two_workers_to_the_same_tile():
+def test_assign_workers_never_sends_two_workers_to_the_same_tile():
+    # Also exercises candidate_jobs + assign_workers directly, not
+    # controller(). No two workers may claim the same job -- this is what
+    # keeps controller() from ever emitting two actions for one tile.
     hands = [[4, 4]] * 9
     o = _obs(hands=hands, unlocked=("NW", "NE", "SW"))
     got = [j for j in np.assign_workers([[4, 4]] + hands, np.candidate_jobs(o, _knobs()))
            if j is not None]
     assert len({j.pos for j in got}) == len(got)
+
+
+def test_controller_routes_a_worker_onto_newly_owned_land():
+    # The end-to-end claim #71 exists to prove: controller() itself (not
+    # just the enumeration/assignment helpers above) routes work onto
+    # newly-bought land. All 10 workers start exactly on SHED_TILE
+    # (x=4, NW's east edge), so no NW tile ever requires an eastward step;
+    # an "EAST" action can only come from a worker assigned an NE tile
+    # (x>=5) in the quadrant that just got unlocked.
+    hands = [[4, 4]] * 9
+    out = np.controller(_knobs(), _obs(hands=hands, unlocked=("NW", "NE")))
+    assert "EAST" in [a[0] for a in [out["farmer"], *out["hands"]]]
 
 
 def test_controller_returns_a_legal_shape_with_no_land_and_no_jobs():

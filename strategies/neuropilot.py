@@ -636,6 +636,30 @@ _ANIMAL_KINDS = frozenset(("COW", "SHEEP"))
 Job = collections.namedtuple("Job", ["pos", "kind", "value"])
 
 
+def _crop_tile_has_work(tile, day, crop) -> bool:
+    """True when a worker standing on this crop tile would actually do
+    something -- dig a weed, plant an empty tile while a crop can still
+    mature, or water/harvest a live plant. `_plot_action` is already
+    position-independent, so this asks the question directly."""
+    return _plot_action(tile, day, crop)[0] != "PASS"
+
+
+def _animal_tile_has_work(tile_pos, kind: str, tiles, shed: dict, unlocked) -> bool:
+    """True when this animal tile still wants something done to it.
+
+    Asked with an EMPTY inventory on purpose: the question is "does this tile
+    want work", not "can this particular worker do it". The hunger clause is
+    required because `_animal_chore`'s feed branch is gated on the worker
+    already holding WHEAT, so a hungry animal would otherwise read as no work
+    whenever nobody happens to be carrying any.
+    """
+    tile = _tile_at(tiles, tile_pos)
+    if (_is_animal(tile) and not tile.get("fed_today", False)
+            and shed.get("WHEAT", 0) > 0):
+        return True
+    return _animal_chore(tile_pos, kind, tile_pos, tiles, {}, shed, unlocked) is not None
+
+
 def candidate_jobs(state, knobs: Knobs) -> list:
     """Every piece of work the farm owns this turn, best-valued first.
 
@@ -643,6 +667,16 @@ def candidate_jobs(state, knobs: Knobs) -> list:
     animal tiles are excluded from `crop_plots` at construction, and the
     fertilize job *replaces* the shed tile's crop job rather than sitting
     beside it -- so `assign_workers` can never route two workers to one tile.
+
+    Only tiles with actual work are enumerated (#71 review finding 1): every
+    crop job carries the same `CROP_JOB_VALUE`, so `_job_score` reduces to
+    `value - TRAVEL_COST * distance` and a worker standing on ANY crop tile
+    always outscores every other tile -- greedy would hand each worker the
+    tile under its feet forever, which is the exact camping #71 exists to
+    break. Filtering by "does this tile want work" (not touching values) lets
+    a worker whose tile has gone idle become available for real work
+    elsewhere, while a null result still means "assignment didn't help"
+    rather than "our pricing was wrong".
 
     Values are deliberately crude: this experiment tests whether *assignment*
     unlocks the land, not whether we can price work correctly. Ranking jobs by
@@ -652,18 +686,24 @@ def candidate_jobs(state, knobs: Knobs) -> list:
     me = state["farms"][player]
     day = state.get("day", 0)
     unlocked = me.get("unlocked_quadrants", ["NW"])
+    tiles = me["tiles"]
+    shed = state.get("private", {}).get("shed", {})
+    crop = _crop_for(knobs, day)
 
     fertilize_day = _is_fertilize_day(knobs.fertilize_pref, day)
     jobs = []
     for pos in crop_plots(unlocked):
-        if pos == SHED_TILE and fertilize_day:
+        tile = _tile_at(tiles, pos)
+        if pos == SHED_TILE and fertilize_day and _fertilize_or_fetch(tile, day, {}, shed) is not None:
             # Only the shed-adjacent tile can PICKUP + FERTILIZE without
-            # leaving, so it is the only tile this job can ever be at.
+            # leaving, so it is the only tile this job can ever be at. The
+            # shed tile yields at most one job -- FERTILIZE here, or the
+            # ordinary CROP rule below -- never both.
             jobs.append(Job(pos, "FERTILIZE", CROP_JOB_VALUE + knobs.fertilize_pref))
-        else:
+        elif _crop_tile_has_work(tile, day, crop):
             jobs.append(Job(pos, "CROP", CROP_JOB_VALUE))
     for pos, kind in ANIMAL_TILES:
-        if _needs_quadrant(kind) in unlocked:
+        if _needs_quadrant(kind) in unlocked and _animal_tile_has_work(pos, kind, tiles, shed, unlocked):
             jobs.append(Job(pos, kind, ANIMAL_JOB_SCALE * knobs.livestock_labor_share))
     # Ties break positionally so the order never depends on how the lists
     # above happened to be built (ADR-0005).
@@ -806,7 +846,7 @@ def controller(knobs: Knobs, state) -> dict:
 
     planted_this_turn: dict = {}
     actions = []
-    for i, (pos, job) in enumerate(zip(positions, assignment)):
+    for i, (pos, job) in enumerate(zip(positions, assignment, strict=True)):
         inv = inventories[i] if i < len(inventories) else {}
         if job is None:
             # More workers than jobs: passing is legal and safe (ADR-0006).
