@@ -48,6 +48,17 @@ NOT legitimate — this is the failure mode #100 describes, stop and read
     dropped, the controller change degraded the shipped agent — fix the
     controller (or re-bake a genome that recovers the share) rather than
     editing this file to make it green again.
+
+  - #71 reinterpreted two knobs (`livestock_labor_share` -> animal-job
+    weight, `fertilize_pref` -> fertilize-job weight) and replaced the
+    worker-index plot mapping with job assignment. The shipped weights are
+    unchanged but are now read differently, so the actions moved by design.
+    Re-benchmarked before re-blessing: share 0.3390 against a 0.3760
+    baseline. This drop is expected, not a regression: these weights were
+    evolved against the OLD knob meanings, so some drop is the honest
+    consequence of reinterpreting them; it is well above the ~0.20
+    collapse band that would indicate a wiring bug, and #71's own fresh
+    evolution run is the real test of the new mechanism.
 """
 from __future__ import annotations
 
@@ -84,11 +95,28 @@ def _mid_game_board():
     return board
 
 
+def _scattered_board():
+    """Work spread across NW *and* NE, none of it on `SHED_TILE` (4, 4):
+    a harvest-ready melon and a hungry cow (both #71 job kinds) plus a weed,
+    with every other tile still bare and plantable (mid-season)."""
+    board = [[None] * 10 for _ in range(10)]
+    board[2][1] = {"kind": "PLANT", "crop": "MELON", "planted_day": 3,
+                    "yield_units": 6, "watered_today": True}
+    board[1][8] = {"kind": "WEED"}
+    board[0][7] = {"animal": "COW", "fed_today": False}
+    return board
+
+
 #: Fixed synthetic observations covering the controller's main branches:
 #: an untouched turn-0 board (hire + first seed buy), a mid-game board with
 #: a harvestable plant, a weed, a hungry animal, fertilizer in the shed and
-#: a full 5-worker crew (fertilize/sell/animal-buy/movement), and a pinned
-#: pair either side of the current land-purchase reserve threshold.
+#: a full 5-worker crew (fertilize/sell/animal-buy/movement), a pinned pair
+#: either side of the current land-purchase reserve threshold, and a
+#: mid-season crew scattered across NW *and* NE (#71 review: three of the
+#: other four scenarios put every worker on `SHED_TILE`, where the new
+#: job-assignment mechanism happens to reproduce the old worker-index ->
+#: plot mapping exactly -- this one and `mid_game_full_crew` are the only
+#: two that can actually detect a future rewrite of that mechanism).
 _SCENARIOS = {
     "early_game": _obs(day=0, hour=0, money=3000, unlocked=("NW",)),
     "mid_game_full_crew": _obs(
@@ -105,6 +133,12 @@ _SCENARIOS = {
         day=10, hour=6, money=43500, unlocked=("NW",),
         hands=[(4, 4)] * 5, shed={"MELON": 20, "WHEAT": 10},
     ),
+    "scattered_second_quadrant": _obs(
+        day=15, hour=4, money=6000, farmer=(4, 4),
+        hands=[(1, 2), (8, 1), (3, 8), (6, 3)],
+        tiles=_scattered_board(), shed={"MELON": 8, "WHEAT": 4, "FERTILIZER": 1},
+        unlocked=("NW", "NE"), seeds={"MELON": 2, "WHEAT": 2},
+    ),
 }
 
 #: Recorded actions of `strategies/champion_genome.json` on `_SCENARIOS`,
@@ -117,7 +151,7 @@ GOLDEN_ACTIONS = {
     },
     "mid_game_full_crew": {
         "farmer": ["PICKUP", "FERTILIZER", 1],
-        "hands": [["EAST"], ["EAST"], ["SOUTH"], ["PASS"]],
+        "hands": [["EAST"], ["EAST"], ["EAST"], ["EAST"]],
         "market": [
             ["SELL", "FERTILIZER", 2], ["SELL", "MELON", 10], ["SELL", "WHEAT", 5],
             ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1],
@@ -135,6 +169,16 @@ GOLDEN_ACTIONS = {
         "hands": [["WEST"], ["NORTH"], ["WEST"], ["WEST"], ["NORTH"]],
         "market": [["SELL", "MELON", 20], ["SELL", "WHEAT", 10],
                    ["BUY_SEED", "MELON", 6], ["BUY_LAND"]],
+    },
+    "scattered_second_quadrant": {
+        "farmer": ["PLANT", "MELON"],
+        "hands": [["HARVEST"], ["DIG"], ["NORTH"], ["PLANT", "MELON"]],
+        "market": [
+            ["SELL", "FERTILIZER", 1], ["SELL", "MELON", 8], ["SELL", "WHEAT", 4],
+            ["BUY_SEED", "MELON", 1],
+            ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1],
+            ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1],
+        ],
     },
 }
 
@@ -176,3 +220,17 @@ def test_buys_land_when_money_at_reserve_threshold():
     result = _act("land_reserve_above")
     assert result == GOLDEN_ACTIONS["land_reserve_above"]
     assert ["BUY_LAND"] in result["market"]
+
+
+def test_matches_golden_actions_when_scattered_second_quadrant():
+    """Mid-season crew scattered across NW *and* NE (none on `SHED_TILE`):
+    harvest/dig/plant/move/animal-approach behaviour is unchanged.
+
+    Unlike `land_reserve_below`/`land_reserve_above` (every worker on
+    `SHED_TILE`, where the #71 job-assignment mechanism happens to reproduce
+    the old worker-index -> plot mapping exactly), and `early_game` (no
+    hands at all), scattered workers plus a second owned quadrant is the
+    shape of state that can actually tell the #71 mechanism apart from a
+    future rewrite of it.
+    """
+    assert _act("scattered_second_quadrant") == GOLDEN_ACTIONS["scattered_second_quadrant"]
