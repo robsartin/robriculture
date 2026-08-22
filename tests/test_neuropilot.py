@@ -577,15 +577,18 @@ def test_assign_workers_prefers_the_nearer_of_two_equal_jobs():
 
 
 def test_assign_workers_walks_to_a_job_worth_the_trip():
-    # Travel cost is 0.05/tile: a job 10 tiles away costs 0.5, so a value
-    # advantage of 1.0 must still win.
+    # Travel cost is 0.05/tile: 11 tiles away costs 0.55, so far (2.0 - 0.55 = 1.45)
+    # still beats near (1.0 - 0.05 = 0.95). Proves the travel penalty does not swamp
+    # a genuinely more valuable job. Its sibling test_assign_workers_declines_a_job_not_worth_the_trip
+    # discriminates the subtraction itself (near 1.0 beats far 1.2 when cost flips the outcome).
     near = np.Job((0, 1), "CROP", 1.0)
     far = np.Job((0, 10 + 1), "COW", 2.0)
     assert np.assign_workers([(0, 0)], [far, near])[0] == far
 
 
 def test_assign_workers_declines_a_job_not_worth_the_trip():
-    # The same distant job at a small value advantage loses to the near one.
+    # Same 11-tile penalty (0.55): far (1.2 - 0.55 = 0.65) loses to near (1.0 - 0.05 = 0.95).
+    # This is the half that actually discriminates the travel-cost subtraction.
     near = np.Job((0, 1), "CROP", 1.0)
     far = np.Job((0, 10 + 1), "COW", 1.2)
     assert np.assign_workers([(0, 0)], [far, near])[0] == near
@@ -599,7 +602,9 @@ def test_assign_workers_is_deterministic():
 
 
 def test_job_score_discounts_distance():
-    # Score = value - (travel_cost * manhattan_distance).
+    # A job's worth falls as distance rises — distance is charged against value at
+    # a fixed rate. Standing on a job (distance 0) costs nothing, so the job is worth
+    # its full value; further away, the value diminishes linearly.
     job = np.Job((0, 5), "CROP", 1.0)
     assert np._job_score((0, 0), job) == 1.0 - np.TRAVEL_COST * 5
     assert np._job_score((0, 5), job) == 1.0
