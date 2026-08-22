@@ -206,3 +206,93 @@ If evolution still declines land with assignment in place, that is a significant
 negative: it would mean the constraint is neither affordability, nor routability, nor
 assignment, and would point at job *valuation* (#119) or at something not yet
 identified. Report it plainly.
+
+---
+
+## Amendment, 2026-08-22: enumerate only tiles that have work
+
+Task 5's review found that the crude-values decision above is not merely crude,
+it is **degenerate**, and it makes this experiment unable to test its own
+hypothesis.
+
+Every crop job carries the same value, `CROP_JOB_VALUE = 1.0`, so
+`_job_score(pos, job)` reduces to `1.0 - TRAVEL_COST * distance`. A worker
+standing on any owned crop tile therefore scores that tile at exactly 1.0 and
+every other crop tile strictly lower. Measured directly:
+
+```
+own tile       score=1.000
+1 step away    score=0.950
+4 steps away   score=0.800
+```
+
+Greedy assignment hands each worker the tile under its feet, forever. Once the
+crew spreads over the tiles nearest the shed on the opening turns, **no worker
+ever relocates again** — including a worker sitting on a watered live plant with
+nothing to do while an empty plantable tile waits one step away. Planted tiles
+are capped at roughly the worker count, which is the 10-11 ceiling this issue
+exists to break, and a bought quadrant adds jobs nobody will ever walk to.
+
+The evidence is already in the guard: of the four frozen scenarios, the only one
+that moved is `mid_game_full_crew` — the only one whose workers are *scattered*
+rather than stacked on `SHED_TILE`. It moved to four `PASS` actions, which is
+this pathology rendered as data. The other three cannot distinguish the new
+mechanism from the old index mapping at all, because when every worker stands on
+`SHED_TILE` the distance ordering reproduces `CROP_PLOTS` exactly.
+
+Run as specified, Task 8's hypothesis (**at least 15 planted tiles**) is
+unreachable by construction, and its ~3.5 hours would buy a false negative.
+
+### Decision
+
+**`candidate_jobs` enumerates only work that actually exists.** A tile with
+nothing to do is not a job. A worker whose tile has gone idle is then free to be
+assigned real work elsewhere, because no zero-work job is competing for it.
+
+This stays on the near side of the #119 boundary. #119 is about ranking jobs by
+**what they are worth**; this is about whether a job **exists at all**, which is
+enumeration — the thing #71 already owns. Job *values* remain uniform and crude,
+so a null result still says "assignment did not help", not "our pricing was
+wrong".
+
+Two helpers, both position-independent so enumeration never depends on which
+worker is asked:
+
+- `_crop_tile_has_work(tile, day, crop)` — `_plot_action(tile, day, crop)[0] != "PASS"`.
+  Covers digging a weed, planting an empty tile when a crop can still mature, and
+  watering or harvesting a live plant.
+- `_animal_tile_has_work(tile_pos, kind, tiles, shed, unlocked)` — true when a
+  hungry animal stands there and the shed holds WHEAT to feed it, or when
+  `_animal_chore(tile_pos, kind, tile_pos, tiles, {}, shed, unlocked)` is not
+  `None`. The empty-inventory argument is deliberate: it asks "does this tile
+  want something doing", not "can this particular worker do it". The hunger
+  clause is required because `_animal_chore`'s feed branch is gated on the
+  worker already holding WHEAT, so a hungry animal with an empty-handed worker
+  would otherwise read as no work.
+
+### This also repairs the livestock knob
+
+`livestock_labor_share` had become near-binary: below roughly 0.55 no animal job
+outscores a crop job, so all 13 herd tiles are ignored while
+`_livestock_market_orders` keeps buying animals on the separate
+`herd_target_scale` / `livestock_pace` knobs. Animals were bought, never placed,
+never fed, and escaped. The old worker-peel guaranteed `round(share * n)`
+tenders; nothing replaced that guarantee.
+
+Filtering fixes the worst of it without touching values: a bought-but-unplaced
+animal is a tile that *wants something done*, so it is enumerated as a job and
+some worker takes it. Whether the knob then carries a usable gradient for
+evolution is a question for the run itself, and is recorded here as a risk rather
+than a claim.
+
+### Testing this amendment
+
+- A worker on an idle tile is reassigned: given a fully-watered live plant under
+  the worker and an empty plantable tile nearby, the worker moves.
+- A tile with nothing to do yields no job at all.
+- A hungry animal is enumerated as work even when no worker is carrying WHEAT.
+- A bought-but-unplaced animal is enumerated as work.
+- **At `controller()` level, not just at the helpers**: with a quadrant newly
+  owned, a worker is routed onto a tile outside the starting quadrant. Task 5's
+  review found that two tests named `test_controller_*` never call `controller()`
+  at all, so the branch's central claim currently has no end-to-end test.
