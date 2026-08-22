@@ -1265,7 +1265,9 @@ The hypothesis from the spec: *a seeded evolution run produces a genome that buy
 
 Multi-seed makes that a rate. Read it as:
 
-- **rate >= 0.5 and `share_max` > Task 6's re-benchmarked figure** — supported. Assignment unlocks the land.
+**The bar is 0.3760, not Task 6's 0.3390.** Task 6 measured the *shipped* weights under the new controller and got 0.3390 — that is what our old genome does after its knobs were reinterpreted, not a standard to clear. Beating 0.3390 only recovers ground this branch itself gave up. A fresh genome has to beat **0.3760**, what we actually shipped before any of this, to be a real improvement. Quote both numbers in the writeup so the distinction cannot be lost.
+
+- **rate >= 0.5 and `share_max` > 0.3760** — supported. Assignment unlocks the land.
 - **rate between 0.1 and 0.5** — partially supported, and the interesting case. Assignment makes expansion *reachable* but not *reliable*; that points squarely at job valuation (#119), since crude values are exactly what would make the outcome seed-dependent. Say so plainly rather than rounding it up or down.
 - **rate == 0** — a significant negative. The constraint is neither affordability (#100), nor routability (#113), nor assignment (#71). Record it as such: it makes #119 the next candidate and reopens the possibility that something not yet identified is the binding constraint.
 
