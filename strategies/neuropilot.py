@@ -689,6 +689,41 @@ def candidate_jobs(state, knobs: Knobs) -> list:
     return jobs
 
 
+def _job_score(pos, job: Job) -> float:
+    """What `job` is worth to the worker standing at `pos`: its value less
+    the walk needed to reach it."""
+    return job.value - TRAVEL_COST * _manhattan(pos, job.pos)
+
+
+def assign_workers(positions, jobs) -> list:
+    """Give each worker its best remaining job; `None` when none is left.
+
+    Greedy: workers are served in index order, each takes the unclaimed job
+    maximising `_job_score`, and a claimed job is never reassigned. Returns
+    one entry per worker, in worker order, so the caller can zip it against
+    `positions`.
+
+    Deterministic (ADR-0005): `jobs` arrives in a fixed order from
+    `candidate_jobs` and `max` keeps the first of any tie, so the same state
+    always produces the same assignment.
+
+    Greedy rather than optimal (Hungarian) matching is deliberate: it is
+    O(workers x jobs) on single-digit worker counts, stdlib-only, and easy to
+    reason about. Optimal matching is not obviously worth the complexity
+    before we know assignment helps at all.
+    """
+    remaining = list(jobs)
+    assigned = []
+    for pos in positions:
+        if not remaining:
+            assigned.append(None)
+            continue
+        best = max(remaining, key=lambda j: _job_score(pos, j))
+        remaining.remove(best)
+        assigned.append(best)
+    return assigned
+
+
 def _fertilizer_buy_order(knobs: Knobs, state, cap: int) -> list:
     """A single fallback `BUY_PRODUCT FERTILIZER` for the farmer's crop plot,
     or `[]`.

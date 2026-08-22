@@ -547,3 +547,59 @@ def test_candidate_jobs_is_sorted_best_first_and_deterministic():
 def test_candidate_jobs_returns_empty_when_nothing_is_owned():
     # Degrades rather than raising; the controller turns this into all-PASS.
     assert np.candidate_jobs(_obs(unlocked=()), _knobs()) == []
+
+
+# --- #71: greedy worker assignment ---
+
+def test_assign_workers_gives_each_worker_a_distinct_job():
+    # No double-booking: each worker claims exactly one unclaimed job.
+    jobs = [np.Job((0, 0), "CROP", 1.0), np.Job((1, 1), "CROP", 1.0),
+            np.Job((2, 2), "CROP", 1.0)]
+    got = np.assign_workers([(0, 0), (1, 1), (2, 2)], jobs)
+    assert len({j.pos for j in got}) == 3
+
+
+def test_assign_workers_returns_none_when_jobs_run_out():
+    # A worker with nothing to do passes; it must not crash or double-book.
+    got = np.assign_workers([(0, 0), (5, 5)], [np.Job((0, 0), "CROP", 1.0)])
+    assert got[0].pos == (0, 0) and got[1] is None
+
+
+def test_assign_workers_returns_all_none_for_an_empty_job_list():
+    # Empty job list degrades gracefully: all workers get None.
+    assert np.assign_workers([(0, 0), (1, 1)], []) == [None, None]
+
+
+def test_assign_workers_prefers_the_nearer_of_two_equal_jobs():
+    # Distance is the tiebreaker when job values are equal.
+    near, far = np.Job((0, 1), "CROP", 1.0), np.Job((9, 9), "CROP", 1.0)
+    assert np.assign_workers([(0, 0)], [far, near])[0] == near
+
+
+def test_assign_workers_walks_to_a_job_worth_the_trip():
+    # Travel cost is 0.05/tile: a job 10 tiles away costs 0.5, so a value
+    # advantage of 1.0 must still win.
+    near = np.Job((0, 1), "CROP", 1.0)
+    far = np.Job((0, 10 + 1), "COW", 2.0)
+    assert np.assign_workers([(0, 0)], [far, near])[0] == far
+
+
+def test_assign_workers_declines_a_job_not_worth_the_trip():
+    # The same distant job at a small value advantage loses to the near one.
+    near = np.Job((0, 1), "CROP", 1.0)
+    far = np.Job((0, 10 + 1), "COW", 1.2)
+    assert np.assign_workers([(0, 0)], [far, near])[0] == near
+
+
+def test_assign_workers_is_deterministic():
+    # Same input produces the same assignment every time (ADR-0005).
+    jobs = [np.Job((0, 0), "CROP", 1.0), np.Job((0, 1), "CROP", 1.0)]
+    positions = [(0, 0), (0, 1)]
+    assert np.assign_workers(positions, jobs) == np.assign_workers(positions, jobs)
+
+
+def test_job_score_discounts_distance():
+    # Score = value - (travel_cost * manhattan_distance).
+    job = np.Job((0, 5), "CROP", 1.0)
+    assert np._job_score((0, 0), job) == 1.0 - np.TRAVEL_COST * 5
+    assert np._job_score((0, 5), job) == 1.0
