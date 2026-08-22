@@ -610,9 +610,10 @@ def _livestock_market_orders(knobs: Knobs, state, market_len: int) -> list:
     `BUY_LAND` (paced by `livestock_pace`), then `BUY_ANIMAL` toward
     `round(herd_target_scale * (N_COW + N_SHEEP))` (cows before sheep), then a
     fallback fertilizer buy — capped at the market slots the caller has left
-    (`10 - market_len`) so these never displace a sell, hire or seed order.
+    (`maxMarketOrdersPerTurn - market_len`) so these never displace a sell,
+    hire or seed order.
     """
-    cap = max(0, 10 - market_len)
+    cap = max(0, economy.CONFIG_DEFAULTS["maxMarketOrdersPerTurn"] - market_len)
     if cap <= 0:
         return []
     player = state.get("player", 0)
@@ -641,9 +642,12 @@ def controller(knobs: Knobs, state) -> dict:
     workers (farmer counted first, so it's the last hands that peel off) tend
     the herd in `ANIMAL_TILES` beats; the rest farm `CROP_PLOTS`, navigating to
     their plot and running the dig/plant/water/fertilize/harvest loop there.
-    Market: sells lead (never displaced by the 10-order cap), then hires up to
-    `hire_target * MAX_HANDS` new hands (mornings only), then restocks seed for
-    empty active crop plots, then livestock/fertilizer market orders (lowest
+    Market: budgeted by priority against `maxMarketOrdersPerTurn` (#117) —
+    sells lead and are never truncated, then the seed the crop crew needs
+    this turn (skip it and planting stalls), then hires up to `hire_target *
+    MAX_HANDS` new hands (mornings only, capped to whatever's left after
+    sells + seed — reaching the hire target is a multi-turn affair, not a
+    same-turn requirement), then livestock/fertilizer market orders (lowest
     priority) fill whatever slots remain.
     """
     player = state.get("player", 0)
@@ -705,15 +709,20 @@ def controller(knobs: Knobs, state) -> dict:
     farmer_action = actions[0]
     hand_actions = actions[1:]
 
-    # --- Market: sells first, then hire, then seed, then livestock/fertilizer
-    # (lowest priority) — sells are never truncated by the 10-order cap. ---
+    # --- Market: budget by priority against the cap (#117) — sells first
+    # (CLAUDE.md: they must never be the ones truncated), then the seed this
+    # turn's crop crew needs (skip it and planting stalls, idling the whole
+    # engine), then hire, then livestock/fertilizer (lowest priority). Hire
+    # is deliberately last even though it's emitted before seed in the list:
+    # reaching `hire_target * MAX_HANDS` is a multi-turn target, not a
+    # same-turn requirement, so it is what absorbs overflow. To make that
+    # true we must know the seed order (and reserve its slot) BEFORE sizing
+    # hire, even though seed is appended to the list after hire.
+    cap = economy.CONFIG_DEFAULTS["maxMarketOrdersPerTurn"]
     market: list = _sell_orders(shed, market_inventory, knobs.sell_throttle)
 
-    if hour == 0:
-        n_hire = max(0, round(knobs.hire_target * MAX_HANDS))
-        market.extend([["HIRE"]] * n_hire)
-
-    if crop is not None and len(market) < 10:
+    seed_order = None
+    if crop is not None and len(market) < cap:
         active_plots = min(n_crop, len(CROP_PLOTS))
         empty_active = sum(
             1 for plot in CROP_PLOTS[:active_plots] if _tile_at(tiles, plot) is None
@@ -722,14 +731,23 @@ def controller(knobs: Knobs, state) -> dict:
         if want_seed > 0:
             seed_cost = economy.CROPS[crop]["seed"]
             affordable = int(money // seed_cost) if seed_cost > 0 else want_seed
-            buy = min(want_seed, affordable, 10 - len(market))
+            buy = min(want_seed, affordable, cap - len(market))
             if buy > 0:
-                market.append(["BUY_SEED", crop, buy])
+                seed_order = ["BUY_SEED", crop, buy]
+    seed_reserved = 1 if seed_order is not None else 0
 
-    if len(market) < 10:
+    if hour == 0:
+        hire_budget = max(0, cap - len(market) - seed_reserved)
+        n_hire = min(max(0, round(knobs.hire_target * MAX_HANDS)), hire_budget)
+        market.extend([["HIRE"]] * n_hire)
+
+    if seed_order is not None:
+        market.append(seed_order)
+
+    if len(market) < cap:
         market.extend(_livestock_market_orders(knobs, state, len(market)))
 
-    return {"farmer": farmer_action, "hands": hand_actions, "market": market[:10]}
+    return {"farmer": farmer_action, "hands": hand_actions, "market": market[:cap]}
 
 
 class NeuroPilotStrategy(Strategy):
