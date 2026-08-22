@@ -582,8 +582,17 @@ def test_candidate_jobs_enumerates_a_hungry_animal_even_with_no_wheat_carrier():
     # the tile wants work, not whether the asking worker personally can do it
     # right now. A hungry animal must still show up as work when the shed
     # (not any one worker) holds the WHEAT to feed it.
+    #
+    # `cared_today: True` (and no yield_units/fertilizer_available) is
+    # required so the hunger clause is the ONLY thing that can make this
+    # tile enumerate as work -- `_animal_chore`'s unconditional `care()`
+    # fallback fires whenever `cared_today` is unset, since
+    # `_animal_tile_has_work` always calls it with the worker "on" the tile
+    # (pos == tile_pos). Leaving `cared_today` unset made an earlier version
+    # of this test pass for the wrong reason (vacuous against a deleted
+    # hunger clause) -- see task-5-report.md's vacuity-check section.
     tiles = [[None] * 10 for _ in range(10)]
-    tiles[0][5] = {"kind": "PASTURE", "animal": "COW", "fed_today": False}
+    tiles[0][5] = {"kind": "PASTURE", "animal": "COW", "fed_today": False, "cared_today": True}
     jobs = np.candidate_jobs(_obs(tiles=tiles, unlocked=("NW", "NE"), shed={"WHEAT": 5}), _knobs())
     assert any(j.pos == (5, 0) and j.kind == "COW" for j in jobs)
 
