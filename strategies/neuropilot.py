@@ -674,7 +674,7 @@ def candidate_jobs(state, knobs: Knobs) -> list:
     fertilize_day = _is_fertilize_day(knobs.fertilize_pref, day)
     jobs = []
     for pos in crop_plots(unlocked):
-        if pos == SHED_TILE and fertilize_day and knobs.fertilize_pref > 0.0:
+        if pos == SHED_TILE and fertilize_day:
             # Only the shed-adjacent tile can PICKUP + FERTILIZE without
             # leaving, so it is the only tile this job can ever be at.
             jobs.append(Job(pos, "FERTILIZE", CROP_JOB_VALUE + knobs.fertilize_pref))

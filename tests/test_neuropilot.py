@@ -470,7 +470,8 @@ def _knobs(**over):
 
 
 def test_candidate_jobs_has_one_crop_job_per_owned_plot():
-    jobs = np.candidate_jobs(_obs(), _knobs())
+    # Every owned tile gets a work order; use day=1 so pref=0.0 is genuinely a non-duty day (1 % huge_period != 0).
+    jobs = np.candidate_jobs(_obs(day=1), _knobs())
     crop = [j for j in jobs if j.kind == "CROP"]
     assert len(crop) == len(np.crop_plots(("NW",)))
 
@@ -489,6 +490,7 @@ def test_candidate_jobs_omits_animal_jobs_on_unowned_land():
 
 
 def test_candidate_jobs_includes_animal_jobs_once_their_quadrant_is_owned():
+    # Unlocking a quadrant unlocks animal work on that quadrant's pastures.
     jobs = np.candidate_jobs(_obs(unlocked=("NW", "NE")), _knobs())
     cows = [j for j in jobs if j.kind == "COW"]
     assert len(cows) == sum(1 for _, k in np.ANIMAL_TILES if k == "COW")
@@ -503,13 +505,15 @@ def test_candidate_jobs_positions_are_unique():
 
 
 def test_candidate_jobs_replaces_the_shed_crop_job_with_fertilize_on_a_duty_day():
+    # On a fertilize duty day, the shed tile gets a FERTILIZE job, not a CROP job; no position is duplicated.
     jobs = np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=1.0))
     at_shed = [j for j in jobs if j.pos == np.SHED_TILE]
     assert len(at_shed) == 1 and at_shed[0].kind == "FERTILIZE"
 
 
 def test_candidate_jobs_has_no_fertilize_job_when_the_knob_is_off():
-    jobs = np.candidate_jobs(_obs(day=0), _knobs(fertilize_pref=0.0))
+    # knob=0.0 produces a huge period; day=1 ensures 1 % period != 0, so it is not a fertilize duty day.
+    jobs = np.candidate_jobs(_obs(day=1), _knobs(fertilize_pref=0.0))
     assert not [j for j in jobs if j.kind == "FERTILIZE"]
 
 
@@ -533,6 +537,7 @@ def test_candidate_jobs_animal_value_rises_with_livestock_labor_share():
 
 
 def test_candidate_jobs_is_sorted_best_first_and_deterministic():
+    # Jobs are value-ordered descending and tie-break by position; two calls on identical input reproduce exactly.
     o = _obs(unlocked=("NW", "NE"))
     jobs = np.candidate_jobs(o, _knobs())
     assert jobs == np.candidate_jobs(o, _knobs())
