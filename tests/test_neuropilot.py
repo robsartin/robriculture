@@ -608,3 +608,58 @@ def test_job_score_discounts_distance():
     job = np.Job((0, 5), "CROP", 1.0)
     assert np._job_score((0, 0), job) == 1.0 - np.TRAVEL_COST * 5
     assert np._job_score((0, 5), job) == 1.0
+
+
+# --- #71: per-tile animal job action (replaces beat-walking) ---
+
+def _cow_tiles(**tile):
+    """A board with a cow structure at (5, 0), the first COW animal tile."""
+    board = [[None] * 10 for _ in range(10)]
+    board[0][5] = {"kind": "PASTURE", "animal": "COW", **tile}
+    return board
+
+
+def test_animal_job_action_feeds_a_hungry_animal_it_is_standing_on():
+    # Feed leads maintenance: an animal escapes after two unfed days.
+    tiles = _cow_tiles(fed_today=False)
+    got = np._animal_job_action((5, 0), "COW", (5, 0), tiles,
+                                {"WHEAT": 1}, {}, ("NW", "NE"))
+    assert got[0] == "FEED"
+
+
+def test_animal_job_action_fetches_wheat_from_the_shed_when_it_holds_none():
+    # Feed leads maintenance: an animal escapes after two unfed days.
+    tiles = _cow_tiles(fed_today=False)
+    got = np._animal_job_action((5, 0), "COW", np.SHED_TILE, tiles,
+                                {}, {"WHEAT": 5}, ("NW", "NE"))
+    assert got[0] == "PICKUP"
+
+
+def test_animal_job_action_builds_a_pasture_on_a_bare_owned_tile():
+    # Setup, not just tending -- without this the herd can never stand up.
+    tiles = [[None] * 10 for _ in range(10)]
+    got = np._animal_job_action((5, 0), "COW", (5, 0), tiles, {}, {}, ("NW", "NE"))
+    assert got[0] == "BUILD_PASTURE"
+
+
+def test_animal_job_action_places_an_animal_it_is_carrying():
+    # Setup, not just tending -- placing the bought animal is required to stand up the herd.
+    tiles = [[None] * 10 for _ in range(10)]
+    tiles[0][5] = {"kind": "PASTURE"}
+    got = np._animal_job_action((5, 0), "COW", (5, 0), tiles,
+                                {"COW": 1}, {}, ("NW", "NE"))
+    assert got[0] == "PLACE"
+
+
+def test_animal_job_action_walks_toward_its_tile_when_nothing_else_applies():
+    # Falls through to walk when idle -- the worker must reach its tile to wait for work.
+    tiles = _cow_tiles(fed_today=True, cared_today=True)
+    got = np._animal_job_action((5, 0), "COW", (0, 0), tiles, {}, {}, ("NW", "NE"))
+    assert got[0] in ("EAST", "WEST", "NORTH", "SOUTH")
+
+
+def test_animal_job_action_never_returns_none():
+    # The controller appends this straight into the action list (ADR-0006).
+    tiles = _cow_tiles(fed_today=True, cared_today=True)
+    got = np._animal_job_action((5, 0), "COW", (5, 0), tiles, {}, {}, ("NW", "NE"))
+    assert isinstance(got, list) and got

@@ -461,6 +461,30 @@ def _livestock_worker_action(pos, beat: list, tiles, inv: dict, shed: dict, unlo
     return acts.pass_()
 
 
+def _animal_job_action(tile_pos, kind: str, pos, tiles, inv: dict,
+                       shed: dict, unlocked) -> list:
+    """The action for the worker assigned to ONE animal tile (never `None`).
+
+    Replaces `_livestock_worker_action` + `_assign_beats` (#71): assignment
+    hands out one tile at a time, so there is no beat to walk.
+
+    Feed still leads -- an animal escapes after two unfed days -- so a hungry
+    animal whose worker holds no WHEAT sends that worker to the shed first.
+    Everything else falls through to `_animal_chore`, which covers setup
+    (build the pasture, fetch the bought animal, place it) as well as
+    tending; that path is the *only* route to standing a herd up now that the
+    `livestock_labor_share` worker-peel is gone.
+    """
+    tile = _tile_at(tiles, tile_pos)
+    hungry = _is_animal(tile) and not tile.get("fed_today", False)
+    if hungry and inv.get("WHEAT", 0) <= 0 and shed.get("WHEAT", 0) > 0:
+        return acts.pickup("WHEAT", 1) if _on(pos, SHED_TILE) else _step_toward(pos, SHED_TILE)
+    chore = _animal_chore(tile_pos, kind, pos, tiles, inv, shed, unlocked)
+    if chore is not None:
+        return chore
+    return acts.pass_() if _on(pos, tile_pos) else _step_toward(pos, tile_pos)
+
+
 #: Flat-dollar reserve added to price, deliberately *not* scaled by price
 #: (#100). #97's `price * 4 * (1/pace - 1)` buffer looked right on paper but
 #: was calibrated against nothing observed: it demanded ~$37,000 at the
