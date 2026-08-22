@@ -419,48 +419,6 @@ def _animal_chore(tile_pos, kind: str, pos, tiles, inv: dict, shed: dict, unlock
     return None
 
 
-def _assign_beats(n_livestock: int) -> list:
-    """Split `ANIMAL_TILES` into `n_livestock` contiguous beats, as even as
-    possible — `[]` when no worker is on livestock duty this turn."""
-    if n_livestock <= 0:
-        return []
-    n = len(ANIMAL_TILES)
-    base, rem = divmod(n, n_livestock)
-    beats, idx = [], 0
-    for i in range(n_livestock):
-        size = base + (1 if i < rem else 0)
-        beats.append(ANIMAL_TILES[idx: idx + size])
-        idx += size
-    return beats
-
-
-def _livestock_worker_action(pos, beat: list, tiles, inv: dict, shed: dict, unlocked) -> list:
-    """One livestock worker's action this turn (never `None`).
-
-    Feed leads (survival-critical): fetch WHEAT from the shed for a hungry
-    animal in the beat before anything else, then fall through to the first
-    tile with an outstanding chore (`_animal_chore`); idle toward the beat
-    when nothing else applies.
-    """
-    hungry = [tp for tp, _ in beat if _is_animal(_tile_at(tiles, tp))
-              and not _tile_at(tiles, tp).get("fed_today", False)]
-    if hungry:
-        if inv.get("WHEAT", 0) > 0:
-            tp = hungry[0]
-            return acts.feed() if _on(pos, tp) else _step_toward(pos, tp)
-        if shed.get("WHEAT", 0) > 0:
-            if _on(pos, SHED_TILE):
-                return acts.pickup("WHEAT", min(shed["WHEAT"], len(hungry)))
-            return _step_toward(pos, SHED_TILE)
-    for tile_pos, kind in beat:
-        chore = _animal_chore(tile_pos, kind, pos, tiles, inv, shed, unlocked)
-        if chore is not None:
-            return chore
-    if beat:
-        return _step_toward(pos, beat[0][0])
-    return acts.pass_()
-
-
 def _animal_job_action(tile_pos, kind: str, pos, tiles, inv: dict,
                        shed: dict, unlocked) -> list:
     """The action for the worker assigned to ONE animal tile (never `None`).
@@ -814,17 +772,17 @@ def _livestock_market_orders(knobs: Knobs, state, market_len: int) -> list:
 def controller(knobs: Knobs, state) -> dict:
     """A legal `{"farmer", "hands", "market"}` turn from decoded knobs + state.
 
-    Worker roles: the last `round(livestock_labor_share * len(workers))`
-    workers (farmer counted first, so it's the last hands that peel off) tend
-    the herd in `ANIMAL_TILES` beats; the rest farm `CROP_PLOTS`, navigating to
-    their plot and running the dig/plant/water/fertilize/harvest loop there.
-    Market: budgeted by priority against `maxMarketOrdersPerTurn` (#117) —
-    sells lead and are never truncated, then the seed the crop crew needs
-    this turn (skip it and planting stalls), then hires up to `hire_target *
-    MAX_HANDS` new hands (mornings only, capped to whatever's left after
-    sells + seed — reaching the hire target is a multi-turn affair, not a
-    same-turn requirement), then livestock/fertilizer market orders (lowest
-    priority) fill whatever slots remain.
+    Worker roles: `candidate_jobs` enumerates every piece of work the farm
+    owns this turn and `assign_workers` gives each worker its best unclaimed
+    one, discounted by the walk to reach it (#71). This replaced a fixed
+    `worker i -> CROP_PLOTS[i]` mapping that could not route anyone onto
+    newly-bought land, and a `livestock_labor_share` peel that split workers
+    into crop and herd crews before either had been costed.
+    Market: budgeted by priority against `maxMarketOrdersPerTurn` (#117) --
+    sells lead and are never truncated, then the seed the assigned crop
+    workers need this turn (skip it and planting stalls), then hires up to
+    `hire_target * MAX_HANDS` new hands (mornings only, capped to whatever's
+    left after sells + seed), then livestock/fertilizer orders fill the rest.
     """
     player = state.get("player", 0)
     me = state["farms"][player]
@@ -842,45 +800,44 @@ def controller(knobs: Knobs, state) -> dict:
 
     crop = _crop_for(knobs, day)
 
-    # --- Worker roles: the last `livestock_labor_share` fraction of workers
-    # (farmer first, then hands) tend the herd; the rest farm crops. ---
+    # --- Jobs: enumerate the work, then assign it (#71). ---
     positions = [me["farmer"], *hands]
-    n_workers = len(positions)
-    n_livestock = min(n_workers, max(0, round(knobs.livestock_labor_share * n_workers)))
-    n_crop = n_workers - n_livestock
-    beats = _assign_beats(n_livestock)
+    assignment = assign_workers(positions, candidate_jobs(state, knobs))
 
-    # --- One action per worker: navigate to its plot/beat, then work it. ---
     planted_this_turn: dict = {}
     actions = []
-    for i, pos in enumerate(positions):
+    for i, (pos, job) in enumerate(zip(positions, assignment)):
         inv = inventories[i] if i < len(inventories) else {}
-        if i < n_crop:
-            plot = CROP_PLOTS[i] if i < len(CROP_PLOTS) else CROP_PLOTS[-1]
-            if not _on(pos, plot):
-                actions.append(_step_toward(pos, plot))
-                continue
-            tile = _tile_at(tiles, plot)
-            action = None
-            if i == 0 and _is_fertilize_day(knobs.fertilize_pref, day):
-                # Only the shed-adjacent farmer plot (CROP_PLOTS[0]) can
-                # PICKUP + FERTILIZE without leaving its tile. Duty-cycle
-                # gated (#97), not a hard >= 0.5 switch.
-                action = _fertilize_or_fetch(tile, day, inv, shed)
-            if action is None:
-                action = _plot_action(tile, day, crop)
-            if action[0] == "PLANT":
-                # Only plant as many of `crop` this turn as we hold seed for, or the
-                # sim's atomic-plant rule voids every plant of the crop at once.
-                planted_crop = action[1]
-                if planted_this_turn.get(planted_crop, 0) < seeds.get(planted_crop, 0):
-                    planted_this_turn[planted_crop] = planted_this_turn.get(planted_crop, 0) + 1
-                else:
-                    action = ["WATER"] if _is_live_plant(tile) else ["PASS"]
-            actions.append(action)
-        else:
-            beat = beats[i - n_crop] if (i - n_crop) < len(beats) else []
-            actions.append(_livestock_worker_action(pos, beat, tiles, inv, shed, unlocked))
+        if job is None:
+            # More workers than jobs: passing is legal and safe (ADR-0006).
+            actions.append(acts.pass_())
+            continue
+        if job.kind in _ANIMAL_KINDS:
+            actions.append(_animal_job_action(job.pos, job.kind, pos, tiles,
+                                              inv, shed, unlocked))
+            continue
+        # CROP and FERTILIZE both work a crop tile; walk there first.
+        if not _on(pos, job.pos):
+            actions.append(_step_toward(pos, job.pos))
+            continue
+        tile = _tile_at(tiles, job.pos)
+        action = None
+        if job.kind == "FERTILIZE":
+            # `_fertilize_or_fetch` returns None when there is nothing to
+            # fertilize or fetch, in which case the tile is farmed normally --
+            # the same fall-through the old duty-cycle gate had.
+            action = _fertilize_or_fetch(tile, day, inv, shed)
+        if action is None:
+            action = _plot_action(tile, day, crop)
+        if action[0] == "PLANT":
+            # Only plant as many of `crop` this turn as we hold seed for, or
+            # the sim's atomic-plant rule voids every plant of the crop at once.
+            planted_crop = action[1]
+            if planted_this_turn.get(planted_crop, 0) < seeds.get(planted_crop, 0):
+                planted_this_turn[planted_crop] = planted_this_turn.get(planted_crop, 0) + 1
+            else:
+                action = ["WATER"] if _is_live_plant(tile) else ["PASS"]
+        actions.append(action)
 
     farmer_action = actions[0]
     hand_actions = actions[1:]
@@ -899,9 +856,13 @@ def controller(knobs: Knobs, state) -> dict:
 
     seed_order = None
     if crop is not None and len(market) < cap:
-        active_plots = min(n_crop, len(CROP_PLOTS))
+        # Count the tiles workers are actually assigned to, not a prefix of
+        # CROP_PLOTS: assignment decides who farms what, so it also decides
+        # how much seed this turn needs.
         empty_active = sum(
-            1 for plot in CROP_PLOTS[:active_plots] if _tile_at(tiles, plot) is None
+            1 for j in assignment
+            if j is not None and j.kind in ("CROP", "FERTILIZE")
+            and _tile_at(tiles, j.pos) is None
         )
         want_seed = max(0, empty_active - seeds.get(crop, 0))
         if want_seed > 0:

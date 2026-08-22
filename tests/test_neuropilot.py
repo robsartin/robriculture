@@ -663,3 +663,56 @@ def test_animal_job_action_never_returns_none():
     tiles = _cow_tiles(fed_today=True, cared_today=True)
     got = np._animal_job_action((5, 0), "COW", (5, 0), tiles, {}, {}, ("NW", "NE"))
     assert isinstance(got, list) and got
+
+
+# --- #71: the controller dispatches assigned jobs ---
+
+def test_controller_sends_a_worker_to_a_tile_outside_nw_once_it_is_owned():
+    # The whole point of #71: with 10 workers and only NW owned every worker
+    # stays in NW; owning NE must put at least one of them on an NE tile.
+    hands = [[4, 4]] * 9
+    o = _obs(hands=hands, unlocked=("NW", "NE"))
+    jobs = np.candidate_jobs(o, _knobs())
+    got = np.assign_workers([[4, 4]] + hands, jobs)
+    assert any(j is not None and j.pos[0] >= 5 for j in got)
+
+
+def test_controller_never_sends_two_workers_to_the_same_tile():
+    hands = [[4, 4]] * 9
+    o = _obs(hands=hands, unlocked=("NW", "NE", "SW"))
+    got = [j for j in np.assign_workers([[4, 4]] + hands, np.candidate_jobs(o, _knobs()))
+           if j is not None]
+    assert len({j.pos for j in got}) == len(got)
+
+
+def test_controller_returns_a_legal_shape_with_no_land_and_no_jobs():
+    # Degenerate case: nothing owned -> every worker passes, no crash.
+    o = _obs(hands=[[0, 0]], unlocked=())
+    out = np.controller(_knobs(), o)
+    assert out["farmer"] == ["PASS"]
+    assert out["hands"] == [["PASS"]]
+
+
+def test_controller_emits_one_action_per_worker():
+    hands = [[4, 4]] * 5
+    out = np.controller(_knobs(), _obs(hands=hands))
+    assert len(out["hands"]) == len(hands)
+    assert isinstance(out["farmer"], list) and out["farmer"]
+
+
+def test_controller_respects_the_market_order_cap():
+    # #117's budgeting must survive: a job-driven controller emits more
+    # orders and presses the cap harder.
+    cap = economy.CONFIG_DEFAULTS["maxMarketOrdersPerTurn"]
+    out = np.controller(_knobs(hire_target=1.0), _obs(hands=[[4, 4]] * 9, money=99999))
+    assert len(out["market"]) <= cap
+
+
+def test_controller_buys_seed_for_assigned_tiles_not_every_owned_plot():
+    # Seed accounting follows the assignment, not a prefix of CROP_PLOTS.
+    # Farmer + 3 hands on an empty NW board: 4 workers take 4 empty crop
+    # tiles, so exactly 4 seeds are wanted -- not the 25 tiles NW contains,
+    # and not the 2 the old livestock_labor_share peel would have left.
+    out = np.controller(_knobs(crop_mix=1.0), _obs(hands=[[4, 4]] * 3, money=99999))
+    buys = [o for o in out["market"] if o[0] == "BUY_SEED"]
+    assert buys == [["BUY_SEED", "MELON", 4]]
