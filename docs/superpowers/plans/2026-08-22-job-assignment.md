@@ -713,11 +713,14 @@ def test_controller_respects_the_market_order_cap():
     assert len(out["market"]) <= cap
 
 
-def test_controller_buys_seed_only_for_assigned_empty_crop_tiles():
-    # Seed accounting now follows the assignment, not CROP_PLOTS[:n_crop].
+def test_controller_buys_seed_for_assigned_tiles_not_every_owned_plot():
+    # Seed accounting follows the assignment, not a prefix of CROP_PLOTS.
+    # Farmer + 3 hands on an empty NW board: 4 workers take 4 empty crop
+    # tiles, so exactly 4 seeds are wanted -- not the 25 tiles NW contains,
+    # and not the 2 the old livestock_labor_share peel would have left.
     out = np.controller(_knobs(crop_mix=1.0), _obs(hands=[[4, 4]] * 3, money=99999))
     buys = [o for o in out["market"] if o[0] == "BUY_SEED"]
-    assert all(o[2] <= 4 for o in buys)  # 4 workers -> at most 4 tiles to seed
+    assert buys == [["BUY_SEED", "MELON", 4]]
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
