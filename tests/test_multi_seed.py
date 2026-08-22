@@ -5,6 +5,8 @@ from harness import multi_seed as ms
 
 
 def _row(seed=0, share=0.4, plants_peak=20, land_purchases=(("NE", 12, 5000),)):
+    # share=0.4 is deliberately above PROMOTION_BAR (0.3760) so tests that
+    # don't mention share still isolate the land/plants clause they name.
     return {"seed": seed, "share": share, "plants_peak": plants_peak,
             "land_purchases": list(land_purchases), "animals_peak": 0,
             "hands_peak": 9, "reward": 25000.0}
@@ -26,6 +28,15 @@ def test_seed_verdict_false_when_planted_tiles_stay_under_the_bar():
 
 def test_seed_verdict_true_exactly_at_the_bar():
     assert ms.seed_verdict(_row(plants_peak=ms.MIN_PLANTS_PEAK)) is True
+
+
+def test_seed_verdict_false_when_share_stays_below_promotion_bar():
+    # This is the exact case the branch's own smoke run produced: land
+    # bought, plants_peak well past MIN_PLANTS_PEAK (21 and 62 tiles), but
+    # share (0.1850 and 0.3134) below PROMOTION_BAR (0.3760). The old
+    # two-clause verdict would have called both of those seeds a success;
+    # planting broadly is not the same as scoring well.
+    assert ms.seed_verdict(_row(share=0.10)) is False
 
 
 def test_summarize_seeds_reports_the_success_rate():

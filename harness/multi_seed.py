@@ -32,16 +32,31 @@ from harness.production_report import report_game, resolve_agent
 #: clearing it shows the agent is working ground it genuinely could not before.
 MIN_PLANTS_PEAK = 15
 
+#: The share a fresh genome must beat to count as a real improvement. This is
+#: what the agent shipped BEFORE this branch (measured on `main`, --games 4) --
+#: deliberately not the 0.3390 the same shipped weights score under the new
+#: controller. Beating 0.3390 would only recover ground this branch itself gave
+#: up by reinterpreting two knobs; beating 0.3760 is a genuine gain.
+PROMOTION_BAR = 0.3760
+
 
 def seed_verdict(row) -> bool:
-    """Did this seed's genome both buy land and farm it?
+    """Did this seed's genome buy land, farm it, AND score better than before?
 
-    Both halves are required. Buying land without farming it is #113's
-    result restated; planting 15 tiles without buying land is impossible
-    (NW holds 25 tiles but the hire ceiling caps workers at 10), so the
-    conjunction is what makes the claim non-trivial.
+    All three are required. Buying land without farming it is #113's result
+    restated; planting 15 tiles without buying land is impossible (NW holds
+    25 tiles but the hire ceiling caps workers at 10). But this branch's own
+    smoke test showed the land+plants pair alone is no longer demanding:
+    once workers stop camping on idle tiles, even a random one-generation
+    genome clears both (seeds reaching 21 and 62 planted tiles, both buying
+    land). The `share` clause is what keeps the verdict meaningful -- it
+    catches a genome that plants broadly but still scores below what shipped
+    before this branch (those same two seeds scored 0.1850 and 0.3134,
+    both under `PROMOTION_BAR`).
     """
-    return bool(row["land_purchases"]) and row["plants_peak"] >= MIN_PLANTS_PEAK
+    return (bool(row["land_purchases"])
+            and row["plants_peak"] >= MIN_PLANTS_PEAK
+            and row["share"] > PROMOTION_BAR)
 
 
 def summarize_seeds(rows) -> dict:
@@ -147,7 +162,8 @@ def main(argv=None):  # pragma: no cover
     print(f"seeds that bought land {summary['land_buying_seeds']}")
     print(f"best planted tiles    {summary['plants_peak_max']} (bar: {MIN_PLANTS_PEAK})")
     print(f"share  mean {summary['share_mean']:.4f}  "
-          f"min {summary['share_min']:.4f}  max {summary['share_max']:.4f}")
+          f"min {summary['share_min']:.4f}  max {summary['share_max']:.4f} "
+          f"(bar: {PROMOTION_BAR})")
 
     if args.out:
         with open(args.out, "w") as fh:
