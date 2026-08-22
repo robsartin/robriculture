@@ -188,6 +188,27 @@ def test_hire_target_scales_the_hire_count():
     assert sum(o[0] == "HIRE" for o in high["market"]) >= sum(o[0] == "HIRE" for o in low["market"])
 
 
+def test_sell_and_seed_survive_when_a_full_hire_target_would_overflow_the_cap():
+    """#117's adversarial case: a full hire target (9, at MAX_HANDS) plus a
+    pending sell plus a needed seed buy is 11 candidate orders against a cap
+    of 10 (`economy.CONFIG_DEFAULTS["maxMarketOrdersPerTurn"]`). CLAUDE.md
+    requires sells never be the ones truncated; seed buys must also survive
+    or planting stalls. Hires are the low-priority one that must absorb the
+    overflow instead.
+    """
+    cap = economy.CONFIG_DEFAULTS["maxMarketOrdersPerTurn"]
+    k = np.decode_knobs([0.0, 1.0] + [0.5]*6)  # sell freely; max hire_target
+    a = np.controller(k, _obs(hour=0, money=3000, shed={"MELON": 10}))
+    market = a["market"]
+    kinds = [o[0] for o in market]
+    assert len(market) <= cap
+    assert kinds.count("SELL") == 1
+    assert kinds.count("BUY_SEED") == 1
+    n_hire = kinds.count("HIRE")
+    assert n_hire == cap - kinds.count("SELL") - kinds.count("BUY_SEED")
+    assert n_hire < np.MAX_HANDS
+
+
 def test_act_runs_and_returns_legal_shape():
     a = np.NeuroPilotStrategy().act(_obs(hour=0))
     assert set(a) == {"farmer", "hands", "market"} and len(a["market"]) <= 10
