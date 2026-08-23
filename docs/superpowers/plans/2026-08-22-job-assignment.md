@@ -1252,10 +1252,12 @@ git commit -m "feat(harness): multi-seed experiment evaluation (#71)"
 - [ ] **Step 1: Launch the multi-seed run**
 
 ```bash
-nohup .venv/bin/python -m harness.multi_seed --seeds 10 --workers 10 --out harness/genomes/71-multi-seed.json > /tmp/71-multi-seed.log 2>&1 &
+nohup .venv/bin/python -m harness.multi_seed --seeds 10 --workers 10 --generations 25 --out harness/genomes/71-multi-seed.json > /tmp/71-multi-seed.log 2>&1 &
 ```
 
-Expected wall time ~3-3.5 hours (10 default runs, 10 lanes). Poll with `tail -f /tmp/71-multi-seed.log`.
+Expected wall time ~8 hours (10 runs of 25 generations, 10 lanes). Poll with `tail -f /tmp/71-multi-seed.log`.
+
+**Why 25 generations and not the plan's original 10.** Task 7's smoke run showed the new mechanism plants 21-62 tiles with *random* genomes at one generation — the ceiling is broken — but those same genomes scored only 0.1850 and 0.3134 against a 0.3760 bar. Planting broadly is not the same as scoring well, and converting one into the other is exactly what evolution has to do here. This design's own record puts reaching current strength from a random start at roughly 35 generations, so a 10-generation run risks a negative caused by run length rather than by the mechanism — the precise ambiguity this plan exists to avoid. Rob's call, 2026-08-23.
 
 **If you are a subagent:** run this **blocking** — `nohup ... & wait $!` — not backgrounded. A backgrounded job is lost at a subagent's turn boundary with no notification.
 
