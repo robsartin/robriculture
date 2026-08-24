@@ -163,15 +163,6 @@ def decode_knobs(raw: list[float]) -> Knobs:
 # module's own tiny helpers. Constants that mirror another strategy's layout
 # (e.g. the NW crop-plot crew) are re-declared here BY VALUE, not imported.
 
-#: The champion's 10-tile NW crew (all x,y <= 4, always-unlocked land), nearest
-#: tiles first. Re-declared by value from `wide_hands.PLOTS` / `meta_bot.MELON_PLOTS`
-#: per ADR-0008 — neuropilot must not import another strategy module.
-CROP_PLOTS = [
-    (4, 4),                  # worker 0 (farmer, shed-adjacent)
-    (3, 4), (4, 3),
-    (2, 4), (3, 3), (4, 2),
-    (1, 4), (2, 3), (3, 2), (4, 1),
-]
 
 #: A crop must reach first yield with at least this many days to spare before
 #: the final day, or planting it just strands the tile (and its seed cost).
@@ -319,6 +310,63 @@ assert sum(1 for _, k in ANIMAL_TILES if k == "SHEEP") == N_SHEEP
 #: only corner every worker can reach a PICKUP/DROP from.
 SHED_TILE = (4, 4)
 
+#: Board quadrant bounds (inclusive), mirroring the sim's own
+#: `_quadrant_of(x, y, board_size)` (board_size=10, half=5): N/S splits on
+#: y < half, W/E splits on x < half. SE is included for completeness even
+#: though `_land_order` never buys it -- no ANIMAL_TILES tile lives there.
+_QUADRANT_BOUNDS = {
+    "NW": (0, 4, 0, 4), "NE": (5, 9, 0, 4), "SW": (0, 4, 5, 9), "SE": (5, 9, 5, 9),
+}
+
+#: Positions occupied by the herd -- never crop-workable.
+_ANIMAL_POSITIONS = frozenset(pos for pos, _ in ANIMAL_TILES)
+
+
+def _manhattan(a, b) -> int:
+    """L1 distance between two board positions (turns to walk, obstacle-free)."""
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _quadrant_tiles(quadrant: str) -> list:
+    """Every tile in `quadrant` that isn't an animal structure's tile."""
+    x0, x1, y0, y1 = _QUADRANT_BOUNDS[quadrant]
+    return [
+        (x, y) for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)
+        if (x, y) not in _ANIMAL_POSITIONS
+    ]
+
+
+#: Every quadrant's crop-eligible tiles, precomputed once at import -- pure
+#: coordinates, no dependency on game state, so `crop_plots` only filters by
+#: ownership and sorts each turn instead of rebuilding tile lists.
+_ALL_QUADRANT_TILES = {q: _quadrant_tiles(q) for q in _QUADRANT_BOUNDS}
+
+
+def crop_plots(unlocked) -> list:
+    """Every crop-workable tile in the owned (`unlocked`) quadrants, nearest
+    `SHED_TILE` first (#113 code, restored by #71 -- replaces the old
+    hard-coded 10-tile NW-only `CROP_PLOTS`).
+
+    Ordered by walking distance to the shed, ties broken by (x, y) for a
+    deterministic layout. Distance, not quadrant, drives the order: a close
+    NE/SW tile can sort ahead of a far NW one, so buying land can hand a
+    worker a *shorter* walk than some NW tile it already had. `SHED_TILE` is
+    always first (distance 0, and NW is always owned). Animal tiles are never
+    included, so a crop plot can never collide with the herd; only tiles in
+    `unlocked` quadrants appear, so a plot can never land on unbought land.
+    Both properties are structural, not checked at use-time.
+    """
+    tiles = [t for q in unlocked for t in _ALL_QUADRANT_TILES.get(q, ())]
+    tiles.sort(key=lambda t: (_manhattan(SHED_TILE, t), t[0], t[1]))
+    return tiles
+
+
+#: NW-only crop-plot ordering, nearest-first -- kept as a plain constant for
+#: callers and tests that just need "the plot at index i with only the
+#: starting quadrant owned". The controller calls `crop_plots(unlocked)`
+#: fresh each turn, since ownership changes mid-game.
+CROP_PLOTS = crop_plots(("NW",))
+
 #: A knob-scaled money floor for livestock spend, sized against the season's
 #: starting capital (mirrors `meta_bot.MELON_RESERVE`'s role, but dialed by
 #: `capital_reserve` instead of fixed).
@@ -371,46 +419,28 @@ def _animal_chore(tile_pos, kind: str, pos, tiles, inv: dict, shed: dict, unlock
     return None
 
 
-def _assign_beats(n_livestock: int) -> list:
-    """Split `ANIMAL_TILES` into `n_livestock` contiguous beats, as even as
-    possible — `[]` when no worker is on livestock duty this turn."""
-    if n_livestock <= 0:
-        return []
-    n = len(ANIMAL_TILES)
-    base, rem = divmod(n, n_livestock)
-    beats, idx = [], 0
-    for i in range(n_livestock):
-        size = base + (1 if i < rem else 0)
-        beats.append(ANIMAL_TILES[idx: idx + size])
-        idx += size
-    return beats
+def _animal_job_action(tile_pos, kind: str, pos, tiles, inv: dict,
+                       shed: dict, unlocked) -> list:
+    """The action for the worker assigned to ONE animal tile (never `None`).
 
+    Replaces `_livestock_worker_action` + `_assign_beats` (#71): assignment
+    hands out one tile at a time, so there is no beat to walk.
 
-def _livestock_worker_action(pos, beat: list, tiles, inv: dict, shed: dict, unlocked) -> list:
-    """One livestock worker's action this turn (never `None`).
-
-    Feed leads (survival-critical): fetch WHEAT from the shed for a hungry
-    animal in the beat before anything else, then fall through to the first
-    tile with an outstanding chore (`_animal_chore`); idle toward the beat
-    when nothing else applies.
+    Feed still leads -- an animal escapes after two unfed days -- so a hungry
+    animal whose worker holds no WHEAT sends that worker to the shed first.
+    Everything else falls through to `_animal_chore`, which covers setup
+    (build the pasture, fetch the bought animal, place it) as well as
+    tending; that path is the *only* route to standing a herd up now that the
+    `livestock_labor_share` worker-peel is gone.
     """
-    hungry = [tp for tp, _ in beat if _is_animal(_tile_at(tiles, tp))
-              and not _tile_at(tiles, tp).get("fed_today", False)]
-    if hungry:
-        if inv.get("WHEAT", 0) > 0:
-            tp = hungry[0]
-            return acts.feed() if _on(pos, tp) else _step_toward(pos, tp)
-        if shed.get("WHEAT", 0) > 0:
-            if _on(pos, SHED_TILE):
-                return acts.pickup("WHEAT", min(shed["WHEAT"], len(hungry)))
-            return _step_toward(pos, SHED_TILE)
-    for tile_pos, kind in beat:
-        chore = _animal_chore(tile_pos, kind, pos, tiles, inv, shed, unlocked)
-        if chore is not None:
-            return chore
-    if beat:
-        return _step_toward(pos, beat[0][0])
-    return acts.pass_()
+    tile = _tile_at(tiles, tile_pos)
+    hungry = _is_animal(tile) and not tile.get("fed_today", False)
+    if hungry and inv.get("WHEAT", 0) <= 0 and shed.get("WHEAT", 0) > 0:
+        return acts.pickup("WHEAT", 1) if _on(pos, SHED_TILE) else _step_toward(pos, SHED_TILE)
+    chore = _animal_chore(tile_pos, kind, pos, tiles, inv, shed, unlocked)
+    if chore is not None:
+        return chore
+    return acts.pass_() if _on(pos, tile_pos) else _step_toward(pos, tile_pos)
 
 
 #: Flat-dollar reserve added to price, deliberately *not* scaled by price
@@ -572,6 +602,150 @@ def _is_fertilize_day(fertilize_pref: float, day: int) -> bool:
     return day % _fertilize_duty_period(fertilize_pref) == 0
 
 
+# --- #71: jobs replace the worker-index -> plot mapping ---------------------
+#
+# The old controller sent worker `i` to `CROP_PLOTS[i]`. There was no notion
+# of travel cost, of which job was worth most this turn, or of who was
+# nearest to what -- so a worker could walk past a harvest-ready melon to
+# reach "its" bare tile, and a newly-bought quadrant's tiles were reachable
+# only by workers whose index happened to land on them. Every agent we own
+# peaks at 10-11 planted tiles regardless of land owned; `pilkwang` reaches
+# 51. Enumerate the work, then assign it.
+
+#: What one turn of a crop tile is nominally worth. Every other value is
+#: expressed relative to this, so it is the unit rather than a tunable.
+CROP_JOB_VALUE = 1.0
+
+#: Animal-job value at `livestock_labor_share` = 1.0. At the midpoint 0.5 an
+#: animal job is worth exactly one crop job, so the knob's old "what fraction
+#: of effort goes to the herd" meaning survives the reinterpretation.
+ANIMAL_JOB_SCALE = 2.0
+
+#: Value lost per tile of walking. At 0.05 the longest walk on a 10x10 board
+#: (18 tiles) costs 0.9 -- just under one crop job, so distance decides
+#: between comparable jobs but never outranks a genuinely better one.
+#: A constant, not a knob: a ninth knob would be a versioned genome interface
+#: bump, restarting evolution from random to tune one scalar.
+TRAVEL_COST = 0.05
+
+#: Job kinds that mean "work the animal on this tile". The species doubles as
+#: the job kind because `_animal_chore` already takes it as its `kind` arg.
+_ANIMAL_KINDS = frozenset(("COW", "SHEEP"))
+
+#: One piece of work: where it is, what kind, and what it is worth this turn.
+Job = collections.namedtuple("Job", ["pos", "kind", "value"])
+
+
+def _crop_tile_has_work(tile, day, crop) -> bool:
+    """True when a worker standing on this crop tile would actually do
+    something -- dig a weed, plant an empty tile while a crop can still
+    mature, or water/harvest a live plant. `_plot_action` is already
+    position-independent, so this asks the question directly."""
+    return _plot_action(tile, day, crop)[0] != "PASS"
+
+
+def _animal_tile_has_work(tile_pos, kind: str, tiles, shed: dict, unlocked) -> bool:
+    """True when this animal tile still wants something done to it.
+
+    Asked with an EMPTY inventory on purpose: the question is "does this tile
+    want work", not "can this particular worker do it". The hunger clause is
+    required because `_animal_chore`'s feed branch is gated on the worker
+    already holding WHEAT, so a hungry animal would otherwise read as no work
+    whenever nobody happens to be carrying any.
+    """
+    tile = _tile_at(tiles, tile_pos)
+    if (_is_animal(tile) and not tile.get("fed_today", False)
+            and shed.get("WHEAT", 0) > 0):
+        return True
+    return _animal_chore(tile_pos, kind, tile_pos, tiles, {}, shed, unlocked) is not None
+
+
+def candidate_jobs(state, knobs: Knobs) -> list:
+    """Every piece of work the farm owns this turn, best-valued first.
+
+    Pure and deterministic. Positions are unique across the returned list --
+    animal tiles are excluded from `crop_plots` at construction, and the
+    fertilize job *replaces* the shed tile's crop job rather than sitting
+    beside it -- so `assign_workers` can never route two workers to one tile.
+
+    Only tiles with actual work are enumerated (#71 review finding 1): every
+    crop job carries the same `CROP_JOB_VALUE`, so `_job_score` reduces to
+    `value - TRAVEL_COST * distance` and a worker standing on ANY crop tile
+    always outscores every other tile -- greedy would hand each worker the
+    tile under its feet forever, which is the exact camping #71 exists to
+    break. Filtering by "does this tile want work" (not touching values) lets
+    a worker whose tile has gone idle become available for real work
+    elsewhere, while a null result still means "assignment didn't help"
+    rather than "our pricing was wrong".
+
+    Values are deliberately crude: this experiment tests whether *assignment*
+    unlocks the land, not whether we can price work correctly. Ranking jobs by
+    what they are actually worth is #119.
+    """
+    player = state.get("player", 0)
+    me = state["farms"][player]
+    day = state.get("day", 0)
+    unlocked = me.get("unlocked_quadrants", ["NW"])
+    tiles = me["tiles"]
+    shed = state.get("private", {}).get("shed", {})
+    crop = _crop_for(knobs, day)
+
+    fertilize_day = _is_fertilize_day(knobs.fertilize_pref, day)
+    jobs = []
+    for pos in crop_plots(unlocked):
+        tile = _tile_at(tiles, pos)
+        if pos == SHED_TILE and fertilize_day and _fertilize_or_fetch(tile, day, {}, shed) is not None:
+            # Only the shed-adjacent tile can PICKUP + FERTILIZE without
+            # leaving, so it is the only tile this job can ever be at. The
+            # shed tile yields at most one job -- FERTILIZE here, or the
+            # ordinary CROP rule below -- never both.
+            jobs.append(Job(pos, "FERTILIZE", CROP_JOB_VALUE + knobs.fertilize_pref))
+        elif _crop_tile_has_work(tile, day, crop):
+            jobs.append(Job(pos, "CROP", CROP_JOB_VALUE))
+    for pos, kind in ANIMAL_TILES:
+        if _needs_quadrant(kind) in unlocked and _animal_tile_has_work(pos, kind, tiles, shed, unlocked):
+            jobs.append(Job(pos, kind, ANIMAL_JOB_SCALE * knobs.livestock_labor_share))
+    # Ties break positionally so the order never depends on how the lists
+    # above happened to be built (ADR-0005).
+    jobs.sort(key=lambda j: (-j.value, j.pos))
+    return jobs
+
+
+def _job_score(pos, job: Job) -> float:
+    """What `job` is worth to the worker standing at `pos`: its value less
+    the walk needed to reach it."""
+    return job.value - TRAVEL_COST * _manhattan(pos, job.pos)
+
+
+def assign_workers(positions, jobs) -> list:
+    """Give each worker its best remaining job; `None` when none is left.
+
+    Greedy: workers are served in index order, each takes the unclaimed job
+    maximising `_job_score`, and a claimed job is never reassigned. Returns
+    one entry per worker, in worker order, so the caller can zip it against
+    `positions`.
+
+    Deterministic (ADR-0005): `jobs` arrives in a fixed order from
+    `candidate_jobs` and `max` keeps the first of any tie, so the same state
+    always produces the same assignment.
+
+    Greedy rather than optimal (Hungarian) matching is deliberate: it is
+    O(workers x jobs) on single-digit worker counts, stdlib-only, and easy to
+    reason about. Optimal matching is not obviously worth the complexity
+    before we know assignment helps at all.
+    """
+    remaining = list(jobs)
+    assigned = []
+    for pos in positions:
+        if not remaining:
+            assigned.append(None)
+            continue
+        best = max(remaining, key=lambda j: _job_score(pos, j))
+        remaining.remove(best)
+        assigned.append(best)
+    return assigned
+
+
 def _fertilizer_buy_order(knobs: Knobs, state, cap: int) -> list:
     """A single fallback `BUY_PRODUCT FERTILIZER` for the farmer's crop plot,
     or `[]`.
@@ -638,17 +812,17 @@ def _livestock_market_orders(knobs: Knobs, state, market_len: int) -> list:
 def controller(knobs: Knobs, state) -> dict:
     """A legal `{"farmer", "hands", "market"}` turn from decoded knobs + state.
 
-    Worker roles: the last `round(livestock_labor_share * len(workers))`
-    workers (farmer counted first, so it's the last hands that peel off) tend
-    the herd in `ANIMAL_TILES` beats; the rest farm `CROP_PLOTS`, navigating to
-    their plot and running the dig/plant/water/fertilize/harvest loop there.
-    Market: budgeted by priority against `maxMarketOrdersPerTurn` (#117) —
-    sells lead and are never truncated, then the seed the crop crew needs
-    this turn (skip it and planting stalls), then hires up to `hire_target *
-    MAX_HANDS` new hands (mornings only, capped to whatever's left after
-    sells + seed — reaching the hire target is a multi-turn affair, not a
-    same-turn requirement), then livestock/fertilizer market orders (lowest
-    priority) fill whatever slots remain.
+    Worker roles: `candidate_jobs` enumerates every piece of work the farm
+    owns this turn and `assign_workers` gives each worker its best unclaimed
+    one, discounted by the walk to reach it (#71). This replaced a fixed
+    `worker i -> CROP_PLOTS[i]` mapping that could not route anyone onto
+    newly-bought land, and a `livestock_labor_share` peel that split workers
+    into crop and herd crews before either had been costed.
+    Market: budgeted by priority against `maxMarketOrdersPerTurn` (#117) --
+    sells lead and are never truncated, then the seed the assigned crop
+    workers need this turn (skip it and planting stalls), then hires up to
+    `hire_target * MAX_HANDS` new hands (mornings only, capped to whatever's
+    left after sells + seed), then livestock/fertilizer orders fill the rest.
     """
     player = state.get("player", 0)
     me = state["farms"][player]
@@ -666,45 +840,44 @@ def controller(knobs: Knobs, state) -> dict:
 
     crop = _crop_for(knobs, day)
 
-    # --- Worker roles: the last `livestock_labor_share` fraction of workers
-    # (farmer first, then hands) tend the herd; the rest farm crops. ---
+    # --- Jobs: enumerate the work, then assign it (#71). ---
     positions = [me["farmer"], *hands]
-    n_workers = len(positions)
-    n_livestock = min(n_workers, max(0, round(knobs.livestock_labor_share * n_workers)))
-    n_crop = n_workers - n_livestock
-    beats = _assign_beats(n_livestock)
+    assignment = assign_workers(positions, candidate_jobs(state, knobs))
 
-    # --- One action per worker: navigate to its plot/beat, then work it. ---
     planted_this_turn: dict = {}
     actions = []
-    for i, pos in enumerate(positions):
+    for i, (pos, job) in enumerate(zip(positions, assignment, strict=True)):
         inv = inventories[i] if i < len(inventories) else {}
-        if i < n_crop:
-            plot = CROP_PLOTS[i] if i < len(CROP_PLOTS) else CROP_PLOTS[-1]
-            if not _on(pos, plot):
-                actions.append(_step_toward(pos, plot))
-                continue
-            tile = _tile_at(tiles, plot)
-            action = None
-            if i == 0 and _is_fertilize_day(knobs.fertilize_pref, day):
-                # Only the shed-adjacent farmer plot (CROP_PLOTS[0]) can
-                # PICKUP + FERTILIZE without leaving its tile. Duty-cycle
-                # gated (#97), not a hard >= 0.5 switch.
-                action = _fertilize_or_fetch(tile, day, inv, shed)
-            if action is None:
-                action = _plot_action(tile, day, crop)
-            if action[0] == "PLANT":
-                # Only plant as many of `crop` this turn as we hold seed for, or the
-                # sim's atomic-plant rule voids every plant of the crop at once.
-                planted_crop = action[1]
-                if planted_this_turn.get(planted_crop, 0) < seeds.get(planted_crop, 0):
-                    planted_this_turn[planted_crop] = planted_this_turn.get(planted_crop, 0) + 1
-                else:
-                    action = ["WATER"] if _is_live_plant(tile) else ["PASS"]
-            actions.append(action)
-        else:
-            beat = beats[i - n_crop] if (i - n_crop) < len(beats) else []
-            actions.append(_livestock_worker_action(pos, beat, tiles, inv, shed, unlocked))
+        if job is None:
+            # More workers than jobs: passing is legal and safe (ADR-0006).
+            actions.append(acts.pass_())
+            continue
+        if job.kind in _ANIMAL_KINDS:
+            actions.append(_animal_job_action(job.pos, job.kind, pos, tiles,
+                                              inv, shed, unlocked))
+            continue
+        # CROP and FERTILIZE both work a crop tile; walk there first.
+        if not _on(pos, job.pos):
+            actions.append(_step_toward(pos, job.pos))
+            continue
+        tile = _tile_at(tiles, job.pos)
+        action = None
+        if job.kind == "FERTILIZE":
+            # `_fertilize_or_fetch` returns None when there is nothing to
+            # fertilize or fetch, in which case the tile is farmed normally --
+            # the same fall-through the old duty-cycle gate had.
+            action = _fertilize_or_fetch(tile, day, inv, shed)
+        if action is None:
+            action = _plot_action(tile, day, crop)
+        if action[0] == "PLANT":
+            # Only plant as many of `crop` this turn as we hold seed for, or
+            # the sim's atomic-plant rule voids every plant of the crop at once.
+            planted_crop = action[1]
+            if planted_this_turn.get(planted_crop, 0) < seeds.get(planted_crop, 0):
+                planted_this_turn[planted_crop] = planted_this_turn.get(planted_crop, 0) + 1
+            else:
+                action = ["WATER"] if _is_live_plant(tile) else ["PASS"]
+        actions.append(action)
 
     farmer_action = actions[0]
     hand_actions = actions[1:]
@@ -723,9 +896,13 @@ def controller(knobs: Knobs, state) -> dict:
 
     seed_order = None
     if crop is not None and len(market) < cap:
-        active_plots = min(n_crop, len(CROP_PLOTS))
+        # Count the tiles workers are actually assigned to, not a prefix of
+        # CROP_PLOTS: assignment decides who farms what, so it also decides
+        # how much seed this turn needs.
         empty_active = sum(
-            1 for plot in CROP_PLOTS[:active_plots] if _tile_at(tiles, plot) is None
+            1 for j in assignment
+            if j is not None and j.kind in ("CROP", "FERTILIZE")
+            and _tile_at(tiles, j.pos) is None
         )
         want_seed = max(0, empty_active - seeds.get(crop, 0))
         if want_seed > 0:
