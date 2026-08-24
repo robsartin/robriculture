@@ -501,6 +501,8 @@
       "source": "strategies/champion_genome.json (issue #111 promotion, 2026-08-21)",
       "share": 0.376,
       "win_rate": 0.0
-    }
+    },
+    "share_under_120": 0.5242,
+    "share_under_120_note": "Re-measured after #120 fixed the fertilizer dead-end (enumeration used an empty inventory, the buy guard checked only inventories[0], and _sell_orders liquidated the shed supply). Win-rate unchanged at 0.8. These weights were evolved while fertilizer was unusable, so they barely exercise the knob; a fresh run can."
   }
 }

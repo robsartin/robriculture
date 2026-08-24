@@ -168,8 +168,17 @@ def decode_knobs(raw: list[float]) -> Knobs:
 #: the final day, or planting it just strands the tile (and its seed cost).
 SELL_MARGIN_DAYS = 1
 
-#: Everything the market will actually buy from us.
-_SELLABLE = frozenset(economy.MARKET_PARAMS)
+#: FERTILIZER is an INPUT, not a product: applying it grows crops, selling it
+#: back is a round trip at a loss (#120). Instrumented over 719 turns the
+#: champion bought 25 units, sold 25, and applied 1 -- the shed supply was
+#: liquidated before any worker could reach it. Holding it also closes the
+#: re-buy loop, because `_fertilizer_on_hand` then stays true and
+#: `_fertilizer_buy_order` stops firing. ADR-0008's Phase-2 notes recorded
+#: this as a TODO ("it dumps just-collected units") and it was never done.
+_UNSELLABLE = frozenset({"FERTILIZER"})
+
+#: Everything the market will actually buy from us, less what we want to keep.
+_SELLABLE = frozenset(economy.MARKET_PARAMS) - _UNSELLABLE
 
 #: The two crops the crop crew grows: melon (high value, slow) or wheat (cheap,
 #: fast), chosen per-turn by `_crop_for` from the `crop_mix` knob.
@@ -579,6 +588,23 @@ def _fertilize_or_fetch(tile, day: int, inv: dict, shed: dict):
     return None
 
 
+def _fertilizer_on_hand(inventories, shed: dict) -> bool:
+    """True when a fertilizer unit exists anywhere we can still act on it --
+    in the shed, or already in some worker's hands (#120).
+
+    Enumeration used to ask `_fertilize_or_fetch` with a hardcoded EMPTY
+    inventory, which made the fertilize job conditional on the SHED alone. So
+    the moment a worker picked a unit up the shed emptied, the job stopped
+    being enumerated, and that worker was reassigned still carrying it --
+    permanently. Measured over 719 turns the champion bought FERTILIZER 21
+    times, sold it 22, and applied it 0. Asking "does a unit exist anywhere"
+    is the question both call sites actually need.
+    """
+    if shed.get("FERTILIZER", 0) > 0:
+        return True
+    return any(inv.get("FERTILIZER", 0) > 0 for inv in (inventories or ()))
+
+
 def _fertilize_duty_period(fertilize_pref: float) -> int:
     """Turn the old `fertilize_pref >= 0.5` on/off gate into a continuous
     duty-cycle period, in days (#97).
@@ -687,14 +713,17 @@ def candidate_jobs(state, knobs: Knobs) -> list:
     day = state.get("day", 0)
     unlocked = me.get("unlocked_quadrants", ["NW"])
     tiles = me["tiles"]
-    shed = state.get("private", {}).get("shed", {})
+    private = state.get("private", {})
+    shed = private.get("shed", {})
+    inventories = private.get("inventories", [])
     crop = _crop_for(knobs, day)
 
     fertilize_day = _is_fertilize_day(knobs.fertilize_pref, day)
     jobs = []
     for pos in crop_plots(unlocked):
         tile = _tile_at(tiles, pos)
-        if pos == SHED_TILE and fertilize_day and _fertilize_or_fetch(tile, day, {}, shed) is not None:
+        if (pos == SHED_TILE and fertilize_day and _wants_fertilizer(tile, day)
+                and _fertilizer_on_hand(inventories, shed)):
             # Only the shed-adjacent tile can PICKUP + FERTILIZE without
             # leaving, so it is the only tile this job can ever be at. The
             # shed tile yields at most one job -- FERTILIZE here, or the
@@ -766,11 +795,13 @@ def _fertilizer_buy_order(knobs: Knobs, state, cap: int) -> list:
     tiles = me["tiles"]
     shed = private.get("shed", {})
     inventories = private.get("inventories", [])
-    farmer_inv = inventories[0] if inventories else {}
     tile = _tile_at(tiles, CROP_PLOTS[0])
     if not _wants_fertilizer(tile, day):
         return []
-    if shed.get("FERTILIZER", 0) > 0 or farmer_inv.get("FERTILIZER", 0) > 0:
+    # #120: any worker's held unit suppresses re-buying, not just the
+    # farmer's. Checking inventories[0] alone meant a unit stranded in a
+    # hand's inventory never stopped the next purchase.
+    if _fertilizer_on_hand(inventories, shed):
         return []
     price = economy.base_price("FERTILIZER") or 1.0
     if me.get("money", 0) < price:

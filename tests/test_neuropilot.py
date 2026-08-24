@@ -6,7 +6,7 @@ from strategies import neuropilot as np
 
 
 def _obs(day=0, hour=0, money=3000, hands=None, tiles=None, shed=None,
-         unlocked=("NW",), prices=None, opp_money=3000):
+         unlocked=("NW",), prices=None, opp_money=3000, inventories=None):
     board = tiles or [[None]*10 for _ in range(10)]
     hands = hands or []
     return {
@@ -18,7 +18,7 @@ def _obs(day=0, hour=0, money=3000, hands=None, tiles=None, shed=None,
         ],
         "market": {"inventory": {}, "prices": prices or {}},
         "town": {"unlocked_shops": []},
-        "private": {"shed": shed or {}, "seeds": {}, "inventories": [{} for _ in range(1 + len(hands))]},
+        "private": {"shed": shed or {}, "seeds": {}, "inventories": inventories or [{} for _ in range(1 + len(hands))]},
     }
 
 
@@ -808,3 +808,73 @@ def test_controller_buys_seed_for_assigned_tiles_not_every_owned_plot():
     out = np.controller(_knobs(crop_mix=1.0), _obs(hands=[[4, 4]] * 3, money=99999))
     buys = [o for o in out["market"] if o[0] == "BUY_SEED"]
     assert buys == [["BUY_SEED", "MELON", 4]]
+
+
+# --- #120: fertilizer must survive the pickup-then-apply hand-off ---
+
+def _planted_shed_tile():
+    """A board whose shed-adjacent tile holds a live, unfertilized plant --
+    the only tile that can PICKUP and FERTILIZE without leaving."""
+    board = [[None] * 10 for _ in range(10)]
+    x, y = np.SHED_TILE
+    board[y][x] = {"kind": "PLANT", "crop": "MELON", "planted_day": 1,
+                   "watered_today": True}
+    return board
+
+
+def test_candidate_jobs_keeps_the_fertilize_job_when_a_worker_holds_the_unit():
+    # #120: enumeration asked _fertilize_or_fetch with a hardcoded EMPTY
+    # inventory, so the job existed only while the SHED held a unit. The
+    # moment a worker picked one up the shed emptied, the job vanished, and
+    # the unit was carried for the rest of the game. A held unit is precisely
+    # when the job matters most.
+    o = _obs(day=0, tiles=_planted_shed_tile(), shed={},
+             inventories=[{"FERTILIZER": 1}])
+    jobs = np.candidate_jobs(o, _knobs(fertilize_pref=1.0))
+    assert [j for j in jobs if j.kind == "FERTILIZE"]
+
+
+def test_controller_applies_fertilizer_a_worker_is_already_carrying():
+    # The payoff path. acts.fertilize() was unreachable in a real game:
+    # instrumented over 719 turns the champion bought FERTILIZER 21 times,
+    # sold it 22, and applied it 0. This pins the line that was never hit.
+    o = _obs(day=0, tiles=_planted_shed_tile(), shed={},
+             inventories=[{"FERTILIZER": 1}])
+    assert np.controller(_knobs(fertilize_pref=1.0), o)["farmer"] == ["FERTILIZE"]
+
+
+def test_candidate_jobs_omits_the_fertilize_job_when_no_unit_exists_anywhere():
+    # The counter-case: with nothing in the shed and nothing in hand there is
+    # no fertilizing to be done, so the shed tile falls back to a crop job.
+    o = _obs(day=0, tiles=_planted_shed_tile(), shed={})
+    jobs = np.candidate_jobs(o, _knobs(fertilize_pref=1.0))
+    assert not [j for j in jobs if j.kind == "FERTILIZE"]
+
+
+def test_fertilizer_buy_order_is_suppressed_when_any_hand_holds_a_unit():
+    # #120: the guard inspected only inventories[0], so a unit stranded in a
+    # HAND's inventory never suppressed re-buying -- the 21 purchases above.
+    o = _obs(day=0, tiles=_planted_shed_tile(), hands=[[4, 4]], shed={},
+             inventories=[{}, {"FERTILIZER": 1}])
+    assert np._fertilizer_buy_order(_knobs(fertilize_pref=1.0), o, 5) == []
+
+
+def test_fertilizer_buy_order_still_buys_when_nobody_holds_a_unit():
+    # Non-vacuity guard for the test above: the suppression must be caused by
+    # the held unit, not by some unrelated gate closing the buy path.
+    o = _obs(day=0, tiles=_planted_shed_tile(), hands=[[4, 4]], shed={},
+             money=99999)
+    assert np._fertilizer_buy_order(_knobs(fertilize_pref=1.0), o, 5) == [
+        ["BUY_PRODUCT", "FERTILIZER", 1]]
+
+
+def test_sell_orders_never_liquidates_fertilizer():
+    # #120: FERTILIZER is an INPUT, not a product. Selling the shed's supply
+    # meant buying a unit and dumping it before any worker could apply it --
+    # instrumented over 719 turns: 25 buys, 25 sells, 1 application. Holding
+    # it instead also stops the re-buy loop, since _fertilizer_on_hand then
+    # stays true. (ADR-0008 Phase-2 recorded this as a TODO and it was never
+    # done.) Other shed items must still sell normally.
+    orders = np._sell_orders({"FERTILIZER": 3, "MELON": 5}, {}, 0.5)
+    assert not [o for o in orders if o[1] == "FERTILIZER"]
+    assert [o for o in orders if o[1] == "MELON"]
