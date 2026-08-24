@@ -359,7 +359,7 @@ def test_fertilizer_buy_order_skips_an_off_duty_day_for_a_low_pref():
     assert np._fertilizer_buy_order(k, state, cap=1) == []
 
 
-def test_controller_fertilizes_farmer_plot_on_a_low_pref_duty_day():
+def test_controller_picks_up_fertilizer_for_farmer_plot_on_a_low_pref_duty_day():
     """The worker-action gate (previously `fertilize_pref >= 0.5`) now fires
     on the pref's duty-cycle day even for a pref below the old threshold."""
     tiles = [[None] * 10 for _ in range(10)]
@@ -742,9 +742,11 @@ def test_assign_workers_sends_a_worker_to_a_tile_outside_nw_once_it_is_owned():
     # controller() -- see test_controller_routes_a_worker_onto_newly_owned_land
     # below for the end-to-end version. With 10 workers and only NW owned
     # every worker stays in NW; owning NE must put at least one on an NE tile.
+    # livestock_labor_share=0.0 pins out animal jobs so an x>=5 assignment
+    # can only come from crop work on the newly-owned NE land, not a cow tile.
     hands = [[4, 4]] * 9
     o = _obs(hands=hands, unlocked=("NW", "NE"))
-    jobs = np.candidate_jobs(o, _knobs())
+    jobs = np.candidate_jobs(o, _knobs(livestock_labor_share=0.0))
     got = np.assign_workers([[4, 4]] + hands, jobs)
     assert any(j is not None and j.pos[0] >= 5 for j in got)
 
@@ -767,8 +769,11 @@ def test_controller_routes_a_worker_onto_newly_owned_land():
     # (x=4, NW's east edge), so no NW tile ever requires an eastward step;
     # an "EAST" action can only come from a worker assigned an NE tile
     # (x>=5) in the quadrant that just got unlocked.
+    # livestock_labor_share=0.0 pins out animal jobs (which the old
+    # worker-peel could also walk east to reach, e.g. a cow tile in NE) so
+    # an EAST here can only be crop work on the newly-owned land.
     hands = [[4, 4]] * 9
-    out = np.controller(_knobs(), _obs(hands=hands, unlocked=("NW", "NE")))
+    out = np.controller(_knobs(livestock_labor_share=0.0), _obs(hands=hands, unlocked=("NW", "NE")))
     assert "EAST" in [a[0] for a in [out["farmer"], *out["hands"]]]
 
 

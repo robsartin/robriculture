@@ -132,11 +132,12 @@ def _scattered_board():
 #: a harvestable plant, a weed, a hungry animal, fertilizer in the shed and
 #: a full 5-worker crew (fertilize/sell/animal-buy/movement), a pinned pair
 #: either side of the current land-purchase reserve threshold, and a
-#: mid-season crew scattered across NW *and* NE (#71 review: three of the
-#: other four scenarios put every worker on `SHED_TILE`, where the new
-#: job-assignment mechanism happens to reproduce the old worker-index ->
-#: plot mapping exactly -- this one and `mid_game_full_crew` are the only
-#: two that can actually detect a future rewrite of that mechanism).
+#: mid-season crew scattered across NW *and* NE (#71 review: two of the
+#: other four scenarios -- `land_reserve_below` and `land_reserve_above` --
+#: put every worker on `SHED_TILE`, where the new job-assignment mechanism
+#: happens to reproduce the old worker-index -> plot mapping exactly; this
+#: one and `mid_game_full_crew` are the only two that can actually detect a
+#: future rewrite of that mechanism).
 _SCENARIOS = {
     "early_game": _obs(day=0, hour=0, money=3000, unlocked=("NW",)),
     "mid_game_full_crew": _obs(
@@ -214,7 +215,7 @@ def test_matches_golden_actions_when_early_game():
 
 
 def test_matches_golden_actions_when_mid_game_full_crew():
-    """Mid-game board with a full crew: fertilize/sell/buy-animal/move behaviour is unchanged."""
+    """Mid-game board with a full crew: harvest/sell/move-east/buy-land behaviour is unchanged."""
     assert _act("mid_game_full_crew") == GOLDEN_ACTIONS["mid_game_full_crew"]
 
 
