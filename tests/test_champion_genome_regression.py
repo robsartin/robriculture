@@ -37,6 +37,18 @@ Legitimate reasons to update it:
     output. The genome changing is expected and welcome — this test must
     never fight a real promotion.
 
+  - #120 (2026-08-24) fixed a three-part fertilizer defect: enumeration
+    asked whether the fertilize job existed using a hardcoded EMPTY
+    inventory, the buy-order guard inspected only `inventories[0]`, and
+    `_sell_orders` liquidated the shed's supply before any worker could
+    reach it. FERTILIZER is now excluded from selling, so the two scenarios
+    holding shed fertilizer (`mid_game_full_crew`, `scattered_second_quadrant`)
+    no longer emit a `SELL FERTILIZER` order. That is the ONLY difference —
+    farmer and hand actions are byte-identical in both. Re-benchmarked
+    BEFORE re-blessing, per the rule below: share 0.5242 / win-rate 0.8
+    against 0.5222 / 0.8 before the fix. Instrumented over 719 turns, the
+    round trip went from 25 bought / 25 sold / 1 applied to 3 / 0 / 3.
+
 NOT legitimate — this is the failure mode #100 describes, stop and read
 `strategies/champion_genome.json`'s `meta.share`/`meta.win_rate` first:
   - The genome is unchanged (`strategies/champion_genome.json` untouched)
@@ -174,7 +186,7 @@ GOLDEN_ACTIONS = {
         "farmer": ["HARVEST"],
         "hands": [["EAST"], ["EAST"], ["EAST"], ["EAST"]],
         "market": [
-            ["SELL", "FERTILIZER", 2], ["SELL", "MELON", 10], ["SELL", "WHEAT", 5],
+            ["SELL", "MELON", 10], ["SELL", "WHEAT", 5],
             ["BUY_LAND"],
         ],
     },
@@ -194,7 +206,7 @@ GOLDEN_ACTIONS = {
         "farmer": ["PLANT", "WHEAT"],
         "hands": [["HARVEST"], ["DIG"], ["NORTH"], ["PLANT", "WHEAT"]],
         "market": [
-            ["SELL", "FERTILIZER", 1], ["SELL", "MELON", 8], ["SELL", "WHEAT", 4],
+            ["SELL", "MELON", 8], ["SELL", "WHEAT", 4],
             ["BUY_SEED", "WHEAT", 1],
         ],
     },
