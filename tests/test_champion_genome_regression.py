@@ -25,6 +25,29 @@ That threshold is a function of the controller's `_LAND_RESERVE` constant
 change that caused #100, so the boundary scenario exists specifically to
 catch it.
 
+**What this guard does and does not catch (mutation-tested, #115).**
+
+Measured by perturbing a constant and checking whether any scenario moves.
+Stated rather than assumed, because a guard that is trusted beyond its reach
+is worse than one whose limits are written down:
+
+    _LAND_RESERVE 800 -> 80        CAUGHT   (the #100 regression)
+    TRAVEL_COST 0.05 -> 0          CAUGHT
+    SELL_MARGIN_DAYS 1 -> 4        CAUGHT   (#115: plantable-window arithmetic)
+    _MELON -> WHEAT                CAUGHT   (#115: crop choice)
+    _ANIMAL_KINDS emptied          CAUGHT   (#115: animal dispatch)
+    FERTILIZER made sellable again CAUGHT   (#120's fix)
+    ANIMAL_JOB_SCALE x10           not caught -- and correctly so
+
+The last one is a limit worth understanding rather than a hole to plug. The
+shipped genome decodes `livestock_labor_share` to roughly 0.01, so an animal
+job is worth about 0.02 against a crop job's 1.0. Multiplying the scale by ten
+lifts it to 0.556 -- still losing every assignment it competes for, so no
+action anywhere changes. A *behavioural* guard cannot fail on a change that
+alters no behaviour, and should not pretend to. Detection begins where the
+animal job's value crosses 1.0 (around x25 here), which is exactly the point
+where the change starts to matter. See #121 for why that knob sits so low.
+
 **Re-blessing — updating `GOLDEN_ACTIONS` below:**
 
 Legitimate reasons to update it:
@@ -32,9 +55,11 @@ Legitimate reasons to update it:
     changed, its `meta.share`/`meta.issue` updated by a real
     `genome_bench` run per CLAUDE.md's experiment loop). Re-run the
     scenarios in `_SCENARIOS` against the new genome (e.g. paste this
-    file's `_SCENARIOS` + `_ACT` into a REPL, or add a throwaway
-    `print(_ACT(name))` loop) and replace `GOLDEN_ACTIONS` with the fresh
-    output. The genome changing is expected and welcome — this test must
+    file's `_SCENARIOS` + `_act` into a REPL, or -- easier, and the
+    supported route since #115 -- run
+    `python -m scripts.regen_goldens` and paste the block it prints;
+    `--check` reports which scenarios are stale without changing anything)
+    and replace `GOLDEN_ACTIONS` with the fresh output. The genome changing is expected and welcome — this test must
     never fight a real promotion.
 
   - #120 (2026-08-24) fixed a three-part fertilizer defect: enumeration
@@ -98,7 +123,8 @@ from strategies import neuropilot as np
 
 
 def _obs(day=0, hour=0, money=3000, farmer=(4, 4), hands=(), tiles=None,
-         shed=None, unlocked=("NW",), prices=None, opp_money=3000, seeds=None):
+         shed=None, unlocked=("NW",), prices=None, opp_money=3000, seeds=None,
+         inventories=None):
     """A minimal, fully-synthetic single-turn observation (mirrors the
     `_obs` helper in `test_neuropilot.py`)."""
     board = tiles or [[None] * 10 for _ in range(10)]
@@ -114,7 +140,7 @@ def _obs(day=0, hour=0, money=3000, farmer=(4, 4), hands=(), tiles=None,
         "market": {"inventory": {}, "prices": prices or {}},
         "town": {"unlocked_shops": []},
         "private": {"shed": shed or {}, "seeds": seeds or {},
-                    "inventories": [{} for _ in range(1 + len(hands))]},
+                    "inventories": inventories or [{} for _ in range(1 + len(hands))]},
     }
 
 
@@ -124,6 +150,50 @@ def _mid_game_board():
                     "yield_units": 5, "watered_today": True}
     board[4][3] = {"kind": "WEED"}
     board[0][5] = {"animal": "COW", "fed_today": False}
+    return board
+
+
+#: The cow tiles, so scenarios can place workers directly ON them. A worker
+#: *walking toward* an animal tile emits the same step whether it was
+#: dispatched through `_animal_job_action` or mis-routed down the crop path,
+#: so an approach-only scenario cannot discriminate -- mutation testing caught
+#: exactly that and the scenario was rebuilt to stand workers on the tiles.
+_COW_TILES = [pos for pos, kind in np.ANIMAL_TILES if kind == "COW"]
+
+
+def _all_idle_crop_board():
+    """Every non-animal tile in NW *and* NE a watered live plant -- i.e. no
+    crop work left anywhere the crew can reach (#115).
+
+    Crop jobs are only enumerated for tiles that want something done, so this
+    leaves the crew nothing to farm. That matters because an animal job is
+    worth roughly 0.02 to the shipped genome against a crop job's 1.0, so it
+    only ever wins an assignment once no crop job remains -- and unlocking NE
+    to own the cow tiles otherwise hands the crew 16 fresh, empty, plantable
+    NE tiles, which outrank the herd every time. Idling those too is what
+    makes animal dispatch reachable at all.
+    """
+    board = [[None] * 10 for _ in range(10)]
+    animal_positions = {pos for pos, _ in np.ANIMAL_TILES}
+    for y in range(5):
+        for x in range(10):
+            if (x, y) not in animal_positions:
+                board[y][x] = {"kind": "PLANT", "crop": "MELON",
+                               "planted_day": 1, "watered_today": True}
+    return board
+
+
+def _one_unfertilized_plant_board():
+    """A single live, unfertilized plant on the shed tile (#115/#120).
+
+    The fertilize path was unreachable for the whole of #71 and no scenario
+    here could see it: four of the five never land on a duty day, and the one
+    that does has an empty board with nothing to fertilize.
+    """
+    board = [[None] * 10 for _ in range(10)]
+    x, y = 4, 4
+    board[y][x] = {"kind": "PLANT", "crop": "MELON", "planted_day": 1,
+                   "watered_today": True}
     return board
 
 
@@ -166,6 +236,43 @@ _SCENARIOS = {
         day=10, hour=6, money=24700, unlocked=("NW",),
         hands=[(4, 4)] * 5, shed={"MELON": 20, "WHEAT": 10},
     ),
+    # --- #115: the production loop the guard could not see -------------------
+    #
+    # Before these, NO scenario placed a worker on an empty plantable tile, so
+    # the PLANT branch of `_plot_action` and the melon-vs-wheat decision in
+    # `_crop_for` were never exercised -- the thing the agent spends most of
+    # its turns doing. The fertilize path was unreachable in all five (four
+    # never land on a duty day; the one that does has an empty board), and
+    # mutation testing during #71's final review showed animal pricing and
+    # dispatch were invisible too: `ANIMAL_JOB_SCALE` raised 10x and
+    # `_ANIMAL_KINDS` emptied both went undetected.
+    "plant_melon_window": _obs(
+        day=18, hour=4, money=8000, hands=[(3, 4)], unlocked=("NW",),
+        seeds={"MELON": 5, "WHEAT": 5},
+    ),
+    # The pair above/below the melon plantable window (melon 0-18, wheat 0-26),
+    # working the same way the land-reserve pair does: one day apart, either
+    # side of the boundary, so a change to the window arithmetic or to the
+    # crop-choice fallback cannot pass unnoticed.
+    "plant_wheat_after_melon_window": _obs(
+        day=19, hour=4, money=8000, hands=[(3, 4)], unlocked=("NW",),
+        seeds={"MELON": 5, "WHEAT": 5},
+    ),
+    # A worker already carrying a unit, standing on an unfertilized live plant,
+    # on a duty day. This is the only scenario that reaches `acts.fertilize()`
+    # -- a line that was uncovered for the whole of #71 and #120.
+    "fertilize_held_unit": _obs(
+        day=0, hour=4, money=6000, tiles=_one_unfertilized_plant_board(),
+        unlocked=("NW",), shed={}, inventories=[{"FERTILIZER": 1}],
+    ),
+    # Every NW tile idle, so no crop job exists and the crew must fall through
+    # to animal work despite an animal job being worth ~0.02 against a crop
+    # job's 1.0. Without this, nothing pins animal enumeration or dispatch.
+    "animal_work_when_crops_idle": _obs(
+        day=8, hour=4, money=9000, tiles=_all_idle_crop_board(),
+        farmer=_COW_TILES[0], hands=_COW_TILES[1:5],
+        unlocked=("NW", "NE"), shed={},
+    ),
     "scattered_second_quadrant": _obs(
         day=15, hour=4, money=6000, farmer=(4, 4),
         hands=[(1, 2), (8, 1), (3, 8), (6, 3)],
@@ -201,6 +308,27 @@ GOLDEN_ACTIONS = {
         "hands": [["WEST"], ["NORTH"], ["WEST"], ["WEST"], ["NORTH"]],
         "market": [["SELL", "MELON", 20], ["SELL", "WHEAT", 10],
                    ["BUY_SEED", "MELON", 6], ["BUY_LAND"]],
+    },
+    "plant_melon_window": {
+        "farmer": ["PLANT", "MELON"],
+        "hands": [["PLANT", "MELON"]],
+        "market": [],
+    },
+    "plant_wheat_after_melon_window": {
+        "farmer": ["PLANT", "WHEAT"],
+        "hands": [["PLANT", "WHEAT"]],
+        "market": [],
+    },
+    "fertilize_held_unit": {
+        "farmer": ["FERTILIZE"],
+        "hands": [],
+        "market": [],
+    },
+    "animal_work_when_crops_idle": {
+        "farmer": ["BUILD_PASTURE"],
+        "hands": [["BUILD_PASTURE"], ["BUILD_PASTURE"], ["BUILD_PASTURE"],
+                  ["BUILD_PASTURE"]],
+        "market": [["BUY_ANIMAL", "COW", 1]],
     },
     "scattered_second_quadrant": {
         "farmer": ["PLANT", "WHEAT"],
@@ -273,3 +401,56 @@ def test_matches_golden_actions_when_scattered_second_quadrant():
     future rewrite of it.
     """
     assert _act("scattered_second_quadrant") == GOLDEN_ACTIONS["scattered_second_quadrant"]
+
+
+# --- #115: tests for the production loop the guard could not previously see ---
+
+def test_matches_golden_actions_when_planting_inside_the_melon_window():
+    """A worker on an empty, plantable tile at the last day melon can still
+    mature (day 18 of a 30-day season).
+
+    Pins the `PLANT` branch of `_plot_action` and the melon side of
+    `_crop_for`'s decision -- neither of which any scenario reached before,
+    despite planting being what the agent spends most of its turns doing.
+    Pairs with the wheat test below, one day apart, exactly as the
+    land-reserve pair brackets its threshold.
+    """
+    assert _act("plant_melon_window") == GOLDEN_ACTIONS["plant_melon_window"]
+
+
+def test_matches_golden_actions_when_past_the_melon_window():
+    """One day past melon's last plantable day, the same worker plants wheat.
+
+    The other half of the bracket. A change to the plantable-window
+    arithmetic, to `SELL_MARGIN_DAYS`, or to the crop-choice fallback moves
+    one of these two and cannot pass unnoticed.
+    """
+    assert _act("plant_wheat_after_melon_window") == GOLDEN_ACTIONS["plant_wheat_after_melon_window"]
+
+
+def test_matches_golden_actions_when_applying_a_held_fertilizer_unit():
+    """A worker already carrying a unit, on an unfertilized live plant, on a
+    duty day.
+
+    This is the only scenario that reaches `acts.fertilize()`. That line was
+    uncovered through all of #71 and #120 -- which is precisely how a
+    three-part defect (enumeration asking with an empty inventory, the buy
+    guard checking only `inventories[0]`, and `_sell_orders` liquidating the
+    supply) survived a green suite while the agent bought 25 units, sold 25,
+    and applied 1.
+    """
+    assert _act("fertilize_held_unit") == GOLDEN_ACTIONS["fertilize_held_unit"]
+
+
+def test_matches_golden_actions_when_only_animal_work_remains():
+    """Every NW tile idle, NE owned, animal tiles bare: the crew falls through
+    to animal work.
+
+    An animal job is worth roughly 0.02 to this genome against a crop job's
+    1.0, so it only ever wins an assignment once no crop job is left. That
+    makes this the only scenario that exercises animal enumeration and
+    dispatch at all. Mutation testing during #71's final review found the
+    guard blind here: `ANIMAL_JOB_SCALE` raised 10x and `_ANIMAL_KINDS`
+    emptied both went undetected.
+    """
+    assert _act("animal_work_when_crops_idle") == GOLDEN_ACTIONS["animal_work_when_crops_idle"]
