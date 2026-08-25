@@ -805,9 +805,13 @@ def test_controller_buys_seed_for_assigned_tiles_not_every_owned_plot():
     # Farmer + 3 hands on an empty NW board: 4 workers take 4 empty crop
     # tiles, so exactly 4 seeds are wanted -- not the 25 tiles NW contains,
     # and not the 2 the old livestock_labor_share peel would have left.
+    # Crop-agnostic on purpose (#127): what this pins is the COUNT following the
+    # assignment. Which crop `crop_mix=1.0` selects is incidental and moved when
+    # the knob became a 5-way ladder -- re-pinning the crop would just make this
+    # break again the next time the bands change, for a reason it does not test.
     out = np.controller(_knobs(crop_mix=1.0), _obs(hands=[[4, 4]] * 3, money=99999))
     buys = [o for o in out["market"] if o[0] == "BUY_SEED"]
-    assert buys == [["BUY_SEED", "MELON", 4]]
+    assert len(buys) == 1 and buys[0][2] == 4
 
 
 # --- #120: fertilizer must survive the pickup-then-apply hand-off ---
@@ -878,3 +882,34 @@ def test_sell_orders_never_liquidates_fertilizer():
     orders = np._sell_orders({"FERTILIZER": 3, "MELON": 5}, {}, 0.5)
     assert not [o for o in orders if o[1] == "FERTILIZER"]
     assert [o for o in orders if o[1] == "MELON"]
+
+
+# --- #127: crop_mix as a 5-way selector, not a melon/wheat switch ---
+
+def test_crop_for_selects_across_all_five_crops():
+    # #127: the sim supports 5 crops; we grew 2, and skipped both that keep
+    # yielding. Reinterpreting the SAME knob as a 5-way band selector widens
+    # the action space with no genome-interface change (N_KNOBS stays 8).
+    # Bands are ordered by rough season revenue per tile, so a higher
+    # crop_mix means a higher-ceiling crop and evolution sees a monotonic
+    # gradient rather than arbitrary jumps.
+    day = 0
+    picked = [np._crop_for(_knobs(crop_mix=v), day)
+              for v in (0.05, 0.25, 0.45, 0.65, 0.95)]
+    assert picked == ["CARROT", "WHEAT", "MELON", "STRAWBERRY", "TOMATO"]
+
+
+def test_crop_for_falls_back_when_the_selected_crop_cannot_mature():
+    # Late in the season the chosen crop may no longer reach first yield.
+    # Planting it then just strands the tile and its seed cost, so fall back
+    # to any crop that still can -- the same guarantee the old melon/wheat
+    # version gave via _plantable.
+    late = np.SEASON_DAYS - 2          # melon (first=10) cannot mature here
+    got = np._crop_for(_knobs(crop_mix=0.45), late)
+    assert got != "MELON"
+    assert got is None or np._plantable(got, late)
+
+
+def test_crop_for_returns_none_when_nothing_can_mature():
+    # Tail of the season: every crop is stranded, so plant nothing.
+    assert np._crop_for(_knobs(crop_mix=0.95), np.SEASON_DAYS) is None
