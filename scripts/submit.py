@@ -5,7 +5,7 @@ post-build smoke test) and submit it with the Kaggle CLI. The strategy defaults
 to the recorded ``submit_default`` (``harness/champion.json``) and the message
 to ``"<strategy> <short-sha>"``. ``--dry-run`` builds + smoke-tests only.
 
-**Slot-aware (issue #79).** Only the **latest 2** COMPLETE submissions are
+**Slot-aware (issues #79, #126).** Only the **latest 2** submissions are
 live (ADR-0003); this rule was documented but not enforced anywhere in the
 tooling, which is how a submission silently evicted our best agent and cost
 ~2 days at ~50 points below where we could have been (see the issue for the
@@ -138,6 +138,30 @@ def live_pair(submissions):
     return tuple(complete[:2])
 
 
+#: Statuses that will hold a live slot once everything finishes scoring: one
+#: already scored, one still in flight. ERROR is deliberately absent -- a failed
+#: submission never scores, so it never takes a slot (#126).
+_SLOT_STATUSES = frozenset({"complete", "pending"})
+
+
+def future_pair(submissions):
+    """The two most-recent submissions that will be live once all have scored.
+
+    `live_pair` answers "what is on the ladder right now" and correctly counts
+    only COMPLETE. This answers the forward-looking question -- "after the dust
+    settles, which two are live" -- and must count PENDING too, because an
+    in-flight submission is going to take a slot.
+
+    Sharing `live_pair`'s COMPLETE-only view for that made the eviction check
+    wrong in both directions (#126): it warned about evicting an agent a
+    just-issued resubmit had already saved, and -- the half that matters -- it
+    could stay silent about an eviction that really was about to happen.
+    """
+    inflight = [s for s in submissions if s["status"] in _SLOT_STATUSES]
+    inflight.sort(key=lambda s: s["date"], reverse=True)
+    return tuple(inflight[:2])
+
+
 def best_of(records):
     """The highest-scored of ``records``, or None if none are scored yet.
 
@@ -158,7 +182,9 @@ def evicted_by(new_strategy, submissions):
     no *distinct* agent from the live set (this is exactly how the incident
     in issue #79 was fixed: resubmitting meta_rancher).
     """
-    pair = live_pair(submissions)
+    # #126: forward-looking on purpose. A submission still PENDING is going to
+    # occupy a slot, so it has to count here even though it is not live yet.
+    pair = future_pair(submissions)
     if len(pair) < 2:
         return None
     _newest, oldest = pair
@@ -203,14 +229,21 @@ def submission_preview(new_strategy, submissions):
     pair = live_pair(submissions)
     evicted = evicted_by(new_strategy, submissions)
     best = best_of(pair)
-    survivor = pair[0] if pair else None  # the newest of the current pair always survives
+    # #126: the survivor is the newest entry that will hold a slot, which may be
+    # a PENDING submission rather than the newest COMPLETE one.
+    forward = future_pair(submissions)
+    survivor = forward[0] if forward else None
     after = tuple(r for r in ({"strategy": new_strategy, "score": None}, survivor) if r is not None)
 
+    in_flight = [r for r in submissions if r["status"] == "pending"]
     lines = [
         f"about to submit: {new_strategy}",
         f"live slots now:    {_format_pair(pair)}",
-        f"live slots after:  {_format_pair(after)}",
     ]
+    if in_flight:
+        names = ", ".join(sorted({r["strategy"] for r in in_flight}))
+        lines.append(f"in flight (will take a slot): {names}")
+    lines.append(f"live slots after:  {_format_pair(after)}")
     evicts_best = evicted is not None and best is not None and evicted["strategy"] == best["strategy"]
     if evicts_best:
         lines.append(f"WARNING: this evicts {_format_slot(evicted)}, your best live agent.")
