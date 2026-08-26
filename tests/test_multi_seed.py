@@ -64,3 +64,53 @@ def test_summarize_seeds_handles_no_rows():
     # A run where every seed crashed must report emptiness, not divide by zero.
     got = ms.summarize_seeds([])
     assert got["n"] == 0 and got["rate"] == 0.0
+
+
+# --- #130: a stopped long run must not lose everything ---
+
+def test_checkpoint_path_is_per_seed_and_derived_from_out():
+    # Each seed writes its own partial so a stopped run leaves usable work for
+    # every lane, not one file the lanes overwrite each other in.
+    got = ms.checkpoint_path("harness/genomes/run.json", 3)
+    assert got == "harness/genomes/run-seed3.partial.json"
+
+
+def test_checkpoint_path_handles_an_out_with_no_extension():
+    # --out is user-supplied; a bare name must still produce a .json partial
+    # rather than a path with no extension that nothing will parse.
+    assert ms.checkpoint_path("run", 0) == "run-seed0.partial.json"
+
+
+def test_checkpoint_paths_differ_per_seed():
+    # The bug this guards: one shared path means ten lanes clobber each other
+    # and a stopped run leaves a single arbitrary genome.
+    paths = {ms.checkpoint_path("out.json", s) for s in range(10)}
+    assert len(paths) == 10
+
+
+def test_write_checkpoint_records_progress_and_is_reloadable(tmp_path):
+    # A partial is only worth writing if it can be read back and benchmarked.
+    # Pins the shape a salvage step depends on: the genome, which generation
+    # it came from, and the anchor share so partials can be ranked without
+    # re-running anything.
+    path = str(tmp_path / "r.json")
+    ms.write_checkpoint(path, seed=2, genome=[0.5, 0.25], fitness=0.4242,
+                        history=[{"gen": 0}, {"gen": 1}])
+    import json
+    back = json.load(open(path))
+    assert back["genome"] == [0.5, 0.25]
+    assert back["meta"]["seed"] == 2
+    assert back["meta"]["generations_done"] == 2
+    assert back["meta"]["anchor_share"] == 0.4242
+
+
+def test_write_checkpoint_overwrites_rather_than_appending(tmp_path):
+    # Called every generation, so it must leave one current file, not grow
+    # without bound over a 25-generation run.
+    path = str(tmp_path / "r.json")
+    ms.write_checkpoint(path, seed=0, genome=[1.0], fitness=0.1, history=[{"gen": 0}])
+    ms.write_checkpoint(path, seed=0, genome=[2.0], fitness=0.2,
+                        history=[{"gen": 0}, {"gen": 1}])
+    import json
+    back = json.load(open(path))
+    assert back["genome"] == [2.0] and back["meta"]["generations_done"] == 2
