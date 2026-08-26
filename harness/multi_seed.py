@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import os
 import sys
 
 from harness.evolve import DEFAULT_ANCHORS, evolve, genome_agent
@@ -80,18 +81,65 @@ def summarize_seeds(rows) -> dict:
     }
 
 
-def run_seed(seed, settings, opponent="wheat_hands"):  # pragma: no cover
+def checkpoint_path(out, seed) -> str:
+    """Per-seed partial-progress path derived from `--out` (#130).
+
+    One path per seed on purpose: ten lanes sharing a file would clobber each
+    other and a stopped run would leave a single arbitrary genome instead of
+    the best from every lane.
+    """
+    base, ext = os.path.splitext(out)
+    return f"{base}-seed{seed}.partial{ext or '.json'}"
+
+
+def write_checkpoint(path, seed, genome, fitness, history) -> None:
+    """Write this seed's best-so-far, overwriting any previous checkpoint.
+
+    Called once per generation, so it must leave exactly one current file
+    rather than growing over a 25-generation run.
+
+    Exists because a 14-hour run was stopped partway and produced **nothing**:
+    `run_seed` called `evolve()` without a `checkpoint_fn`, even though
+    `evolve` has supported one all along, so every lane's work was held in
+    memory until the very end. Records the anchor share and generation count
+    alongside the weights so a salvaged partial can be ranked and benchmarked
+    without re-running anything.
+    """
+    payload = {
+        "genome": list(genome),
+        "meta": {
+            "seed": seed,
+            "generations_done": len(history),
+            "anchor_share": fitness,
+            "partial": True,
+            "note": "checkpoint from an in-progress multi_seed run; not a promoted champion",
+        },
+    }
+    with open(path, "w") as fh:
+        json.dump(payload, fh)
+
+
+def run_seed(seed, settings, opponent="wheat_hands", out=None):  # pragma: no cover
     """Evolve one seed, then measure the winner. Integration -- no unit test.
 
     Returns a `row` dict for `summarize_seeds`. Runs in a worker process, so
     it takes plain data and returns plain data.
     """
+    # #130: check-point every generation. Without this a stopped run loses
+    # every lane's work -- which is exactly what happened to a 14-hour run.
+    ckpt = None
+    if out is not None:
+        path = checkpoint_path(out, seed)
+
+        def ckpt(genome, fitness, history, _p=path, _s=seed):
+            write_checkpoint(_p, _s, genome, fitness, history)
+
     result = evolve(
         generations=settings["generations"], pop_size=settings["pop"],
         games=settings["games"], sigma=settings["sigma"],
         sample_k=settings["sample_k"], hof_cap=settings["hof_cap"],
         anchor_names=tuple(settings["anchors"]), seed=seed,
-        anchor_weight=settings["anchor_weight"],
+        anchor_weight=settings["anchor_weight"], checkpoint_fn=ckpt,
     )
     genome = result["best_genome"]
     bench = benchmark_genome(genome, anchor_names=tuple(settings["anchors"]),
@@ -136,9 +184,15 @@ def main(argv=None):  # pragma: no cover
         "bench_games": args.bench_games,
     }
 
+    if args.out is None:
+        # #130: checkpoints are derived from --out, so without it a stopped run
+        # still loses everything. Say so rather than failing silently.
+        print("warning: no --out, so per-generation checkpoints are DISABLED; "
+              "a stopped run will lose all work", file=sys.stderr)
+
     rows = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(run_seed, s, settings, args.opponent): s
+        futures = {pool.submit(run_seed, s, settings, args.opponent, args.out): s
                    for s in range(args.seeds)}
         for fut in concurrent.futures.as_completed(futures):
             seed = futures[fut]
