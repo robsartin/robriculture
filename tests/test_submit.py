@@ -232,6 +232,52 @@ class TestLivePair:
         assert len(submit.live_pair([])) == 0
 
 
+class TestSlotsPending:
+    """#126: a PENDING submission is not live YET, but it WILL be.
+
+    `live_pair` answers "what is scoring on the ladder right now", and for
+    that a pending entry correctly occupies no slot. `evicted_by` asks a
+    different, forward-looking question -- "if I submit now, which agent
+    stops being live" -- and there a pending entry absolutely does take a
+    slot, because by the time the new one scores the pending one has too.
+
+    Sharing one COMPLETE-only view between the two made the eviction warning
+    wrong in both directions: it warned about evicting an agent that was
+    already safe, and (the dangerous half) it can stay silent about an
+    eviction that will really happen. #79 built this check because a silent
+    eviction cost ~2 days at ~50 points below where we could have been.
+    """
+
+    def test_pending_still_does_not_occupy_a_live_slot(self):
+        """`live_pair` is unchanged: PENDING has no score, so it is not live yet."""
+        pending = _raw("neuropilot.tar.gz", "2026-08-24T18:25:09", status="SubmissionStatus.PENDING")
+        submissions = submit.parse_submissions([pending, _META_RANCHER, _RANCH_HANDS])
+        assert "neuropilot" not in [r["strategy"] for r in submit.live_pair(submissions)]
+
+    def test_eviction_accounts_for_a_pending_submission(self):
+        """The observed 2026-08-24 case. meta_rancher was re-submitted to protect
+        its slot, then neuropilot nine seconds later. The tool warned that
+        neuropilot would evict meta_rancher -- but the fresh meta_rancher is
+        newer than ranch_hands, so ranch_hands is what actually ages out."""
+        fresh_mr = _raw("meta_rancher.tar.gz", "2026-08-24T18:25:00", status="SubmissionStatus.PENDING")
+        submissions = submit.parse_submissions([fresh_mr, _META_RANCHER, _RANCH_HANDS])
+        assert submit.evicted_by("neuropilot", submissions)["strategy"] == "ranch_hands"
+
+    def test_eviction_still_warns_when_a_pending_does_not_save_the_best(self):
+        """Non-vacuity guard for the test above: with nothing pending, the same
+        call must still name meta_rancher. Otherwise the fix could be "never
+        warn" and both tests would pass."""
+        submissions = submit.parse_submissions([_META_RANCHER, _RANCH_HANDS])
+        assert submit.evicted_by("neuropilot", submissions)["strategy"] == "meta_rancher"
+
+    def test_a_failed_submission_never_takes_a_slot(self):
+        """ERROR is not PENDING: it will never score, so it must not be counted
+        as occupying a future slot. Only in-flight submissions do."""
+        failed = _raw("broken.tar.gz", "2026-08-24T19:00:00", status="SubmissionStatus.ERROR")
+        submissions = submit.parse_submissions([failed, _META_RANCHER, _RANCH_HANDS])
+        assert submit.evicted_by("neuropilot", submissions)["strategy"] == "meta_rancher"
+
+
 class TestBestOf:
     def test_higher_scored_record_returned(self):
         """'Best' picks the higher publicScore among the given records."""
