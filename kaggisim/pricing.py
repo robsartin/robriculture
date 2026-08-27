@@ -27,11 +27,23 @@ from kaggisim.economy import MARKET_PARAMS
 PRICE_FLOOR = 1
 
 
-def _shape(func: str, x: float) -> float:
+#: Curvature of the ``hinge`` regime past its target, mirroring the sim's
+#: ``HINGE_GAIN`` (#133). Kept as a named constant rather than inlined so the
+#: claim-check in ``tests/test_pricing_matches_sim.py`` compares like with like.
+HINGE_GAIN = 8.0
+
+
+def _shape(func: str, x: float, T: float | None = None) -> float:
     """The curve shape applied to the distance from the inventory anchor ``I0``.
 
     Mirrors the sim's ``_shape``: ``log``/``sqrt`` are gentle (deep markets that
     absorb volume), ``sq`` is steep (shallow markets that floor fast).
+
+    ``hinge`` (#133) is linear in ``x/T`` up to the target and then curves away
+    sharply, so a market absorbs volume normally until it is saturated and then
+    collapses. It is the only shape that needs ``T``, which is why ``_shape``
+    takes it -- the sim has always passed it, and ours did not, so CARROT, EGG
+    and TOMATO were being priced on the wrong curve entirely.
     """
     x = max(0.0, x)
     if func == "linear":
@@ -44,6 +56,12 @@ def _shape(func: str, x: float) -> float:
         return math.log(1.0 + x)
     if func == "log10":
         return math.log10(1.0 + x)
+    if func == "hinge":
+        # Degenerates to linear when T is missing or non-positive, as the sim does.
+        if not T or T <= 0:
+            return x
+        u = x / T
+        return u + HINGE_GAIN * max(0.0, u - 1.0) ** 2
     return x
 
 
@@ -57,11 +75,11 @@ def market_price(item: str, inventory: float, params=MARKET_PARAMS) -> int:
     p = params[item]
     base, I0, T = p["base"], p["I0"], p["T"]
     if inventory < I0:
-        amp = p["below_target"] * base / _shape(p["below_func"], T)
-        price = base + amp * _shape(p["below_func"], I0 - inventory)
+        amp = p["below_target"] * base / _shape(p["below_func"], T, T)
+        price = base + amp * _shape(p["below_func"], I0 - inventory, T)
     else:
-        amp = p["above_target"] * base / _shape(p["above_func"], T)
-        price = base - amp * _shape(p["above_func"], inventory - I0)
+        amp = p["above_target"] * base / _shape(p["above_func"], T, T)
+        price = base - amp * _shape(p["above_func"], inventory - I0, T)
     return max(PRICE_FLOOR, int(round(price)))
 
 
