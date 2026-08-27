@@ -477,7 +477,7 @@
     "issue": 127,
     "promoted": "2026-08-27",
     "criterion": "genome_bench share vs the 5 fixed anchors, --games 4",
-    "share": 0.7018,
+    "share": 0.6697,
     "win_rate": 1.0,
     "run": {
       "seeds": 10,
@@ -501,7 +501,11 @@
     "supersedes": {
       "source": "#71/#120 champion",
       "share": 0.5222,
-      "win_rate": 0.8
-    }
+      "win_rate": 0.8,
+      "share_on_pinned_sim": 0.3325,
+      "win_rate_on_pinned_sim": 0.0
+    },
+    "sim_version": "kaggle-environments==1.32.4 (the requirements.txt pin)",
+    "measurement_note": "0.6697 / rate 1.0 is measured against the PINNED sim. An earlier reading of 0.7018 was taken on a local venv that had drifted to 1.32.7 -- see #133. The verdict is unchanged either way: 20/20 against all five anchors, meta_bot included. The outgoing champion re-measured on the pinned sim scores 0.3325 at rate 0.0, not the 0.5222/0.8 recorded against 1.32.7, so the improvement is LARGER than the original figures suggested."
   }
 }
