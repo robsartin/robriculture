@@ -74,6 +74,18 @@ Legitimate reasons to update it:
     against 0.5222 / 0.8 before the fix. Instrumented over 719 turns, the
     round trip went from 25 bought / 25 sold / 1 applied to 3 / 0 / 3.
 
+  - #127 (2026-08-27) promoted a genome that beats every anchor (share
+    0.7018, win-rate 1.0). Six goldens moved, which is expected when the
+    genome changes. The `land_reserve_below` / `land_reserve_above` bracket
+    was RE-CALIBRATED rather than loosened: the new genome's decoded reserve
+    threshold moved from $23,846 to **$11,258**, so the old $23,000/$24,700
+    pair sat entirely above it and both sides bought land, bracketing nothing.
+    Moving those two `money` inputs is legitimate precisely because the
+    scenario's stated purpose is to straddle the threshold -- freezing the old
+    values would keep the fixture and lose what it tests. Verified afterwards
+    that re-blessing did not hollow the guard out: #115's mutation suite still
+    catches all six probes, plus `_CROP_LADDER -> melon only`.
+
 NOT legitimate — this is the failure mode #100 describes, stop and read
 `strategies/champion_genome.json`'s `meta.share`/`meta.win_rate` first:
   - The genome is unchanged (`strategies/champion_genome.json` untouched)
@@ -229,11 +241,11 @@ _SCENARIOS = {
         unlocked=("NW", "NE"), seeds={"MELON": 3},
     ),
     "land_reserve_below": _obs(
-        day=10, hour=6, money=23000, unlocked=("NW",),
+        day=10, hour=6, money=10500, unlocked=("NW",),
         hands=[(4, 4)] * 5, shed={"MELON": 20, "WHEAT": 10},
     ),
     "land_reserve_above": _obs(
-        day=10, hour=6, money=24700, unlocked=("NW",),
+        day=10, hour=6, money=12000, unlocked=("NW",),
         hands=[(4, 4)] * 5, shed={"MELON": 20, "WHEAT": 10},
     ),
     # --- #115: the production loop the guard could not see -------------------
@@ -284,61 +296,58 @@ _SCENARIOS = {
 #: Recorded actions of `strategies/champion_genome.json` on `_SCENARIOS`,
 #: captured directly from `NeuroPilotStrategy(genome=<baked genome>).act`.
 #: See the module docstring for when/how to regenerate this.
-GOLDEN_ACTIONS = {
-    "early_game": {
-        "farmer": ["PASS"], "hands": [],
-        "market": [["HIRE"]] * 8 + [["BUY_SEED", "MELON", 1]],
-    },
-    "mid_game_full_crew": {
-        "farmer": ["HARVEST"],
-        "hands": [["EAST"], ["EAST"], ["EAST"], ["EAST"]],
-        "market": [
-            ["SELL", "MELON", 10], ["SELL", "WHEAT", 5],
-            ["BUY_LAND"],
-        ],
-    },
-    "land_reserve_below": {
-        "farmer": ["PASS"],
-        "hands": [["WEST"], ["NORTH"], ["WEST"], ["WEST"], ["NORTH"]],
-        "market": [["SELL", "MELON", 20], ["SELL", "WHEAT", 10],
-                   ["BUY_SEED", "MELON", 6]],
-    },
-    "land_reserve_above": {
-        "farmer": ["PASS"],
-        "hands": [["WEST"], ["NORTH"], ["WEST"], ["WEST"], ["NORTH"]],
-        "market": [["SELL", "MELON", 20], ["SELL", "WHEAT", 10],
-                   ["BUY_SEED", "MELON", 6], ["BUY_LAND"]],
-    },
-    "plant_melon_window": {
-        "farmer": ["PLANT", "MELON"],
-        "hands": [["PLANT", "MELON"]],
-        "market": [],
-    },
-    "plant_wheat_after_melon_window": {
-        "farmer": ["PLANT", "WHEAT"],
-        "hands": [["PLANT", "WHEAT"]],
-        "market": [],
-    },
-    "fertilize_held_unit": {
-        "farmer": ["FERTILIZE"],
-        "hands": [],
-        "market": [],
-    },
-    "animal_work_when_crops_idle": {
-        "farmer": ["BUILD_PASTURE"],
-        "hands": [["BUILD_PASTURE"], ["BUILD_PASTURE"], ["BUILD_PASTURE"],
-                  ["BUILD_PASTURE"]],
-        "market": [["BUY_ANIMAL", "COW", 1]],
-    },
-    "scattered_second_quadrant": {
-        "farmer": ["PLANT", "WHEAT"],
-        "hands": [["HARVEST"], ["DIG"], ["NORTH"], ["PLANT", "WHEAT"]],
-        "market": [
-            ["SELL", "MELON", 8], ["SELL", "WHEAT", 4],
-            ["BUY_SEED", "WHEAT", 1],
-        ],
-    },
-}
+GOLDEN_ACTIONS = {   'early_game': {   'farmer': ['PASS'],
+                      'hands': [],
+                      'market': [   ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['HIRE'],
+                                    ['BUY_SEED', 'STRAWBERRY', 1]]},
+    'mid_game_full_crew': {   'farmer': ['PICKUP', 'FERTILIZER', 1],
+                              'hands': [['EAST'], ['EAST'], ['EAST'], ['EAST']],
+                              'market': [['SELL', 'MELON', 10], ['SELL', 'WHEAT', 5]]},
+    'land_reserve_below': {'farmer': ['PASS'],
+                        'hands': [['WEST'], ['NORTH'], ['WEST'], ['WEST'], ['NORTH']],
+                        'market': [['SELL', 'MELON', 20],
+                                   ['SELL', 'WHEAT', 10],
+                                   ['BUY_SEED', 'MELON', 6]]},
+    'land_reserve_above': {   'farmer': ['PASS'],
+                              'hands': [   ['WEST'],
+                                           ['NORTH'],
+                                           ['WEST'],
+                                           ['WEST'],
+                                           ['NORTH']],
+                              'market': [   ['SELL', 'MELON', 20],
+                                            ['SELL', 'WHEAT', 10],
+                                            ['BUY_SEED', 'MELON', 6],
+                                            ['BUY_LAND']]},
+    'plant_melon_window': {   'farmer': ['PASS'],
+                              'hands': [['PASS']],
+                              'market': [['BUY_SEED', 'STRAWBERRY', 2]]},
+    'plant_wheat_after_melon_window': {   'farmer': ['PLANT', 'WHEAT'],
+                                          'hands': [['PLANT', 'WHEAT']],
+                                          'market': []},
+    'fertilize_held_unit': {'farmer': ['FERTILIZE'], 'hands': [], 'market': []},
+    'animal_work_when_crops_idle': {   'farmer': ['BUILD_PASTURE'],
+                                       'hands': [   ['BUILD_PASTURE'],
+                                                    ['BUILD_PASTURE'],
+                                                    ['BUILD_PASTURE'],
+                                                    ['BUILD_PASTURE']],
+                                       'market': [['BUY_PRODUCT', 'FERTILIZER', 1]]},
+    'scattered_second_quadrant': {   'farmer': ['PLANT', 'MELON'],
+                                     'hands': [   ['HARVEST'],
+                                                  ['DIG'],
+                                                  ['NORTH'],
+                                                  ['PLANT', 'MELON']],
+                                     'market': [   ['SELL', 'MELON', 8],
+                                                   ['SELL', 'WHEAT', 4],
+                                                   ['BUY_SEED', 'MELON', 1]]}}
+
 
 
 def _act(scenario_name):

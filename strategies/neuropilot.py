@@ -183,6 +183,7 @@ _SELLABLE = frozenset(economy.MARKET_PARAMS) - _UNSELLABLE
 #: The two crops the crop crew grows: melon (high value, slow) or wheat (cheap,
 #: fast), chosen per-turn by `_crop_for` from the `crop_mix` knob.
 _MELON, _WHEAT = "MELON", "WHEAT"
+_CARROT, _STRAWBERRY, _TOMATO = "CARROT", "STRAWBERRY", "TOMATO"
 
 
 def _step_toward(pos, target) -> list:
@@ -235,14 +236,43 @@ def _harvest_ready(tile, day: int) -> bool:
     return day - tile.get("planted_day", day) >= c["first"]
 
 
+#: The five crops the sim supports, ordered by rough season revenue per tile
+#: (#127). Estimated as harvests x max_yield x base_price over a 30-day season,
+#: where an `ongoing` crop keeps yielding on its interval and a one-shot crop
+#: is replanted:
+#:
+#:     CARROT      2,100   one-shot, 2-day cycle
+#:     WHEAT       2,250   one-shot, 2-day cycle
+#:     MELON       4,500   one-shot, 10 days to a single 6-unit payout
+#:     STRAWBERRY  5,280   ongoing, first yield day 10 then every 2 days
+#:     TOMATO      5,520   ongoing, first yield day 8 then EVERY day
+#:
+#: Ordered rather than arbitrary so `crop_mix` reads as "commitment to a
+#: higher-ceiling crop" and evolution sees a monotonic gradient. We grew only
+#: MELON and WHEAT before this -- 2 of 5 crops, and neither of the two that
+#: compound. `pilkwang`, which outscores us ~5x, sells 228 STRAWBERRY.
+_CROP_LADDER = (_CARROT, _WHEAT, _MELON, _STRAWBERRY, _TOMATO)
+
+
 def _crop_for(knobs: Knobs, day: int):
-    """The crop to grow this turn: melon when `crop_mix` favors it and it can
-    still mature; otherwise wheat; `None` once neither can mature (tail end of
-    the season)."""
-    if knobs.crop_mix >= 0.5 and _plantable(_MELON, day):
-        return _MELON
-    if _plantable(_WHEAT, day):
-        return _WHEAT
+    """The crop to grow this turn, selected from `_CROP_LADDER` by `crop_mix`
+    band, falling back down the ladder when the pick cannot still mature;
+    `None` once nothing can (tail end of the season).
+
+    `crop_mix` was a binary melon-or-wheat switch (#127 widened it). Same knob,
+    same 472-weight genome -- reinterpreting it costs no interface bump, where
+    adding a crop knob would restart evolution from random.
+
+    Fallback order is *down* the ladder from the pick: a crop that can no
+    longer reach first yield only strands the tile and its seed cost, and the
+    cheaper, faster crops below are exactly the ones that can still finish.
+    """
+    n = len(_CROP_LADDER)
+    idx = min(n - 1, int(_clamp01(knobs.crop_mix) * n))
+    for i in range(idx, -1, -1):
+        crop = _CROP_LADDER[i]
+        if _plantable(crop, day):
+            return crop
     return None
 
 
