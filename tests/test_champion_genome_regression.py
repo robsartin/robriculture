@@ -173,6 +173,25 @@ def _mid_game_board():
 _COW_TILES = [pos for pos, kind in np.ANIMAL_TILES if kind == "COW"]
 
 
+def _dying_harvest_ready_board():
+    """A board whose tiles hold plants that are BOTH harvest-ready and one day
+    from dying (#137).
+
+    `consecutive_unwatered >= 1` means the sim turns the tile into a WEED at
+    rollover unless it is watered today. Every other scenario here has plants
+    at 0, so none of them could see #137's reordering: harvest used to preempt
+    watering unconditionally, which killed ongoing crops after first yield
+    (75 of 77 tomatoes died as weeds) and cost melon yield it would otherwise
+    have accrued.
+    """
+    board = [[None] * 10 for _ in range(10)]
+    for i, (x, y) in enumerate([(4, 4), (3, 4), (4, 3), (2, 4), (3, 3)]):
+        board[y][x] = {"kind": "PLANT", "crop": "MELON", "planted_day": 1,
+                       "watered_today": False, "consecutive_unwatered": 1,
+                       "yield_units": 2, "fertilized_until_day": -1}
+    return board
+
+
 def _all_idle_crop_board():
     """Every non-animal tile in NW *and* NE a watered live plant -- i.e. no
     crop work left anywhere the crew can reach (#115).
@@ -285,6 +304,13 @@ _SCENARIOS = {
         farmer=_COW_TILES[0], hands=_COW_TILES[1:5],
         unlocked=("NW", "NE"), shed={},
     ),
+    # #137: plants both harvest-ready AND one day from death. Nothing else here
+    # has an at-risk plant, so without this the guard cannot see whether
+    # watering preempts harvesting -- a change worth +0.0116 share, 10/10.
+    "dying_harvest_ready": _obs(
+        day=12, hour=4, money=7000, farmer=(4, 4), hands=[(3, 4), (4, 3), (2, 4)],
+        tiles=_dying_harvest_ready_board(), unlocked=("NW",), shed={"MELON": 4},
+    ),
     "scattered_second_quadrant": _obs(
         day=15, hour=4, money=6000, farmer=(4, 4),
         hands=[(1, 2), (8, 1), (3, 8), (6, 3)],
@@ -339,6 +365,10 @@ GOLDEN_ACTIONS = {   'early_game': {   'farmer': ['PASS'],
                                                     ['BUILD_PASTURE'],
                                                     ['BUILD_PASTURE']],
                                        'market': [['BUY_PRODUCT', 'FERTILIZER', 1]]},
+    'dying_harvest_ready': {   'farmer': ['WATER'],
+                               'hands': [['WATER'], ['WATER'], ['WATER']],
+                               'market': [   ['SELL', 'MELON', 4],
+                                             ['BUY_PRODUCT', 'FERTILIZER', 1]]},
     'scattered_second_quadrant': {   'farmer': ['PLANT', 'MELON'],
                                      'hands': [   ['HARVEST'],
                                                   ['DIG'],
@@ -463,3 +493,19 @@ def test_matches_golden_actions_when_only_animal_work_remains():
     emptied both went undetected.
     """
     assert _act("animal_work_when_crops_idle") == GOLDEN_ACTIONS["animal_work_when_crops_idle"]
+
+
+def test_matches_golden_actions_when_plants_are_dying_and_harvest_ready():
+    """Plants both harvest-ready and one day from becoming WEEDs.
+
+    The only scenario that can see #137's reordering. Harvest used to preempt
+    watering unconditionally -- harmless for a one-shot crop, fatal for an
+    ongoing one, which accrues yield every day after first yield so every visit
+    was spent harvesting and the plant was never watered again (75 of 77
+    tomatoes died as weeds, median age 9 against a 12-day life).
+
+    Every other scenario has `consecutive_unwatered` at 0, so all nine were
+    blind to a change worth +0.0116 share across 10/10 genomes. Verified by
+    mutation: restoring the old ordering moves this golden and no other.
+    """
+    assert _act("dying_harvest_ready") == GOLDEN_ACTIONS["dying_harvest_ready"]

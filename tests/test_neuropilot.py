@@ -913,3 +913,44 @@ def test_crop_for_falls_back_when_the_selected_crop_cannot_mature():
 def test_crop_for_returns_none_when_nothing_can_mature():
     # Tail of the season: every crop is stranded, so plant nothing.
     assert np._crop_for(_knobs(crop_mix=0.95), np.SEASON_DAYS) is None
+
+
+# --- #137: a plant about to die is watered before it is harvested ---
+
+def _live(crop="TOMATO", planted_day=0, yield_units=1, watered_today=False, unwatered=0):
+    return {"kind": "PLANT", "crop": crop, "planted_day": planted_day,
+            "yield_units": yield_units, "watered_today": watered_today,
+            "consecutive_unwatered": unwatered, "fertilized_until_day": -1}
+
+
+def test_waters_a_dying_plant_instead_of_harvesting_it():
+    # #137: harvest used to preempt watering unconditionally. An ONGOING crop
+    # accrues yield every day after first yield, so every visit was spent
+    # harvesting and the plant was never watered again -- it died two days
+    # later. Measured: 75 of 77 tomatoes died as weeds, median age 9 against a
+    # 12-day life, delivering one or two of their four yields.
+    # A dead plant forfeits every REMAINING yield plus the seed; the harvest
+    # only waits a turn.
+    tile = _live(planted_day=0, yield_units=1, unwatered=1)
+    assert np._plot_action(tile, 9, "TOMATO") == ["WATER"]
+
+
+def test_still_harvests_a_ready_plant_that_is_in_no_danger():
+    # Non-vacuity guard: the reordering must be caused by the plant DYING, not
+    # by harvest having been demoted generally. A safe plant still harvests.
+    tile = _live(planted_day=0, yield_units=1, unwatered=0)
+    assert np._plot_action(tile, 9, "TOMATO") == ["HARVEST"]
+
+
+def test_does_not_water_a_dying_plant_already_watered_today():
+    # The sim ignores a second WATER, so the turn would be wasted; harvest is
+    # then the better use of the visit.
+    tile = _live(planted_day=0, yield_units=1, watered_today=True, unwatered=1)
+    assert np._plot_action(tile, 9, "TOMATO") == ["HARVEST"]
+
+
+def test_one_shot_crops_are_unaffected_when_not_at_risk():
+    # MELON becomes harvest-ready once, near the end of its natural life, and
+    # loses only 6 plants a game. This change must not disturb it.
+    tile = _live(crop="MELON", planted_day=0, yield_units=3, unwatered=0)
+    assert np._plot_action(tile, 11, "MELON") == ["HARVEST"]
