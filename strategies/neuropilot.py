@@ -285,6 +285,25 @@ def _plot_action(tile, day: int, crop):
     if tile is None:
         return ["PLANT", crop] if crop is not None else ["PASS"]
     if _is_live_plant(tile):
+        # #137: water first when the plant would die at rollover. The sim turns
+        # a plant with consecutive_unwatered >= 2 into a WEED, and the counter
+        # increments for anything unwatered that day -- so one already at 1 is
+        # on its last turn.
+        #
+        # Harvest used to preempt watering unconditionally. Harmless for a
+        # one-shot crop, which becomes harvest-ready once near the end of its
+        # natural life; fatal for an ONGOING one, which accrues yield EVERY day
+        # after first yield, so every visit was spent harvesting and the plant
+        # was never watered again. Measured: 75 of 77 tomatoes died as weeds at
+        # a median age of 9 against a 12-day life, delivering one or two of
+        # their four yields -- the whole of tomato's 888 reward against melon's
+        # 8,995 (#127).
+        #
+        # A dead plant forfeits every remaining yield plus the seed. The
+        # harvest only waits a turn, and the yield keeps accruing meanwhile.
+        at_risk = tile.get("consecutive_unwatered", 0) >= 1
+        if at_risk and not tile.get("watered_today", False):
+            return ["WATER"]
         if _harvest_ready(tile, day):
             return ["HARVEST"]
         if not tile.get("watered_today", False):
