@@ -16,6 +16,7 @@ see the ADRs in [docs/adr/](docs/adr/).
 - `python -m harness.rounds --games 20` — play a round, append it to `harness/rounds.json`, and re-designate by pool share (#12, #76).
 - `python -m harness.genome_bench --genome <path> --games 4` — score one genome against the fixed anchors only (no Hall-of-Fame, no population sample). The **comparable** number across evolution runs; `evolve`'s own fitness is not (#70).
 - `python -m build.package <strategy>` — build a submittable tarball (runs a post-build smoke test).
+- `python -m scripts.preflight` — **run before trusting any measurement or pushing.** Asserts the installed deps match the `requirements.txt` pins, the working tree is clean, you are on the branch you think, and no long experiment is running. Every check exists because its absence produced a wrong result: a venv drifted off the sim pin and a whole session was measured against the wrong simulator (#133); a "discarded" branch that was never committed left its rejected code in the tree and the next measurement ran against it (#129); a 14-hour run was reading `strategies/` when a branch switch changed the file underneath it (#127). Compose it: `python -m scripts.preflight --tests && git push`.
 
 ## The experiment loop (ADR-0007) — the defining workflow
 
@@ -25,6 +26,12 @@ see the ADRs in [docs/adr/](docs/adr/).
 - **Strategy** (a new or tuned agent). "Is this agent actually *better*?" is a statistical question no unit test can answer. It must additionally pass the **promotion test**: a fixed set of **seeded** games (default **200**) against the current champion — promote only if **win-rate ≥ 55% AND a binomial test rejects the 50% null at p < 0.05**. Record N / win-rate / p in the issue.
 
 **Always TDD** the code (red → green → refactor, stay green). Work on a branch per experiment; nothing lands on `main` directly; PRs are reviewed, not auto-merged.
+
+**Verify the machinery, not just the result.** The experiment discipline above catches wrong *hypotheses*; it does not catch a measurement taken against the wrong simulator, a tree still holding rejected code, or a dead instrument. Three habits, each earned the hard way:
+
+- **`python -m scripts.preflight` before any measurement or push.** Chain a push on the tests themselves (`pytest -q && git push`) — chaining on an `echo` or `tail` will happily push a red suite.
+- **Every instrument needs a positive control.** A monkeypatch that silently misses its target returns all zeros, which is indistinguishable from a clean result. Count something that MUST be non-zero.
+- **No completion claim without a verifying command beside it.** "Discarded", "fixed" and "clean" each need a `git status` or a `grep` in the same breath — a rejected branch that was never committed deletes nothing.
 
 **Execute plans via subagent-driven-development** — a fresh implementer subagent per task, a spec + code-quality review after each task, and a whole-branch review before the PR. This is the standing default: go straight to it once a plan is committed; do **not** pause to offer an execution-mode menu.
 
