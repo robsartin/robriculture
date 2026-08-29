@@ -74,14 +74,17 @@ def build_bench_agents(anchor_names, include_external=False, discover_fn=None, b
 
     ``include_external=True`` additionally folds in whatever real competitor
     agents ``harness.external_pool.discover_external_agents`` finds locally
-    (#78) -- opt-in only, measurement-only; never wired into
-    ``DEFAULT_ANCHORS``, ``harness.promotion.designate``, or ``evolve()``.
+    (#78) -- opt-in only; never wired into ``DEFAULT_ANCHORS`` or
+    ``harness.promotion.designate``. It raises when the directory is empty
+    rather than quietly falling back to the internal-only pool.
+
+    The composition itself lives in ``harness.external_pool.resolve_opponents``
+    so the evolution fitness pool and this frozen bar cannot drift apart on who
+    counts as an opponent (#149).
     """
-    agents = build(list(anchor_names))
-    if include_external:
-        discover_fn = discover_fn or external_pool.discover_external_agents
-        agents.update(discover_fn())
-    return agents
+    return external_pool.resolve_opponents(
+        anchor_names, include_external=include_external,
+        discover_fn=discover_fn, build=build)
 
 
 def main(argv=None):  # pragma: no cover
