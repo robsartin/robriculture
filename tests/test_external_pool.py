@@ -86,3 +86,53 @@ def test_discover_uses_the_default_warn_when_none_is_given(tmp_path, capsys):
 def test_default_dir_points_at_repo_root_external_agents():
     """Kept in sync with .gitignore and the fetch script's own default dest."""
     assert external_pool.DEFAULT_DIR.endswith("external_agents")
+
+
+# --- resolve_opponents: one place that decides who a genome is scored against (#149) ---
+
+
+def _stub(name):
+    def agent(obs, config=None):
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+    agent.__name__ = name
+    return agent
+
+
+def test_resolve_opponents_default_is_named_anchors_and_never_discovers():
+    """The frozen comparability bar must not depend on what happens to be sitting
+    in the gitignored external_agents/ directory, so discovery is not attempted."""
+    called = []
+
+    def fake_discover():
+        called.append(True)
+        return {"pilkwang": _stub("pilkwang")}
+
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=False,
+        discover_fn=fake_discover, build=lambda names: {n: _stub(n) for n in names})
+
+    assert set(agents) == {"meta_bot"}
+    assert called == []
+
+
+def test_resolve_opponents_merges_discovered_agents_when_included():
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        discover_fn=lambda: {"pilkwang": _stub("pilkwang")},
+        build=lambda names: {n: _stub(n) for n in names})
+
+    assert set(agents) == {"meta_bot", "pilkwang"}
+
+
+def test_resolve_opponents_raises_when_external_requested_but_none_found():
+    """Asking for external opponents and silently getting none is the dead-instrument
+    failure: the run reports a clean number that was measured against the wrong pool
+    entirely (#67, #127). Fail loudly instead -- external_agents/ is gitignored and
+    is empty until scripts/fetch_external_agents.py has been run."""
+    import pytest
+
+    with pytest.raises(RuntimeError, match="fetch_external_agents"):
+        external_pool.resolve_opponents(
+            ["meta_bot"], include_external=True,
+            discover_fn=lambda: {},
+            build=lambda names: {n: _stub(n) for n in names})

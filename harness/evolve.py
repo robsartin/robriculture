@@ -3,6 +3,7 @@ import argparse, json, os, random, sys
 from kaggisim.strategy import make_agent
 from harness.tournament import play_rewards as _play_rewards
 from harness.tournament import build_agents
+from harness import external_pool
 from strategies import neuropilot as npilot
 
 GENOME_LEN = npilot.genome_size(npilot.N_FEATURES, npilot.H1, npilot.N_KNOBS)
@@ -315,6 +316,10 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--anchors", nargs="*", default=list(DEFAULT_ANCHORS),
                      help="registered strategy names to use as fixed opponents")
+    ap.add_argument("--include-external", action="store_true",
+                    help="add the locally-fetched real competitor agents to the fitness "
+                         "pool (#149). Off by default so the frozen bar stays comparable "
+                         "across runs; raises if external_agents/ is empty.")
     ap.add_argument("--anchor-weight", type=float, default=DEFAULT_ANCHOR_WEIGHT,
                     help="weight on the anchor share vs the sibling pool (default 0.75)")
     ap.add_argument("--out", default=GENOME_ARTIFACT, help="where to save the champion genome")
@@ -334,12 +339,20 @@ def main(argv=None):  # pragma: no cover
         "hof_cap": args.hof_cap,
         "seed": args.seed,
         "anchors": args.anchors,
+        "include_external": args.include_external,
         "anchor_weight": args.anchor_weight,
         "seed_genome": args.seed_genome,
     }
 
     ckpt = None if args.dry_run else (
         lambda g, f, h: checkpoint_genome(args.out, g, f, h, settings=run_settings))
+
+    # Externals are opponents only. resolve_opponents raises rather than
+    # silently handing back the internal-only pool, so a run can never report an
+    # "external" number it did not measure (#149).
+    anchor_override = (
+        list(external_pool.resolve_opponents(args.anchors, include_external=True).values())
+        if args.include_external else None)
 
     result = evolve(
         generations=args.generations,
@@ -351,6 +364,7 @@ def main(argv=None):  # pragma: no cover
         anchor_names=args.anchors,
         seed=args.seed,
         anchor_weight=args.anchor_weight,
+        anchor_agents_override=anchor_override,
         seed_genome=seed_genome,
         checkpoint_fn=ckpt,
     )

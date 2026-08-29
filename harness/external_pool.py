@@ -71,3 +71,43 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
         agents[name] = candidate
 
     return agents
+
+
+def resolve_opponents(anchor_names, include_external=False, discover_fn=None, build=None):
+    """Return ``{name: agent}`` for the opponents a genome should be scored against.
+
+    One place decides this, so the evolution fitness pool (`harness.evolve`) and
+    the frozen benchmark (`harness.genome_bench`) cannot drift apart on the
+    question of who counts as an opponent.
+
+    Default is exactly the named anchors, and discovery is **not attempted** --
+    the frozen comparability bar across evolution runs must never depend on what
+    happens to be sitting in the gitignored ``external_agents/`` directory
+    (CLAUDE.md).
+
+    ``include_external=True`` merges in the locally-fetched real competitors
+    (#78). It raises when none are found rather than quietly returning the
+    internal-only set: a run that asked for external opponents and silently got
+    none reports a confident number measured against the wrong pool, which is
+    indistinguishable from a clean result -- the failure mode that wasted a whole
+    session in #133 and returned "every candidate is unlicensed" in #67.
+
+    Externals are opponents and gate opponents only, never submission
+    candidates: `scripts/submit.py` must not package a competitor's agent
+    (ADR-0005 licensing, enforced via `submit_default`).
+    """
+    if build is None:  # lazy: keeps this module importable without the strategy registry
+        from harness.tournament import build_agents as build
+    agents = build(list(anchor_names))
+    if include_external:
+        discover_fn = discover_fn or discover_external_agents
+        external = discover_fn()
+        if not external:
+            raise RuntimeError(
+                "include_external was requested but no external agents were found in "
+                f"{DEFAULT_DIR!r}. That directory is gitignored and empty until you run "
+                "scripts/fetch_external_agents.py. Refusing to score against the "
+                "internal-only pool while reporting an external result."
+            )
+        agents.update(external)
+    return agents
