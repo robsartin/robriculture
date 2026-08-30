@@ -97,6 +97,12 @@ def extract_agent_cell(notebook, cell_file=None):
     Omitted, the first tagged cell wins, which is the behavior every manifest
     entry predating #151 relies on.
 
+    The match target is taken as the first token after the magic (e.g.
+    ``main.py`` in ``%%writefile main.py``); a flagged magic like
+    ``%%writefile -a main.py`` yields ``-a`` instead, so it is never matched
+    and the cell is skipped -- correctly failing loudly rather than silently
+    vendoring the wrong cell.
+
     Raises ValueError if no cell is tagged ``%%agentfile``/``%%writefile``, or
     if ``cell_file`` matches none of them -- a notebook that doesn't follow the
     convention must fail loudly at fetch time rather than silently vendoring

@@ -35,6 +35,12 @@ def test_load_manifest_reads_the_committed_manifest():
     assert len(entries) >= 4
     names = [e["name"] for e in entries]
     assert len(names) == len(set(names)), f"duplicate agent names: {names}"
+    # A count floor alone would let any one of the four original entries be
+    # deleted (leaving >= 4 via later additions) without the suite noticing.
+    # Pin them by name too.
+    assert {"pilkwang_structured_economic_policy", "madhur_sabherwal_hub_geometry_agent",
+            "seyamalam_candidate_v6_adaptive_livestock",
+            "alexandergremyakov_harvest_pulse_goose_dividend_v2"} <= set(names)
     for entry in entries:
         for key in ("name", "source_type", "license", "attribution", "dest_filename"):
             assert entry[key]

@@ -19,11 +19,16 @@ sources are worth adding to the external pool:
 
 These join the pool as **measurement-only** opponents, per ADR-0008's amendment
 (#78, 2026-08-18): fetched by `scripts/fetch_external_agents.py` into the
-gitignored `external_agents/` directory, reachable only through
-`harness/genome_bench.py --include-external`. No third-party code is committed.
+gitignored `external_agents/` directory. No third-party code is committed.
 
 Using them as evolution anchors is explicitly out of scope; that reverses a
-recorded decision and is issue #152.
+recorded decision and is issue #152. In practice, though, the pool is reachable
+via the opt-in `--include-external` flag on both `harness/genome_bench.py` and
+`harness/evolve.py`, and by name through `harness/production_report.py`'s
+`resolve_agent`. `evolve.py --include-external` passes the resolved externals
+as `anchor_agents_override`, which *is* the fitness anchor list — so externals
+already do reach evolution anchors today, contradicting the amendment above.
+That contradiction is open and tracked in issue #152, not resolved here.
 
 ### A correction this spec carries
 

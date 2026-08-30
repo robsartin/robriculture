@@ -9,6 +9,7 @@ suite behaves identically in CI, a clean clone, and any other machine.
 
 from __future__ import annotations
 
+import sys
 import textwrap
 
 from harness import external_pool
@@ -52,6 +53,12 @@ def test_discover_skips_a_file_that_fails_to_import(tmp_path):
     agents = external_pool.discover_external_agents(str(tmp_path), warn=warnings.append)
     assert agents == {}
     assert any("broken" in w for w in warnings)
+    # The loader registers the module in sys.modules *before* exec'ing it (to
+    # satisfy slotted-dataclass annotation resolution, see the slots test
+    # below) -- a failed import must not leave that placeholder registered
+    # behind, or a later, unrelated import of the same stem could resolve
+    # against a half-built stranger's module.
+    assert "_external_agent_broken" not in sys.modules
 
 
 def test_discover_skips_a_file_whose_agent_attribute_is_not_callable(tmp_path):

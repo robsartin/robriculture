@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **Measurement only.** These agents are reachable solely via `harness/genome_bench.py --include-external`. Do NOT add them to `DEFAULT_ANCHORS` (`harness/evolve.py:200`), to promotion gates, or to `harness/promotion.py`'s `designate`. ADR-0008 amendment (#78, 2026-08-18) forbids it; issue #152 tracks revisiting that.
+- **Measurement only, in intent.** Do NOT add these agents to `DEFAULT_ANCHORS` (`harness/evolve.py:200`), to promotion gates, or to `harness/promotion.py`'s `designate`. ADR-0008 amendment (#78, 2026-08-18) forbids using externals as evolution anchors. In fact the pool is reachable via the opt-in `--include-external` flag on both `harness/genome_bench.py` and `harness/evolve.py` (the latter feeds resolved externals into `evolve`'s own `anchor_agents_override`, i.e. the fitness anchor list) and by name through `harness/production_report.py`. The `evolve` path already contradicts the #78 amendment; that open contradiction is tracked, not resolved, by issue #152.
 - **No third-party code in git.** `external_agents/` is gitignored (`.gitignore:73`). Never `git add` a fetched agent or its `.meta.json` sidecar.
 - **Stdlib only** in anything shipped (ADR-0004). No new dependencies.
 - **Strict TDD.** Write the test, run it, *observe it fail for the right reason*, then implement. A test that has never been seen red has proven nothing.
