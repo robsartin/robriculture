@@ -29,7 +29,7 @@ def _runner(returncode=0, stdout="", stderr="", side_effect=None):
 
 def test_load_manifest_reads_the_committed_manifest():
     entries = fea.load_manifest()
-    assert len(entries) == 4
+    assert len(entries) == 7
     for entry in entries:
         for key in ("name", "source_type", "license", "attribution", "dest_filename"):
             assert entry[key]
@@ -40,6 +40,24 @@ def test_manifest_excludes_the_rejected_candidate_v7_plus_variants():
     entries = fea.load_manifest()
     paths = [e.get("path", "") for e in entries]
     assert not any("v7" in p or "v18" in p or "v19" in p or "v20" in p or "v21" in p for p in paths)
+
+
+def test_manifest_pins_the_premaananda_agent_cell():
+    # Its notebook tags both main.py (the agent) and arena.py (a harness);
+    # without cell_file the fetch depends on cell order (#151).
+    entries = fea.load_manifest()
+    entry = next(e for e in entries if e["name"] == "premaananda108_ecobot_v7")
+    assert entry["cell_file"] == "main.py"
+
+
+def test_manifest_takes_only_the_two_measured_shashankjangid_rungs():
+    # 57 agent files in that repo; v300 (~0.536 share) and v1000 (~0.677) were
+    # chosen by measurement against DEFAULT_ANCHORS. v1500 measures within noise
+    # of v1000 and must not be added alongside it.
+    entries = fea.load_manifest()
+    paths = {e.get("path") for e in entries
+             if e.get("repo") == "ShashankJangid/kaggriculture-agent"}
+    assert paths == {"agent_v300_champion.py", "agent_v1000_sovereign_prime.py"}
 
 
 # --- load_manifest: pure parsing ---
