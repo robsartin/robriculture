@@ -56,11 +56,20 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
             continue
         name = fname[: -len(".py")]
         path = os.path.join(directory, fname)
+        module_name = f"_external_agent_{name}"
         try:
-            spec = importlib.util.spec_from_file_location(f"_external_agent_{name}", path)
+            spec = importlib.util.spec_from_file_location(module_name, path)
             module = importlib.util.module_from_spec(spec)
+            # Register before exec: a module-level `@dataclass(slots=True)` under
+            # `from __future__ import annotations` resolves its (stringified)
+            # field annotations via `sys.modules[cls.__module__]` while the class
+            # body runs. Skipping this step makes that lookup return None and
+            # crashes the import with an unrelated AttributeError (#151) -- a
+            # failure a hand-written fake agent would never trigger.
+            sys.modules[module_name] = module
             spec.loader.exec_module(module)
         except Exception as exc:  # a stranger's code -- anything can go wrong here
+            sys.modules.pop(module_name, None)
             warn(f"external agent {fname!r} failed to import ({exc!r}); skipping")
             continue
 

@@ -68,6 +68,34 @@ def test_discover_ignores_non_python_files(tmp_path):
     assert external_pool.discover_external_agents(str(tmp_path)) == {}
 
 
+def test_discover_loads_an_agent_module_that_defines_a_slotted_dataclass(tmp_path):
+    """A module-level `@dataclass(slots=True)` under `from __future__ import
+    annotations` (PEP 563 -- annotations become strings) calls CPython's
+    `_is_type`, which resolves those strings via `sys.modules[cls.__module__]`
+    -- if the loader never registers the module there before exec'ing it, that
+    lookup returns None and the whole import blows up with an unrelated
+    AttributeError (#151, found by the real-network fetch of
+    premaananda108_ecobot_v7, which hits exactly this: a slots=True frozen
+    dataclass at module scope, under `from __future__ import annotations`)."""
+    (tmp_path / "dataclass_agent.py").write_text(textwrap.dedent(
+        """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass(slots=True, frozen=True)
+        class Config:
+            hands: int = 8
+
+        def agent(obs, config=None):
+            return {"farmer": ["PASS"], "hands": [], "market": []}
+        """
+    ))
+    warnings = []
+    agents = external_pool.discover_external_agents(str(tmp_path), warn=warnings.append)
+    assert warnings == []
+    assert set(agents) == {"dataclass_agent"}
+
+
 def test_discover_loads_multiple_agents_keyed_by_filename_stem(tmp_path):
     (tmp_path / "agent_a.py").write_text("def agent(obs, config=None):\n    return 'a'\n")
     (tmp_path / "agent_b.py").write_text("def agent(obs, config=None):\n    return 'b'\n")
