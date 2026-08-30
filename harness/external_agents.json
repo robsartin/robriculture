@@ -52,6 +52,41 @@
       "attribution": "Alexander Gremyakov, \"harvest-pulse-goose-dividend-v2\" (https://www.kaggle.com/code/alexandergremyakov/harvest-pulse-goose-dividend-v2), Apache License 2.0.",
       "dest_filename": "alexandergremyakov_harvest_pulse_goose_dividend_v2.py",
       "notes": "Kaggle notebook; single code cell tagged `%%writefile /kaggle/working/main.py`. The fetch script extracts that cell only."
+    },
+    {
+      "name": "premaananda108_ecobot_v7",
+      "source_type": "kaggle_kernel",
+      "kernel_ref": "premaananda108/economics-driven-rule-agent-ecobot-v7-arena",
+      "url": "https://www.kaggle.com/code/premaananda108/economics-driven-rule-agent-ecobot-v7-arena",
+      "license": "Apache-2.0",
+      "attribution": "premaananda108, \"Economics-Driven Rule Agent (EcoBot v7) + Arena\" (https://www.kaggle.com/code/premaananda108/economics-driven-rule-agent-ecobot-v7-arena), Apache License 2.0.",
+      "dest_filename": "premaananda108_ecobot_v7.py",
+      "cell_file": "main.py",
+      "notes": "Public 819.0 / best 995.2 -- the strongest agent in this pool, and well above our own ~520-535. Its notebook tags TWO cells: main.py (the agent) and arena.py (a self-play harness); cell_file pins the former, so do not remove it (#151). Measured share ~0.792 vs DEFAULT_ANCHORS. Roughly 2.5x slower per game than the other externals."
+    },
+    {
+      "name": "shashankjangid_agent_v300_champion",
+      "source_type": "github_file",
+      "repo": "ShashankJangid/kaggriculture-agent",
+      "path": "agent_v300_champion.py",
+      "ref": "main",
+      "url": "https://github.com/ShashankJangid/kaggriculture-agent/blob/main/agent_v300_champion.py",
+      "license": "MIT",
+      "attribution": "Shashank Jangid, kaggriculture-agent (https://github.com/ShashankJangid/kaggriculture-agent), agent_v300_champion.py, MIT License.",
+      "dest_filename": "shashankjangid_agent_v300_champion.py",
+      "notes": "The near-parity rung: measured share ~0.536 vs DEFAULT_ANCHORS (0.5 is parity). Chosen with v1000 to span a real measured spread. That repo has 57 agent files whose version numbers do NOT track strength -- v25_master is the weakest measured (~0.095) and v9 beats v100_sota -- so do not add rungs by version number without measuring (#151)."
+    },
+    {
+      "name": "shashankjangid_agent_v1000_sovereign_prime",
+      "source_type": "github_file",
+      "repo": "ShashankJangid/kaggriculture-agent",
+      "path": "agent_v1000_sovereign_prime.py",
+      "ref": "main",
+      "url": "https://github.com/ShashankJangid/kaggriculture-agent/blob/main/agent_v1000_sovereign_prime.py",
+      "license": "MIT",
+      "attribution": "Shashank Jangid, kaggriculture-agent (https://github.com/ShashankJangid/kaggriculture-agent), agent_v1000_sovereign_prime.py, MIT License.",
+      "dest_filename": "shashankjangid_agent_v1000_sovereign_prime.py",
+      "notes": "The strong rung: measured share ~0.677 vs DEFAULT_ANCHORS, beating every one of our anchors. Do NOT also add agent_v1500_sovereign_apex -- it measures ~0.674, within the ~0.01 run-to-run noise, so it is a duplicate voice for double the runtime (#151)."
     }
   ]
 }

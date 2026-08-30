@@ -9,6 +9,7 @@ suite behaves identically in CI, a clean clone, and any other machine.
 
 from __future__ import annotations
 
+import sys
 import textwrap
 
 from harness import external_pool
@@ -52,6 +53,12 @@ def test_discover_skips_a_file_that_fails_to_import(tmp_path):
     agents = external_pool.discover_external_agents(str(tmp_path), warn=warnings.append)
     assert agents == {}
     assert any("broken" in w for w in warnings)
+    # The loader registers the module in sys.modules *before* exec'ing it (to
+    # satisfy slotted-dataclass annotation resolution, see the slots test
+    # below) -- a failed import must not leave that placeholder registered
+    # behind, or a later, unrelated import of the same stem could resolve
+    # against a half-built stranger's module.
+    assert "_external_agent_broken" not in sys.modules
 
 
 def test_discover_skips_a_file_whose_agent_attribute_is_not_callable(tmp_path):
@@ -66,6 +73,34 @@ def test_discover_ignores_non_python_files(tmp_path):
     (tmp_path / "readme.txt").write_text("not code")
     (tmp_path / "some_agent.py.meta.json").write_text("{}")
     assert external_pool.discover_external_agents(str(tmp_path)) == {}
+
+
+def test_discover_loads_an_agent_module_that_defines_a_slotted_dataclass(tmp_path):
+    """A module-level `@dataclass(slots=True)` under `from __future__ import
+    annotations` (PEP 563 -- annotations become strings) calls CPython's
+    `_is_type`, which resolves those strings via `sys.modules[cls.__module__]`
+    -- if the loader never registers the module there before exec'ing it, that
+    lookup returns None and the whole import blows up with an unrelated
+    AttributeError (#151, found by the real-network fetch of
+    premaananda108_ecobot_v7, which hits exactly this: a slots=True frozen
+    dataclass at module scope, under `from __future__ import annotations`)."""
+    (tmp_path / "dataclass_agent.py").write_text(textwrap.dedent(
+        """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass(slots=True, frozen=True)
+        class Config:
+            hands: int = 8
+
+        def agent(obs, config=None):
+            return {"farmer": ["PASS"], "hands": [], "market": []}
+        """
+    ))
+    warnings = []
+    agents = external_pool.discover_external_agents(str(tmp_path), warn=warnings.append)
+    assert warnings == []
+    assert set(agents) == {"dataclass_agent"}
 
 
 def test_discover_loads_multiple_agents_keyed_by_filename_stem(tmp_path):

@@ -29,7 +29,18 @@ def _runner(returncode=0, stdout="", stderr="", side_effect=None):
 
 def test_load_manifest_reads_the_committed_manifest():
     entries = fea.load_manifest()
-    assert len(entries) == 4
+    # A floor, not an exact count: this pool is explicitly growing (#151), so an
+    # exact-count pin forces an unrelated bump on every future addition. >= 4
+    # still catches a truncated/emptied manifest.
+    assert len(entries) >= 4
+    names = [e["name"] for e in entries]
+    assert len(names) == len(set(names)), f"duplicate agent names: {names}"
+    # A count floor alone would let any one of the four original entries be
+    # deleted (leaving >= 4 via later additions) without the suite noticing.
+    # Pin them by name too.
+    assert {"pilkwang_structured_economic_policy", "madhur_sabherwal_hub_geometry_agent",
+            "seyamalam_candidate_v6_adaptive_livestock",
+            "alexandergremyakov_harvest_pulse_goose_dividend_v2"} <= set(names)
     for entry in entries:
         for key in ("name", "source_type", "license", "attribution", "dest_filename"):
             assert entry[key]
@@ -40,6 +51,24 @@ def test_manifest_excludes_the_rejected_candidate_v7_plus_variants():
     entries = fea.load_manifest()
     paths = [e.get("path", "") for e in entries]
     assert not any("v7" in p or "v18" in p or "v19" in p or "v20" in p or "v21" in p for p in paths)
+
+
+def test_manifest_pins_the_premaananda_agent_cell():
+    # Its notebook tags both main.py (the agent) and arena.py (a harness);
+    # without cell_file the fetch depends on cell order (#151).
+    entries = fea.load_manifest()
+    entry = next(e for e in entries if e["name"] == "premaananda108_ecobot_v7")
+    assert entry["cell_file"] == "main.py"
+
+
+def test_manifest_takes_only_the_two_measured_shashankjangid_rungs():
+    # 57 agent files in that repo; v300 (~0.536 share) and v1000 (~0.677) were
+    # chosen by measurement against DEFAULT_ANCHORS. v1500 measures within noise
+    # of v1000 and must not be added alongside it.
+    entries = fea.load_manifest()
+    paths = {e.get("path") for e in entries
+             if e.get("repo") == "ShashankJangid/kaggriculture-agent"}
+    assert paths == {"agent_v300_champion.py", "agent_v1000_sovereign_prime.py"}
 
 
 # --- load_manifest: pure parsing ---
@@ -122,6 +151,41 @@ def test_extract_agent_cell_raises_when_no_tagged_cell_is_present():
         fea.extract_agent_cell(notebook)
 
 
+def test_extract_agent_cell_returns_the_named_cell_when_cell_file_is_given():
+    # Two tagged cells: the agent is the SECOND one, so first-match would be wrong.
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile arena.py\n", "ARENA = 1\n"]},
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "AGENT = 1\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook, "main.py") == "AGENT = 1\n"
+
+
+def test_extract_agent_cell_matches_cell_file_against_a_path_prefixed_target():
+    # Kaggle notebooks commonly write to /kaggle/working/main.py; an entry
+    # should not have to know the author's directory prefix.
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile /kaggle/working/main.py\n", "AGENT = 1\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook, "main.py") == "AGENT = 1\n"
+
+
+def test_extract_agent_cell_falls_back_to_first_match_without_cell_file():
+    # Pins the four existing manifest entries, none of which set cell_file.
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "FIRST = 1\n"]},
+        {"cell_type": "code", "source": ["%%writefile arena.py\n", "SECOND = 2\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook) == "FIRST = 1\n"
+
+
+def test_extract_agent_cell_raises_when_cell_file_matches_nothing():
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "AGENT = 1\n"]},
+    ]}
+    with pytest.raises(ValueError, match="typo.py"):
+        fea.extract_agent_cell(notebook, "typo.py")
+
+
 # --- fetch_github_file: DI over `runner` ---
 
 def test_fetch_github_file_writes_the_raw_content(tmp_path):
@@ -166,6 +230,19 @@ def test_fetch_kaggle_kernel_extracts_the_agent_cell(tmp_path):
     path = fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=_fake_kaggle_pull(notebook))
     assert path == str(tmp_path / "foo.py")
     assert (tmp_path / "foo.py").read_text() == "def agent(obs):\n    pass\n"
+
+
+def test_fetch_kaggle_kernel_honours_cell_file_from_the_entry(tmp_path):
+    # Agent is the second tagged cell, so a fetch ignoring cell_file writes
+    # the arena harness instead (#151).
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile arena.py\n", "ARENA = 1\n"]},
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "AGENT = 1\n"]},
+    ]}
+    entry = {"name": "foo", "kernel_ref": "someone/kernel",
+             "dest_filename": "foo.py", "cell_file": "main.py"}
+    path = fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=_fake_kaggle_pull(notebook))
+    assert (tmp_path / "foo.py").read_text() == "AGENT = 1\n"
 
 
 def test_fetch_kaggle_kernel_raises_on_a_nonzero_exit(tmp_path):
