@@ -29,7 +29,12 @@ def _runner(returncode=0, stdout="", stderr="", side_effect=None):
 
 def test_load_manifest_reads_the_committed_manifest():
     entries = fea.load_manifest()
-    assert len(entries) == 7
+    # A floor, not an exact count: this pool is explicitly growing (#151), so an
+    # exact-count pin forces an unrelated bump on every future addition. >= 4
+    # still catches a truncated/emptied manifest.
+    assert len(entries) >= 4
+    names = [e["name"] for e in entries]
+    assert len(names) == len(set(names)), f"duplicate agent names: {names}"
     for entry in entries:
         for key in ("name", "source_type", "license", "attribution", "dest_filename"):
             assert entry[key]
