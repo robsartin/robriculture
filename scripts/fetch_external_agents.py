@@ -84,12 +84,23 @@ def write_meta(entry, dest_dir=DEST_DIR):
     return meta_path(entry, dest_dir)
 
 
-def extract_agent_cell(notebook):
+def extract_agent_cell(notebook, cell_file=None):
     """Return the source of the notebook's tagged agent cell, magic line stripped.
 
-    Raises ValueError if no cell is tagged ``%%agentfile``/``%%writefile`` --
-    a notebook that doesn't follow the convention must fail loudly at fetch
-    time rather than silently vendoring the wrong (narrative/plotting) cell.
+    ``cell_file`` names which tagged cell to take, matched against the basename
+    of the magic's target (so ``main.py`` matches both ``%%writefile main.py``
+    and ``%%writefile /kaggle/working/main.py``). It is required for notebooks
+    that tag more than one cell -- premaananda108's writes both a ``main.py``
+    agent and an ``arena.py`` harness, and taking the wrong one silently
+    vendors a file with no module-level ``agent`` (#151).
+
+    Omitted, the first tagged cell wins, which is the behavior every manifest
+    entry predating #151 relies on.
+
+    Raises ValueError if no cell is tagged ``%%agentfile``/``%%writefile``, or
+    if ``cell_file`` matches none of them -- a notebook that doesn't follow the
+    convention must fail loudly at fetch time rather than silently vendoring
+    the wrong (narrative/plotting) cell.
     """
     for cell in notebook.get("cells", []):
         if cell.get("cell_type") != "code":
@@ -102,8 +113,19 @@ def extract_agent_cell(notebook):
         if not lines:
             continue
         first = lines[0].strip()
-        if any(first.startswith(magic) for magic in _AGENT_CELL_MAGICS):
-            return "".join(lines[1:])
+        if not any(first.startswith(magic) for magic in _AGENT_CELL_MAGICS):
+            continue
+        if cell_file is not None:
+            parts = first.split()
+            target = parts[1] if len(parts) > 1 else ""
+            if os.path.basename(target) != os.path.basename(cell_file):
+                continue
+        return "".join(lines[1:])
+    if cell_file is not None:
+        raise ValueError(
+            f"no cell tagged %%agentfile or %%writefile targets {cell_file!r} -- "
+            "cannot identify the submittable agent"
+        )
     raise ValueError(
         "no cell tagged %%agentfile or %%writefile found in notebook -- "
         "cannot identify the submittable agent"
@@ -174,7 +196,7 @@ def fetch_kaggle_kernel(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_di
             )
         with open(os.path.join(tmp, notebooks[0])) as fh:
             notebook = json.load(fh)
-        source = extract_agent_cell(notebook)
+        source = extract_agent_cell(notebook, entry.get("cell_file"))
 
     os.makedirs(dest_dir, exist_ok=True)
     path = dest_path(entry, dest_dir)

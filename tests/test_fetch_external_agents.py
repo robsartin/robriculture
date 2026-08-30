@@ -122,6 +122,41 @@ def test_extract_agent_cell_raises_when_no_tagged_cell_is_present():
         fea.extract_agent_cell(notebook)
 
 
+def test_extract_agent_cell_returns_the_named_cell_when_cell_file_is_given():
+    # Two tagged cells: the agent is the SECOND one, so first-match would be wrong.
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile arena.py\n", "ARENA = 1\n"]},
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "AGENT = 1\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook, "main.py") == "AGENT = 1\n"
+
+
+def test_extract_agent_cell_matches_cell_file_against_a_path_prefixed_target():
+    # Kaggle notebooks commonly write to /kaggle/working/main.py; an entry
+    # should not have to know the author's directory prefix.
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile /kaggle/working/main.py\n", "AGENT = 1\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook, "main.py") == "AGENT = 1\n"
+
+
+def test_extract_agent_cell_falls_back_to_first_match_without_cell_file():
+    # Pins the four existing manifest entries, none of which set cell_file.
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "FIRST = 1\n"]},
+        {"cell_type": "code", "source": ["%%writefile arena.py\n", "SECOND = 2\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook) == "FIRST = 1\n"
+
+
+def test_extract_agent_cell_raises_when_cell_file_matches_nothing():
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "AGENT = 1\n"]},
+    ]}
+    with pytest.raises(ValueError, match="typo.py"):
+        fea.extract_agent_cell(notebook, "typo.py")
+
+
 # --- fetch_github_file: DI over `runner` ---
 
 def test_fetch_github_file_writes_the_raw_content(tmp_path):
@@ -166,6 +201,19 @@ def test_fetch_kaggle_kernel_extracts_the_agent_cell(tmp_path):
     path = fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=_fake_kaggle_pull(notebook))
     assert path == str(tmp_path / "foo.py")
     assert (tmp_path / "foo.py").read_text() == "def agent(obs):\n    pass\n"
+
+
+def test_fetch_kaggle_kernel_honours_cell_file_from_the_entry(tmp_path):
+    # Agent is the second tagged cell, so a fetch ignoring cell_file writes
+    # the arena harness instead (#151).
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["%%writefile arena.py\n", "ARENA = 1\n"]},
+        {"cell_type": "code", "source": ["%%writefile main.py\n", "AGENT = 1\n"]},
+    ]}
+    entry = {"name": "foo", "kernel_ref": "someone/kernel",
+             "dest_filename": "foo.py", "cell_file": "main.py"}
+    path = fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=_fake_kaggle_pull(notebook))
+    assert (tmp_path / "foo.py").read_text() == "AGENT = 1\n"
 
 
 def test_fetch_kaggle_kernel_raises_on_a_nonzero_exit(tmp_path):
