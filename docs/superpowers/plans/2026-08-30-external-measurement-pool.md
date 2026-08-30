@@ -141,17 +141,9 @@ cd /Users/sartin/code/robriculture && .venv/bin/python -m pytest tests/test_fetc
 
 Expected: the three new tests PASS and every pre-existing test in the file still passes (the fallback path is unchanged).
 
-- [ ] **Step 5: Pass `cell_file` through from the manifest entry**
+- [ ] **Step 5: Write the failing test for the pass-through**
 
-In `fetch_kaggle_kernel`, change the extraction call:
-
-```python
-        source = extract_agent_cell(notebook, entry.get("cell_file"))
-```
-
-- [ ] **Step 6: Write and run a failing test for the pass-through**
-
-Add this test, run it, and confirm it fails if you revert Step 5 (it exercises the wiring, not the matcher):
+This exercises the wiring from manifest entry to matcher, not the matcher itself. Write it and see it red **before** touching `fetch_kaggle_kernel`.
 
 Reuse the file's existing `_fake_kaggle_pull` helper (line ~154), which already simulates `kaggle kernels pull`'s side effect of writing a `.ipynb` into the `-p` directory. Do not write a second staging helper.
 
@@ -169,13 +161,31 @@ def test_fetch_kaggle_kernel_honours_cell_file_from_the_entry(tmp_path):
     assert (tmp_path / "foo.py").read_text() == "AGENT = 1\n"
 ```
 
+- [ ] **Step 6: Run it and observe it fail**
+
+```bash
+cd /Users/sartin/code/robriculture && .venv/bin/python -m pytest tests/test_fetch_external_agents.py -k honours_cell_file -v
+```
+
+Expected: FAIL with `AssertionError` — `fetch_kaggle_kernel` still ignores `cell_file`, so it writes the first tagged cell and the file contains `ARENA = 1\n`. **Confirm that exact wrong value before implementing** — it proves the test would catch the bug.
+
+- [ ] **Step 7: Pass `cell_file` through from the manifest entry**
+
+In `fetch_kaggle_kernel`, change the extraction call:
+
+```python
+        source = extract_agent_cell(notebook, entry.get("cell_file"))
+```
+
+- [ ] **Step 8: Run the tests and observe them pass**
+
 ```bash
 cd /Users/sartin/code/robriculture && .venv/bin/python -m pytest tests/test_fetch_external_agents.py -v
 ```
 
 Expected: PASS, whole file green.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd /Users/sartin/code/robriculture
