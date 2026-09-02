@@ -96,3 +96,23 @@ def test_market_params_match_sim(item):
         assert ours[field] == theirs[field], (
             f"{item}.{field} is {ours[field]!r}, sim is {theirs[field]!r}"
         )
+
+
+# --- market_price must match the sim exactly (ADR-0002 claim-check) ---
+
+
+def test_market_price_matches_the_sim_across_the_curve():
+    """`economy.market_price` is a reconciliation of the sim's own function, not
+    an approximation: the whole point of #162 is reasoning about what our own
+    sales do to the price we get, so a drifting curve would silently invent the
+    answer. Checked on both sides of the I0 anchor, including the glut region
+    where melon's `sq` curve is steepest."""
+    from kaggle_environments.envs.kaggriculture import kaggriculture as sim
+    from kaggisim import economy
+
+    checked = 0
+    for item in economy.MARKET_PARAMS:
+        for inv in (0, 5000, 9000, 9999, 10000, 10001, 10500, 11000, 15000, 30000):
+            assert economy.market_price(item, inv) == sim.market_price(item, inv), (item, inv)
+            checked += 1
+    assert checked >= 80, f"POSITIVE CONTROL: only {checked} points compared"

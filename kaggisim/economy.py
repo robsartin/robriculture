@@ -8,6 +8,8 @@ them for tuning — see ADR-0002.
 
 from __future__ import annotations
 
+import math
+
 # --- Simulation configuration defaults (env.configuration knobs) ---
 CONFIG_DEFAULTS = {
     "episodeSteps": 720,          # 24 turns/day * 30 days
@@ -76,6 +78,47 @@ SHOP_DEMAND = {
     "SMOOTHIE_SHOP":  ["STRAWBERRY", "MILK"],
     "FARMERS_MARKET": ["WHEAT", "CARROT", "TOMATO", "STRAWBERRY"],
 }
+
+
+#: Price floor and shape functions, reconciled field-for-field to the sim's
+#: `PRICE_FLOOR` and `_shape` (ADR-0002).
+PRICE_FLOOR = 1
+
+
+def _shape(func: str, x: float) -> float:
+    x = max(0.0, x)
+    if func == "linear": return x
+    if func == "sq":     return x * x
+    if func == "sqrt":   return math.sqrt(x)
+    if func == "log":    return math.log(1.0 + x)
+    if func == "log10":  return math.log10(1.0 + x)
+    return x
+
+
+def market_price(item: str, inventory: float, params=None) -> int:
+    """What the market pays for one unit of `item` at `inventory`.
+
+    A reconciliation of the sim's own `market_price` (ADR-0002), not an
+    approximation. `price(inv) = base + sign * amp * f(|inv - I0|)`, scarcity
+    above base below the I0 anchor and a discount above it, floored at
+    PRICE_FLOOR.
+
+    Needed because selling moves this curve *against us*: #161 concentrated on
+    melon and drove its own price from 270 to 34, since melon carries the
+    steepest glut curve in the table (`sq`, 3.60). Any crop decision that
+    ignores its own price impact is guessing.
+    """
+    p = (params or MARKET_PARAMS)[item]
+    base, I0, T = p["base"], p["I0"], p["T"]
+    if inventory < I0:
+        f = p["below_func"]
+        amp = p["below_target"] * base / _shape(f, T)
+        price = base + amp * _shape(f, I0 - inventory)
+    else:
+        f = p["above_func"]
+        amp = p["above_target"] * base / _shape(f, T)
+        price = base - amp * _shape(f, inventory - I0)
+    return max(PRICE_FLOOR, int(round(price)))
 
 
 def base_price(item: str) -> int:
