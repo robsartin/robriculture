@@ -365,3 +365,69 @@ def test_herder_ignores_pasture_tiles_on_land_it_does_not_own_yet():
     tiles[4][3] = "LOCKED"          # the herd's only assigned tile, (3, 4)
     action = fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {}, 0)
     assert action == ["PASS"], action
+
+
+# --- every order must survive the sim's own parser ---
+
+def test_every_emitted_order_parses_in_the_simulator():
+    # The sim silently discards an order its `_parse_order` rejects -- a
+    # BUY_ANIMAL without an explicit count parses to None and vanishes, which
+    # reads exactly like "we could not afford it". Use the sim as the oracle.
+    from kaggle_environments.envs.kaggriculture import kaggriculture as sim
+
+    cases = [
+        dict(day=0, hour=0, money=3_000, hands=0, quadrants=1, animals=0,
+             shed={}, seeds={}, empty_plots=15),
+        dict(day=12, hour=0, money=500_000, hands=0, quadrants=1, animals=0,
+             shed={"MELON": 40, "MILK": 5, "WHEAT": 9}, seeds={}, empty_plots=27),
+        dict(day=20, hour=6, money=8_000, hands=10, quadrants=3, animals=8,
+             shed={"STRAWBERRY": 12}, seeds={"STRAWBERRY": 2}, empty_plots=4),
+    ]
+    for case in cases:
+        for order in fr.market_orders(**case):
+            assert sim._parse_order(order) is not None, (order, case)
+
+
+def test_seed_for_empty_plots_outranks_the_herd():
+    # Melon does not pay out until day 10. An animal ramp that spends the
+    # opening bankroll leaves no seed money and the farm never starts: measured
+    # at 30 reward against 55,638 before this rule existed.
+    orders = fr.market_orders(day=4, hour=3, money=1_500, hands=6, quadrants=1,
+                              animals=0, shed={}, seeds={}, empty_plots=15)
+    kinds = [o[0] for o in orders]
+    assert "BUY_SEED" in kinds
+    assert "BUY_ANIMAL" not in kinds, orders
+
+
+def test_herd_is_bought_only_out_of_surplus():
+    # With deep reserves the ramp proceeds as measured.
+    rich = fr.market_orders(day=12, hour=3, money=50_000, hands=9, quadrants=2,
+                            animals=0, shed={}, seeds={}, empty_plots=0)
+    assert sum(1 for o in rich if o[0] == "BUY_ANIMAL") == fr.animal_target(12)
+    # Just above the seed line but below the reserve: no animal.
+    thin = fr.market_orders(day=12, hour=3, money=fr.CAPITAL_RESERVE, hands=9,
+                            quadrants=2, animals=0, shed={}, seeds={},
+                            empty_plots=0)
+    assert not [o for o in thin if o[0] == "BUY_ANIMAL"], thin
+
+
+def test_animals_waiting_in_the_shed_count_against_the_ramp():
+    # An animal is bought into the shed and only becomes a placed animal when a
+    # herder walks it out. Counting placed head alone re-buys the whole ramp on
+    # every one of the day's 24 turns: measured at 79 sheep in a 100-item shed,
+    # which then silently discards every harvest.
+    orders = fr.market_orders(day=12, hour=3, money=50_000, hands=9, quadrants=2,
+                              animals=2, shed={"SHEEP": 5}, seeds={},
+                              empty_plots=0)
+    bought = sum(1 for o in orders if o[0] == "BUY_ANIMAL")
+    assert bought == fr.animal_target(12) - 2 - 5, orders
+
+
+def test_livestock_in_the_shed_is_never_offered_to_the_market():
+    # SHEEP/COW are not tradable PRODUCTS; a SELL for one is a dead order that
+    # burns a slot under the 10-order cap.
+    orders = fr.market_orders(day=12, hour=3, money=1_000, hands=9, quadrants=2,
+                              animals=2, shed={"SHEEP": 3, "MILK": 2}, seeds={},
+                              empty_plots=0)
+    assert not [o for o in orders if o[:2] == ["SELL", "SHEEP"]], orders
+    assert ["SELL", "MILK", 2] in orders

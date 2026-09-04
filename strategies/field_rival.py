@@ -212,6 +212,14 @@ MAX_ORDERS = 10
 #: whenever they are at the shed anyway.
 FEED_CARRY = 4
 
+#: What the market will actually bid on. Livestock is bought here but never
+#: sold, and fertilizer has no bid at all.
+TRADABLE = tuple(CROPS) + tuple(a["product"] for a in economy.ANIMALS.values())
+
+#: Cash held back from the herd for seed, wages and feed. The crop line is what
+#: earns; livestock is bought only from what is left after it is funded.
+CAPITAL_RESERVE = 1200
+
 #: Animals we buy, cheapest first. Sheep are the better earner (200 vs 160) but
 #: cost 500, so the herd starts on cows and upgrades as money allows.
 HERD_MIX = ("COW", "SHEEP")
@@ -251,19 +259,24 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
-    its 100-item cap silently discards the next harvest. Then the crew, then the
-    land and herd ramps, and finally seed for the tiles standing empty.
+    its 100-item cap silently discards the next harvest. Then the crew, the land
+    ramp and seed for every empty tile -- the crop line is what earns -- and the
+    herd last, out of whatever surplus is left above ``CAPITAL_RESERVE``.
     """
     orders: list = []
     budget = money
 
     reserved = FEED_CARRY if animals else 0
     for item, n in sorted(shed.items()):
-        # Fertilizer has no market bid, and the herd's feed wheat must survive
-        # the sweep -- selling it back would just buy it again next turn.
+        # Fertilizer has no market bid and livestock is not a tradable product,
+        # so a SELL for either is a dead order burning one of the ten slots. The
+        # herd's feed wheat must also survive the sweep -- selling it back would
+        # just buy it again next turn.
+        if item not in TRADABLE:
+            continue
         keep = reserved if item == "WHEAT" else 0
         sell = int(n) - keep
-        if sell > 0 and item != "FERTILIZER":
+        if sell > 0:
             orders.append(["SELL", item, sell])
 
     if hour == 0:
@@ -281,14 +294,6 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             orders.append(["BUY_LAND"])
             budget -= cost
 
-    for _ in range(max(0, animal_target(day) - animals)):
-        kind = HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"] else HERD_MIX[0]
-        cost = economy.ANIMALS[kind]["cost"]
-        if budget < cost:
-            break
-        orders.append(["BUY_ANIMAL", kind])
-        budget -= cost
-
     crop = crop_for_day(day)
     if crop and empty_plots > 0:
         held = seeds.get(crop, 0)
@@ -298,6 +303,25 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         if buy > 0:
             orders.append(["BUY_SEED", crop, buy])
             budget -= buy * seed_cost
+
+    # The herd comes out of surplus only. Melon does not pay until day 10, so
+    # a ramp that spends the opening bankroll leaves nothing for seed and the
+    # farm never starts -- measured at 30 reward before this reserve existed.
+    # An animal bought lands in the shed and only becomes livestock when a
+    # herder walks it out to a pasture. Counting placed head alone re-buys the
+    # whole ramp on every one of the day's 24 turns -- measured at 79 sheep
+    # filling a 100-item shed, which then silently discarded every harvest.
+    pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
+    for _ in range(max(0, animal_target(day) - animals - pending)):
+        kind = HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"] else HERD_MIX[0]
+        cost = economy.ANIMALS[kind]["cost"]
+        if budget - cost < CAPITAL_RESERVE:
+            break
+        # The count is not optional: the sim's `_parse_order` rejects a
+        # BUY_ANIMAL of length 2 and drops it without a word, which is
+        # indistinguishable from having been unable to afford it.
+        orders.append(["BUY_ANIMAL", kind, 1])
+        budget -= cost
 
     # Feed wheat for the herd -- bought, never grown, so the crop plan stays the
     # measured melon/strawberry pair.
@@ -370,12 +394,76 @@ def herd_worker_action(pastures, tiles, pos, inv, shed, hour):
     return ["PASS"]
 
 
+def active_pastures(day: int, animals: int):
+    """Pasture tiles in play today -- the ramp's target, never fewer than the
+    head already on the board (an animal must keep being fed after the ramp
+    flattens)."""
+    return PASTURE_TILES[:max(animal_target(day), animals)]
+
+
+def count_animals(tiles) -> int:
+    return sum(1 for row in tiles for t in row
+               if isinstance(t, dict) and t.get("animal"))
+
+
 class FieldRivalStrategy(Strategy):
     name = "field_rival"
+
+    #: Readonly sparring opponent. `scripts/submit.py` refuses to package a
+    #: benchmark strategy (ADR-0005) and `harness.promotion.top_contender`
+    #: refuses to promote one -- this agent exists to be measured against, and
+    #: must never become a submission by accident.
     benchmark = True
 
     def act(self, obs) -> dict:
-        return {"farmer": ["PASS"], "hands": [], "market": []}
+        player = obs["player"]
+        me = obs["farms"][player]
+        private = obs["private"]
+        day = obs.get("day", 0)
+        hour = obs.get("hour", 0)
+        tiles = me["tiles"]
+        hands = me.get("hands") or []
+        shed = private.get("shed", {}) or {}
+        seeds = private.get("seeds", {}) or {}
+        inventories = private.get("inventories") or []
+
+        crop = crop_for_day(day)
+        animals = count_animals(tiles)
+        pastures = active_pastures(day, animals)
+        herders = {worker: slot for slot, worker in enumerate(LIVESTOCK_WORKERS)}
+
+        positions = [me["farmer"], *hands]
+        seeds_held = seeds.get(crop, 0) if crop else 0
+        planted = 0
+        actions = []
+        for i, pos in enumerate(positions):
+            inv = inventories[i] if i < len(inventories) else {}
+            if i in herders:
+                mine = pastures[herders[i]::len(LIVESTOCK_WORKERS)]
+                actions.append(herd_worker_action(mine, tiles, pos, inv, shed, hour))
+                continue
+            action = crop_worker_action(crop_cluster(i), tiles, pos, inv, crop, day, hour)
+            if action[0] == "PLANT":
+                # One seed per PLANT, and the sim silently no-ops a plant we
+                # cannot pay for -- so a worker past the seed count would just
+                # burn its turn. Water instead where there is something to water.
+                if planted < seeds_held:
+                    planted += 1
+                else:
+                    action = ["PASS"]
+            actions.append(action)
+
+        empty = 0
+        for i in range(len(positions)):
+            for tile_xy in crop_cluster(i):
+                if _tile_at(tiles, tile_xy) is None:
+                    empty += 1
+
+        market = market_orders(day, hour, me["money"], len(hands),
+                               len(me.get("unlocked_quadrants") or ["NW"]),
+                               animals, shed, seeds, empty)
+
+        return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
 
 STRATEGY = FieldRivalStrategy
