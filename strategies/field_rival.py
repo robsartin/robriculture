@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from kaggisim.strategy import Strategy
 from kaggisim import economy
+from strategies import catch_hands as ch
 from strategies import hired_hands as hh
 
 CROPS = hh.CROPS
@@ -37,6 +38,18 @@ SEASON_DAYS = hh.SEASON_DAYS
 #: goes 3 -> 13 over the same span, so the crossover sits at day 10.
 PIVOT_DAY = 10
 
+#: What the late tiles carry once strawberry can no longer finish. Wheat is the
+#: field's own answer (3-5 tiles from day 20) and the only crop fast enough to
+#: fully mature inside the tail.
+LATE_CROP = "WHEAT"
+
+#: Tiles the farm will run of each headline crop, from the replay medians (melon
+#: 11-12, strawberry 13-15). The cap IS the archetype: both farms sell into one
+#: shared market, and a farm that plants every tile it owns crashes the price it
+#: is selling into -- measured, strawberry fell from 180 to 14 by day 28 at 25
+#: tiles. Restraint is what the winning field does differently (#178).
+CROP_CAP = {"MELON": 12, "STRAWBERRY": 15, "WHEAT": 5}
+
 
 def crop_for_day(day: int, season_days: int = SEASON_DAYS):
     """The crop this farm plants on `day`, or ``None`` past the horizon.
@@ -46,7 +59,15 @@ def crop_for_day(day: int, season_days: int = SEASON_DAYS):
     seed is never spent on a plant that cannot reach first yield in time.
     """
     crop = "MELON" if day < PIVOT_DAY else "STRAWBERRY"
-    return crop if hh.plantable(crop, day, season_days) else None
+    if hh.plantable(crop, day, season_days):
+        return crop
+    # The measured field carries 3-5 wheat tiles through days 20-24, when
+    # strawberry can no longer reach first yield. Wheat fills out in four days,
+    # so it keeps the late tiles earning instead of idle -- and it doubles as
+    # the herd's feed, which we otherwise buy.
+    if ch.cc_plantable(LATE_CROP, day, season_days):
+        return LATE_CROP
+    return None
 
 
 #: Crew cap. The measured field tops out at 10 hands (11 workers with the
@@ -69,6 +90,21 @@ def _ramp(table, day: int) -> int:
         if day >= from_day:
             value = target
     return value
+
+
+def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS):
+    """The crop for one more empty tile, given what is already in the ground.
+
+    The day's headline crop until its cap is met, then wheat: extra tiles are
+    worth more filled with a crop whose market we are not already flooding.
+    """
+    crop = crop_for_day(day, season_days)
+    if crop and standing.get(crop, 0) < CROP_CAP.get(crop, 10 ** 6):
+        return crop
+    if (ch.cc_plantable(LATE_CROP, day, season_days)
+            and standing.get(LATE_CROP, 0) < CROP_CAP.get(LATE_CROP, 10 ** 6)):
+        return LATE_CROP
+    return None
 
 
 def hire_target(day: int) -> int:
@@ -104,7 +140,7 @@ LIVESTOCK_WORKERS = (1, 2)
 #: Tiles per crop worker. Watering is only needed every other day (a plant dies
 #: at ``consecutive_unwatered >= 2``), so three tiles fit comfortably inside one
 #: worker's 24-turn day without the walk eating the schedule.
-CLUSTER = 3
+CLUSTER = 4
 
 
 def quadrant_of(x: int, y: int) -> str:
@@ -252,13 +288,22 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
     if carrying >= CARRY_LIMIT:
         return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
 
+    # Nearest first, not cluster order: the cluster is sorted by distance from
+    # the shed, which says nothing about where this worker is standing. Serving
+    # the first tile in the list instead of the closest one put 52% of all
+    # worker-turns into walking.
+    best = None
     for tile in cluster:
         action = plot_action(_tile_at(tiles, tile), crop, day, hour)
         if action == ["PASS"]:
             continue
-        if [pos[0], pos[1]] == [tile[0], tile[1]]:
+        dist = abs(tile[0] - pos[0]) + abs(tile[1] - pos[1])
+        if dist == 0:
             return action
-        return hh.step_toward(pos, tile)
+        if best is None or dist < best[0]:
+            best = (dist, tile)
+    if best is not None:
+        return hh.step_toward(pos, best[1])
 
     if carrying:
         return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
@@ -266,7 +311,7 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
-                  empty_plots):
+                  empty_plots, standing=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -306,10 +351,15 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             buys.append(["BUY_LAND"])
             budget -= cost
 
-    crop = crop_for_day(day)
+    standing = standing or {}
+    crop = crop_for_plot(day, standing)
     if crop and empty_plots > 0:
-        held = seeds.get(crop, 0)
-        want = max(0, empty_plots - held)
+        # Never stock more seed of a capped crop than its remaining headroom:
+        # buying 25 strawberry seeds to fill 25 tiles is how the price we sell
+        # into gets crashed.
+        cap = CROP_CAP.get(crop)
+        room = empty_plots if cap is None else max(0, cap - standing.get(crop, 0))
+        want = max(0, min(empty_plots, room) - seeds.get(crop, 0))
         seed_cost = CROPS[crop]["seed"]
         buy = min(want, int(budget // seed_cost))
         if buy > 0:
@@ -421,6 +471,16 @@ def active_pastures(day: int, animals: int):
     return PASTURE_TILES[:max(animal_target(day), animals)]
 
 
+def standing_crops(tiles) -> dict:
+    """Live plants on the board, counted by crop."""
+    counts: dict = {}
+    for row in tiles:
+        for t in row:
+            if isinstance(t, dict) and t.get("kind") == "PLANT" and t.get("crop"):
+                counts[t["crop"]] = counts.get(t["crop"], 0) + 1
+    return counts
+
+
 def count_animals(tiles) -> int:
     return sum(1 for row in tiles for t in row
                if isinstance(t, dict) and t.get("animal"))
@@ -447,14 +507,13 @@ class FieldRivalStrategy(Strategy):
         seeds = private.get("seeds", {}) or {}
         inventories = private.get("inventories") or []
 
-        crop = crop_for_day(day)
+        standing = standing_crops(tiles)
         animals = count_animals(tiles)
         pastures = active_pastures(day, animals)
         herders = {worker: slot for slot, worker in enumerate(LIVESTOCK_WORKERS)}
 
         positions = [me["farmer"], *hands]
-        seeds_held = seeds.get(crop, 0) if crop else 0
-        planted = 0
+        used: dict = {}
         actions = []
         for i, pos in enumerate(positions):
             inv = inventories[i] if i < len(inventories) else {}
@@ -462,13 +521,17 @@ class FieldRivalStrategy(Strategy):
                 mine = pastures[herders[i]::len(LIVESTOCK_WORKERS)]
                 actions.append(herd_worker_action(mine, tiles, pos, inv, shed, hour))
                 continue
+            # Re-read the crop per worker: each plant this turn counts against
+            # the cap immediately, so the crew cannot collectively overshoot it.
+            crop = crop_for_plot(day, standing)
             action = crop_worker_action(crop_cluster(i), tiles, pos, inv, crop, day, hour)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
                 # cannot pay for -- so a worker past the seed count would just
-                # burn its turn. Water instead where there is something to water.
-                if planted < seeds_held:
-                    planted += 1
+                # burn its turn.
+                if used.get(crop, 0) < seeds.get(crop, 0):
+                    used[crop] = used.get(crop, 0) + 1
+                    standing[crop] = standing.get(crop, 0) + 1
                 else:
                     action = ["PASS"]
             actions.append(action)
@@ -481,7 +544,7 @@ class FieldRivalStrategy(Strategy):
 
         market = market_orders(day, hour, me["money"], len(hands),
                                len(me.get("unlocked_quadrants") or ["NW"]),
-                               animals, shed, seeds, empty)
+                               animals, shed, seeds, empty, standing)
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

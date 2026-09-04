@@ -31,9 +31,16 @@ def test_plants_strawberry_after_the_pivot():
     assert fr.crop_for_day(16) == "STRAWBERRY"
 
 
-def test_plants_nothing_once_the_horizon_closes():
-    # A strawberry planted this late cannot reach first yield before the buzzer;
-    # the measured field is down to 1 strawberry tile by day 28.
+def test_falls_back_to_wheat_once_the_strawberry_horizon_closes():
+    # The measured field carries 3-5 wheat tiles from day 20 to day 24, when
+    # strawberry can no longer reach first yield. Wheat fully matures in four
+    # days, so it keeps the late tiles earning -- and it is the herd's feed.
+    assert fr.crop_for_day(20) == "WHEAT"
+    assert fr.crop_for_day(24) == "WHEAT"
+
+
+def test_plants_nothing_once_even_wheat_cannot_finish():
+    # Wheat needs four days to fill out; past that a seed just strands a tile.
     assert fr.crop_for_day(fr.SEASON_DAYS - 1) is None
 
 
@@ -463,3 +470,44 @@ def test_the_whole_feed_buffer_is_held_back_from_the_sell_sweep():
                               animals=11, shed={"WHEAT": fr.feed_buffer(11)},
                               seeds={}, empty_plots=0)
     assert not [o for o in orders if o[:2] == ["SELL", "WHEAT"]], orders
+
+
+# --- crop caps: the field's restraint is the point, not its volume ---
+
+def test_primary_crop_is_capped_at_the_measured_tile_count():
+    # The field holds 11-12 melon and 13-15 strawberry. Running 25 strawberry
+    # instead crashes the shared price from 180 to 14 by day 28 -- measured --
+    # which is the very mistake that loses us games (#178).
+    assert fr.CROP_CAP["MELON"] <= 13
+    assert fr.CROP_CAP["STRAWBERRY"] <= 16
+
+
+def test_plots_take_the_primary_crop_below_its_cap():
+    assert fr.crop_for_plot(4, {"MELON": 5}) == "MELON"
+    assert fr.crop_for_plot(12, {"STRAWBERRY": 5}) == "STRAWBERRY"
+
+
+def test_plots_past_the_cap_fall_back_to_wheat_rather_than_flood_the_market():
+    at_cap = {"STRAWBERRY": fr.CROP_CAP["STRAWBERRY"]}
+    assert fr.crop_for_plot(12, at_cap) == "WHEAT"
+    assert fr.crop_for_plot(4, {"MELON": fr.CROP_CAP["MELON"]}) == "WHEAT"
+
+
+def test_plots_take_nothing_when_no_crop_can_still_finish():
+    assert fr.crop_for_plot(fr.SEASON_DAYS - 1, {}) is None
+
+
+def test_worker_services_the_nearest_tile_that_needs_work_not_the_first():
+    # Cluster tiles are ordered by distance from the shed, which has nothing to
+    # do with where the worker is standing. Walking past a thirsty tile to reach
+    # one further away is why 52% of all worker-turns were spent moving.
+    tiles = _blank_board()
+    far, near = (0, 0), (3, 0)
+    tiles[far[1]][far[0]] = _plant()          # both dry, both want WATER
+    tiles[near[1]][near[0]] = _plant()
+    action = fr.crop_worker_action((far, near), tiles, (4, 0), {}, "MELON", 3, 5)
+    assert action == ["WEST"]                  # toward (3, 0), the near one
+    # Standing on the near tile, it works that one rather than walking to (0, 0).
+    action = fr.crop_worker_action((far, near), tiles, near, {}, "MELON", 3, 5)
+    assert action == ["WATER"], action
+
