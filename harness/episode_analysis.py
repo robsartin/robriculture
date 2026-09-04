@@ -18,6 +18,7 @@ looking plausible. That check is the point of the module.
 from __future__ import annotations
 
 from kaggisim import economy
+from kaggisim.economy import market_price
 
 CROPS = economy.CROPS
 ANIMALS = economy.ANIMALS
@@ -86,13 +87,39 @@ def spend_by_category(orders, hires_before, quadrants):
     return out
 
 
-def sell_revenue(orders, prices, shed):
+def banked_this_turn(action, inventories):
+    """Items every DROPping worker puts into the shed this turn.
+
+    The interpreter applies unit actions before it processes market orders, so
+    these units are sellable in the very same turn. DROP banks a worker's whole
+    inventory.
+    """
+    out: dict = {}
+    if not isinstance(action, dict):
+        return out
+    units = [action.get("farmer")] + list(action.get("hands") or [])
+    for idx, act in enumerate(units):
+        if not (isinstance(act, list) and act and act[0] == "DROP"):
+            continue
+        inv = inventories[idx] if idx < len(inventories) else {}
+        for item, n in (inv or {}).items():
+            if n:
+                out[item] = out.get(item, 0) + int(n)
+    return out
+
+
+def sell_revenue(orders, prices, shed, banked=None, inventory=None):
     """Estimated proceeds per item from one turn's SELL orders.
 
     Two deliberate conservatisms, both of which would otherwise invent money:
-    an order is capped at what the shed actually holds (the sim partially fills),
-    and an item with no quoted price contributes nothing -- livestock and
-    anything else the market does not bid on.
+    an order is capped at the stock that actually exists (the sim partially
+    fills), and an item with no quoted price contributes nothing -- livestock
+    and anything else the market does not bid on.
+
+    ``banked`` is what this turn's DROPs add to the shed. The interpreter runs
+    every unit action before the market, so a crew that banks its harvest and
+    sells it in the same turn is the normal case; capping at the observed
+    pre-DROP shed erased almost all real revenue.
     """
     out: dict = {}
     for order in orders:
@@ -102,9 +129,26 @@ def sell_revenue(orders, prices, shed):
         price = (prices or {}).get(item)
         if not price:
             continue
-        units = min(int(order[2]), int((shed or {}).get(item, 0)))
-        if units > 0:
+        available = int((shed or {}).get(item, 0)) + int((banked or {}).get(item, 0))
+        units = min(int(order[2]), available)
+        if units <= 0:
+            continue
+        inv = (inventory or {}).get(item)
+        if inv is None:
             out[item] = out.get(item, 0) + units * int(price)
+            continue
+        # Walk the curve, as the sim does: each unit is quoted against the
+        # inventory the previous units have already added to. Measured on a real
+        # episode, 96 melon quoted at 244 realised 190/unit -- pricing the whole
+        # order at the opening quote overstates it by 28%.
+        total = 0
+        inv = int(inv)
+        for _ in range(units):
+            unit_price = market_price(item, inv)
+            total += unit_price
+            if unit_price > 1:      # sales at the floor add no market supply
+                inv += 1
+        out[item] = out.get(item, 0) + total
     return out
 
 
@@ -132,17 +176,30 @@ def decompose(steps, player):
     hires_today = 0
     last_day = None
 
+    # The action recorded at index t was chosen from -- and applied to -- the
+    # observation at index t-1. Verified on a real episode: the SELL of 96 melon
+    # sits at index 289 while the shed holding those melon is index 288, and the
+    # money moves across that pair. Reading an order against the observation at
+    # its own index prices it against the state it already produced, which
+    # scored the champion's whole season at 994 against an actual 48,144.
     for t in range(len(steps)):
         slot = _slot(steps, t, player)
+        prior = _slot(steps, t - 1, player) if t else None
         if slot is None:
             continue
-        obs = slot.get("observation") or {}
+        obs = (prior or {}).get("observation") or {}
+        money_obs = (slot.get("observation") or {})
+        money_farms = money_obs.get("farms")
+        if money_farms:
+            me_now = (money_farms[money_obs.get("player", player)]
+                      if len(money_farms) > 1 else money_farms[0])
+            if start_money is None:
+                start_money = float(me_now.get("money", 0))
+            final_money = float(me_now.get("money", 0))
+
         farms = obs.get("farms")
         if farms:
             me = farms[obs.get("player", player)] if len(farms) > 1 else farms[0]
-            if start_money is None:
-                start_money = float(me.get("money", 0))
-            final_money = float(me.get("money", 0))
             day = obs.get("day")
             if day != last_day:
                 hires_today = 0          # the sim clears the crew nightly
@@ -150,8 +207,9 @@ def decompose(steps, player):
             quadrants = len(me.get("unlocked_quadrants") or ["NW"])
             sheds = (obs.get("private") or {}).get("shed") or {}
             prices = (obs.get("market") or {}).get("prices") or {}
+            inv_levels = (obs.get("market") or {}).get("inventory") or None
         else:
-            quadrants, sheds, prices = 1, {}, {}
+            quadrants, sheds, prices, inv_levels = 1, {}, {}, None
 
         action = slot.get("action")
         if not isinstance(action, dict):
@@ -162,7 +220,8 @@ def decompose(steps, player):
                 actions[act[0]] = actions.get(act[0], 0) + 1
 
         orders = action.get("market") or []
-        for item, amount in sell_revenue(orders, prices, sheds).items():
+        banked = banked_this_turn(action, (obs.get("private") or {}).get("inventories") or [])
+        for item, amount in sell_revenue(orders, prices, sheds, banked, inv_levels).items():
             revenue[item] = revenue.get(item, 0) + amount
         for bucket, amount in spend_by_category(orders, hires_today, quadrants).items():
             spend[bucket] += amount

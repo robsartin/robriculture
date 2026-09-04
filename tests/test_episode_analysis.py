@@ -85,29 +85,36 @@ def test_sell_revenue_ignores_an_item_with_no_quoted_price():
 
 
 # --- the whole episode, with its own validity check attached ---
+#
+# Replay layout, verified against a real episode: the action recorded at index t
+# was chosen from -- and applied to -- the observation at index t-1. In episode
+# 78443212 the SELL of 96 melon sits at index 289, while the shed holding those
+# 96 melon is the observation at index 288; money moves 3,537 -> 21,808 across
+# that pair. Pairing action[t] with observation[t] instead reads every order
+# against the state it already produced.
 
-def test_decomposition_reports_a_residual_against_the_real_final_money():
-    # Start 3000, sell 4 melon at 250 (+1000), buy 3 melon seed (-240).
-    # A faithful reconstruction lands on the money the replay actually records.
+def test_orders_are_read_against_the_state_they_were_chosen_from():
+    # Index 0 holds the opening state; the order at index 1 acts on it.
     steps = [
-        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"MELON": 250}, shed={"MELON": 4})],
+        [_step(3760, {"farmer": ["PASS"], "hands": [], "market": [
             ["SELL", "MELON", 4], ["BUY_SEED", "MELON", 3]]},
-            prices={"MELON": 250}, shed={"MELON": 4})],
-        [_step(3760, {"farmer": ["PASS"], "hands": [], "market": []})],
+            prices={"MELON": 1}, shed={})],
     ]
     out = ea.decompose(steps, player=0)
+    # Priced at 250 (the state the order was chosen from), not at 1.
     assert out["revenue"] == {"MELON": 1000}
     assert out["spend"]["seed"] == 240
     assert out["residual"] == 0
 
 
 def test_a_reconstruction_that_misses_income_reports_a_nonzero_residual():
-    # Same trade, but the replay's money went up by 500 more than the orders
-    # explain. The residual must surface that rather than quietly balancing.
     steps = [
-        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": [
-            ["SELL", "MELON", 4]]}, prices={"MELON": 250}, shed={"MELON": 4})],
-        [_step(4500, {"farmer": ["PASS"], "hands": [], "market": []})],
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"MELON": 250}, shed={"MELON": 4})],
+        [_step(4500, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "MELON", 4]]}, prices={"MELON": 250}, shed={})],
     ]
     out = ea.decompose(steps, player=0)
     assert out["residual"] == 500
@@ -115,13 +122,76 @@ def test_a_reconstruction_that_misses_income_reports_a_nonzero_residual():
 
 def test_actions_are_tallied_by_category_across_the_whole_crew():
     steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []})],
         [_step(3000, {"farmer": ["WATER"],
                       "hands": [["HARVEST"], ["NORTH"], ["PASS"]],
                       "market": []})],
-        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []})],
     ]
     out = ea.decompose(steps, player=0)
     assert out["actions"]["WATER"] == 1
     assert out["actions"]["HARVEST"] == 1
     assert out["actions"]["NORTH"] == 1
-    assert out["actions"]["PASS"] == 2      # one hand, plus the farmer's own
+    assert out["actions"]["PASS"] == 2      # index-0 farmer, plus the idle hand
+
+
+# --- the shed a SELL draws on is the post-DROP shed, not the observed one ---
+
+def test_sell_counts_stock_a_worker_banks_in_the_same_turn():
+    # The interpreter applies every unit action -- DROP included -- BEFORE it
+    # processes market orders. A crew that banks its harvest and sells it in one
+    # turn is the normal case, so capping at the observed pre-DROP shed erases
+    # almost all real revenue (measured: 994 estimated against 48,144 actual).
+    rev = ea.sell_revenue(
+        [["SELL", "MELON", 6]],
+        prices={"MELON": 250},
+        shed={"MELON": 1},
+        banked={"MELON": 5},           # a hand DROPs 5 melon this same turn
+    )
+    assert rev == {"MELON": 1500}
+
+
+def test_banked_stock_is_still_capped_by_what_actually_exists():
+    rev = ea.sell_revenue([["SELL", "MELON", 40]], prices={"MELON": 250},
+                          shed={"MELON": 1}, banked={"MELON": 2})
+    assert rev == {"MELON": 750}
+
+
+def test_banked_units_are_summed_across_every_worker_that_drops():
+    inventories = [{"MELON": 2}, {"MELON": 3, "MILK": 1}, {"MELON": 9}]
+    actions = {"farmer": ["DROP"], "hands": [["DROP"], ["WATER"]]}
+    # Workers 0 and 1 DROP; worker 2 is watering and banks nothing.
+    assert ea.banked_this_turn(actions, inventories) == {"MELON": 5, "MILK": 1}
+
+
+def test_nothing_is_banked_when_no_worker_drops():
+    inventories = [{"MELON": 4}]
+    assert ea.banked_this_turn({"farmer": ["WATER"], "hands": []}, inventories) == {}
+
+
+# --- revenue walks the price curve, because a big sell moves it ---
+
+def test_a_large_sell_walks_the_price_down_the_curve():
+    # Measured on a real episode: 96 melon quoted at 244 realised 190/unit.
+    # Pricing every unit at the opening quote overstates a big order badly.
+    flat = 96 * 244
+    walked = ea.sell_revenue([["SELL", "MELON", 96]], prices={"MELON": 244},
+                             shed={"MELON": 96}, inventory={"MELON": 10000})["MELON"]
+    assert walked < flat
+    assert 96 * 150 < walked < 96 * 244
+
+
+def test_a_single_unit_sells_at_the_quoted_price():
+    # One unit cannot move the curve, so the walk must agree with the quote.
+    from kaggisim.economy import market_price
+    expected = market_price("MELON", 10000)
+    got = ea.sell_revenue([["SELL", "MELON", 1]], prices={"MELON": expected},
+                          shed={"MELON": 1}, inventory={"MELON": 10000})
+    assert got == {"MELON": expected}
+
+
+def test_revenue_falls_back_to_the_quote_when_inventory_is_unknown():
+    # Older captures may lack market inventory; the estimate degrades rather
+    # than disappearing.
+    got = ea.sell_revenue([["SELL", "MELON", 2]], prices={"MELON": 200},
+                          shed={"MELON": 2}, inventory=None)
+    assert got == {"MELON": 400}
