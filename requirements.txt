@@ -18,4 +18,6 @@ scipy==1.18.0
 # --- Dev / tuning tooling (optional but recommended) ---
 pytest>=8.0             # local tournament harness + regression tests
 pytest-cov>=5.0         # coverage measurement + CI gate (line>=85%, branch>=65%)
+pytest-xdist>=3.5       # parallel test execution; the suite is dominated by
+                        # independent full-game simulations (see ci.yml `-n auto`)
 tqdm>=4.66              # progress bars for batch game runs
