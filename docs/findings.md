@@ -125,6 +125,56 @@ sheep + fertilizer from day 2*. `meta_bot` was written to it as a benchmark oppo
 never as our agent. The measurement above is that recon confirmed from our own match
 record, thirteen months of experiments later.
 
+### So why not just add livestock? Because it cannot be bolted on (#187)
+
+The obvious next move is to keep our strong crop line and add the herd. It was tried, and
+**rejected**: the declared necessary condition — 30% of revenue from livestock — is unmet
+at every setting, and the farm collapses in all of them.
+
+| livestock labour premium | final money | revenue | livestock+fert | animals |
+|---|---|---|---|---|
+| **champion (control)** | **45,945** | 57,384 | 0 (0%) | 0 |
+| 1.0x crop job | 1,381 | 19,460 | 340 (2%) | 1 |
+| 1.2x | 2,626 | 22,912 | 1,522 (7%) | 8 |
+| 1.5x | 391 | 11,546 | 0 (0%) | 0 |
+| 2.0x | 3,025 | 19,021 | 0 (0%) | 0 |
+
+**The champion is not missing the machinery.** `neuropilot` already implements the whole
+livestock line — pastures, cows, sheep, feeding, harvesting, `COLLECT_FERTILIZER` — driven
+by its `herd_target_scale` knob. Its evolved genome sets that knob to a median **0.0098**,
+which `_herd_targets` rounds to **zero animals for the entire game**. Nineteen experiments
+searched everywhere except the switch.
+
+**Evolution switching it off was correct.** Four things, each visible only by turning it
+back on:
+
+1. `herd_target_scale` and `livestock_labor_share` are **entangled**. Flooring the first
+   alone buys 11 animals nobody places: 9 cows and 2 sheep sat in the shed from day 12,
+   hit the 100-item cap alongside the melon, and silently discarded every later harvest.
+2. **There is no feed supply.** `neuropilot`'s only `BUY_PRODUCT` is FERTILIZER. FEED
+   spends wheat from a worker's inventory, sourced from the shed, so unless `crop_mix`
+   happens to pick wheat the herd starves at `consecutive_unfed >= 2` — buy, place,
+   starve, re-buy, at 400 a head.
+3. **At labour parity, ties go to crops.** `candidate_jobs` sorts ties by position and
+   `assign_workers` keeps the first, so an animal job worth exactly `CROP_JOB_VALUE` loses
+   every tie to the low-coordinate crop tiles: **13 FEED actions in a season**, against
+   `field_rival`'s 153.
+4. **Above parity the crop line collapses.** Workers abandon 62 planted tiles and revenue
+   drops to a fifth.
+
+The root cause is structural, and it is the same table as before read the other way:
+
+| | planted | animals | crew | WATER | FEED |
+|---|---|---|---|---|---|
+| us | **62** | 0 | 8 | 1,074 | 13 |
+| the field | 20 | 8 | 11 | 506 | 153 |
+
+**The field does not run our crop line and a herd. It runs a third of our crop line and a
+herd, with a bigger crew.** The two businesses compete for one crew, so the question is
+not "should we keep animals" but "is our oversized crop line worth more than the field's
+balanced pair" — and that is answerable only by a contender built on the field's shape,
+not by another knob on this one.
+
 ---
 
 ## 3. What we tried, and what each ruled out
