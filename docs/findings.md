@@ -69,6 +69,62 @@ at day 8 appears in **63% of losses and 15% of wins**.
 
 That is the loss mechanism, and it is substantially **opponent-determined**.
 
+### But it explains our variance, not our level
+
+The melon finding above compares our wins to our losses. Decomposing where the money
+actually comes from — both sides of all 63 replays, via `harness/episode_analysis.py`
+(#157) — compares us to the field, and gives a different answer.
+
+The reconstruction is self-checking: the sim's only money inflow is a SELL commit, every
+outflow is a listed price, so the module reports a **residual** against the money the
+replay actually records. Median residual **7.3%** of final money (quartiles 1.7% / 31.5%);
+the numbers below are good to roughly that. Two defects were caught by that check and
+would otherwise have read as plausible: the action at replay index `t` is applied to the
+observation at index **t-1**, and a sell walks the price curve per unit rather than
+clearing at the opening quote (96 melon quoted at 244 realised 190).
+
+Revenue by source, medians:
+
+| source | us | opponents who beat us |
+|---|---|---|
+| melon | 20,358 (34%) | 12,255 (13%) |
+| strawberry | 34,370 (58%) | 11,673 (12%) |
+| wheat | 1,230 (2%) | 4,433 (5%) |
+| **milk** | **0** | **31,492 (33%)** |
+| **wool** | **0** | **11,868 (12%)** |
+| **fertilizer** | **0** | **16,794 (17%)** |
+| total revenue | 59,667 | **96,002** |
+| spent on animals | **0** | 5,600 |
+
+**Livestock and its fertilizer byproduct are 62% of the winning field's revenue, and we
+earn none of it.** Our crop revenue is not the problem — we out-earn them on melon and
+strawberry combined, 55K to 24K. They simply have a second business we do not have.
+
+This is not confined to the farms that beat us. Of the 62 opponents that finished with
+more than the 3,000 they started with, **54 buy animals**; the median opponent draws
+**61%** of revenue from livestock and fertilizer. Sorted by that share:
+
+| livestock+fertilizer share | n | beat us | median final |
+|---|---|---|---|
+| 0-20% | 8 | 5/8 | 22,963 |
+| 20-40% | 9 | 2/9 | 52,127 |
+| **40-60%** | **13** | **13/13** | **74,332** |
+| 60-100% | 32 | 23/32 | 58,538 |
+
+The field at our rating is not broken agents or replayers: 62 of 63 finished as real
+farms and every one of them acted all season. **We are one of eight farms on this ladder
+with no animals at all** — and the eight are the weakest group in the table.
+
+Fertilizer deserves its own line. It is a **free byproduct** of owning livestock
+(`COLLECT_FERTILIZER` on any animal tile), it is in the sim's `PRODUCTS` list, and it
+clears at a base of 100 — above wheat (25), carrot (35) and tomato (60). It is 17% of the
+winning field's revenue for no land, no seed and no growing time.
+
+The 2026-08-12 notebook recon had already reported the modal top-Elo build as *9 cows + 4
+sheep + fertilizer from day 2*. `meta_bot` was written to it as a benchmark opponent and
+never as our agent. The measurement above is that recon confirmed from our own match
+record, thirteen months of experiments later.
+
 ---
 
 ## 3. What we tried, and what each ruled out
