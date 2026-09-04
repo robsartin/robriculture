@@ -159,6 +159,44 @@ def crop_cluster(worker: int):
     return CROP_TILES[slot * CLUSTER:(slot + 1) * CLUSTER]
 
 
+TURNS_PER_DAY = hh.TURNS_PER_DAY
+
+
+def plot_action(tile, crop, day: int, hour: int):
+    """The action for a worker standing on one of its crop tiles.
+
+    Harvest before water before plant: a ready tile is money already earned, and
+    an ongoing crop (strawberry) keeps offering HARVEST every time it regrows.
+    Planting is refused on the final turn of the day -- a new plant carries
+    ``consecutive_unwatered = 1`` and dies at 2, so it could never be watered.
+    """
+    if tile == "LOCKED":
+        return ["PASS"]
+    if isinstance(tile, dict) and tile.get("kind") == "WEED":
+        return ["DIG"]
+    if tile is None:
+        if crop and hour < TURNS_PER_DAY - 1:
+            return ["PLANT", crop]
+        return ["PASS"]
+    if hh._is_live_plant(tile):
+        if hh.harvest_ready(tile, day):
+            return ["HARVEST"]
+        if not tile.get("watered_today", False):
+            return ["WATER"]
+    return ["PASS"]
+
+
+def nearest_shed(pos):
+    """The shed-access tile a worker at `pos` can reach fastest.
+
+    All four are usable from day one: the sim resolves shed operations before
+    its LOCKED guard and allows movement onto locked tiles, precisely so a hand
+    spawned on a locked access tile is never stranded.
+    """
+    return min(SHED_ACCESS.values(),
+               key=lambda t: (abs(t[0] - pos[0]) + abs(t[1] - pos[1]), t))
+
+
 class FieldRivalStrategy(Strategy):
     name = "field_rival"
     benchmark = True

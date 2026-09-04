@@ -133,3 +133,71 @@ def test_full_crew_tends_enough_tiles_for_the_measured_peak():
     # The field peaks at 27 planted tiles on day 16.
     total = sum(len(fr.crop_cluster(i)) for i in range(1 + fr.MAX_HANDS))
     assert total >= 27, total
+
+
+# --- plot_action: the per-tile decision ---
+
+def _plant(crop="MELON", day=0, **kw):
+    tile = {"kind": "PLANT", "crop": crop, "planted_day": day,
+            "watered_today": False, "yield_units": 0}
+    tile.update(kw)
+    return tile
+
+
+def test_plants_an_empty_tile_with_todays_crop():
+    assert fr.plot_action(None, "MELON", day=0, hour=0) == ["PLANT", "MELON"]
+    assert fr.plot_action(None, "STRAWBERRY", day=12, hour=0) == ["PLANT", "STRAWBERRY"]
+
+
+def test_never_plants_on_the_last_turn_of_the_day():
+    # A plant is created with consecutive_unwatered=1 and dies at 2, so one
+    # planted on the final turn cannot be watered and is dead by morning.
+    last = fr.TURNS_PER_DAY - 1
+    assert fr.plot_action(None, "MELON", day=0, hour=last) == ["PASS"]
+
+
+def test_never_plants_when_there_is_no_crop_for_today():
+    assert fr.plot_action(None, None, day=29, hour=0) == ["PASS"]
+
+
+def test_waters_a_dry_standing_plant():
+    assert fr.plot_action(_plant(), "MELON", day=3, hour=5) == ["WATER"]
+
+
+def test_leaves_an_already_watered_plant_alone():
+    assert fr.plot_action(_plant(watered_today=True), "MELON", day=3, hour=5) == ["PASS"]
+
+
+def test_harvest_beats_watering_when_the_crop_is_ready():
+    tile = _plant(day=0, yield_units=4)
+    assert fr.plot_action(tile, "MELON", day=12, hour=5) == ["HARVEST"]
+
+
+def test_harvests_an_ongoing_crop_again_after_it_regrows():
+    # Strawberry is ongoing: the tile survives harvest and accrues more units,
+    # so a second HARVEST must still be offered later in the season.
+    tile = _plant("STRAWBERRY", day=10, yield_units=2, watered_today=True)
+    assert fr.plot_action(tile, "STRAWBERRY", day=25, hour=5) == ["HARVEST"]
+
+
+def test_digs_a_weed():
+    assert fr.plot_action({"kind": "WEED"}, "MELON", day=3, hour=5) == ["DIG"]
+
+
+def test_never_acts_on_locked_land():
+    # Tiles in an unbought quadrant read as the string "LOCKED".
+    assert fr.plot_action("LOCKED", "MELON", day=3, hour=5) == ["PASS"]
+
+
+# --- nearest_shed: every worker's drop point ---
+
+def test_nearest_shed_picks_the_closest_access_tile():
+    assert fr.nearest_shed((0, 0)) == (4, 4)
+    assert fr.nearest_shed((9, 0)) == (5, 4)
+    assert fr.nearest_shed((0, 9)) == (4, 5)
+
+
+def test_nearest_shed_is_reachable_from_anywhere_on_the_board():
+    for y in range(10):
+        for x in range(10):
+            assert fr.nearest_shed((x, y)) in set(fr.SHED_ACCESS.values())
