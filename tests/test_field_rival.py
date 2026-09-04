@@ -511,3 +511,58 @@ def test_worker_services_the_nearest_tile_that_needs_work_not_the_first():
     action = fr.crop_worker_action((far, near), tiles, near, {}, "MELON", 3, 5)
     assert action == ["WATER"], action
 
+
+
+# --- fertilizer: sellable, and free (issue #184) ---
+
+def test_fertilizer_is_tradable_because_the_sim_says_so():
+    # I had excluded fertilizer as having "no market bid". It is in the sim's
+    # own PRODUCTS list and clears at a base of 100 -- above wheat, carrot and
+    # tomato. What it is excluded from is the TOWN CENTRE, a different thing.
+    # Measured at 17% of the winning field's season revenue (#157).
+    from kaggle_environments.envs.kaggriculture import kaggriculture as sim
+    assert "FERTILIZER" in sim.PRODUCTS
+    assert "FERTILIZER" in fr.TRADABLE
+
+
+def test_tradable_is_exactly_what_the_sim_will_bid_on():
+    # Derived from the sim rather than rebuilt by hand, so it cannot drift again.
+    from kaggle_environments.envs.kaggriculture import kaggriculture as sim
+    assert set(fr.TRADABLE) == set(sim.PRODUCTS)
+
+
+def test_market_sells_fertilizer_that_the_herd_has_produced():
+    orders = fr.market_orders(day=20, hour=6, money=5_000, hands=10, quadrants=3,
+                              animals=8, shed={"FERTILIZER": 7}, seeds={},
+                              empty_plots=0)
+    assert ["SELL", "FERTILIZER", 7] in orders, orders
+
+
+def test_herder_collects_the_free_fertilizer_from_a_tended_animal():
+    # COLLECT_FERTILIZER costs a turn and nothing else; the tile flags when it
+    # is available. Taken only while already standing on the animal, after it is
+    # fed and cared for, so it never displaces keeping the animal alive.
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": True, "cared_today": True,
+                   "fertilizer_available": True}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {}, {}, 9) == [
+        "COLLECT_FERTILIZER"]
+
+
+def test_herder_does_not_collect_fertilizer_that_is_not_there():
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": True, "cared_today": True,
+                   "fertilizer_available": False}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {}, {}, 9) == ["PASS"]
+
+
+def test_feeding_still_outranks_collecting_fertilizer():
+    # An animal escapes at consecutive_unfed >= 2; fertilizer keeps.
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": False, "cared_today": False,
+                   "fertilizer_available": True}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {"WHEAT": 1}, {}, 9) == [
+        "FEED"]

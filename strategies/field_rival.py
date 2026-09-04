@@ -26,6 +26,8 @@ It is flagged ``benchmark = True``: never packaged by ``scripts/submit.py``
 from __future__ import annotations
 
 from kaggisim.strategy import Strategy
+from kaggle_environments.envs.kaggriculture import kaggriculture as _sim
+
 from kaggisim import economy
 from strategies import catch_hands as ch
 from strategies import hired_hands as hh
@@ -259,9 +261,16 @@ def feed_buffer(animals: int) -> int:
     """
     return max(FEED_CARRY, 2 * animals)
 
-#: What the market will actually bid on. Livestock is bought here but never
-#: sold, and fertilizer has no bid at all.
-TRADABLE = tuple(CROPS) + tuple(a["product"] for a in economy.ANIMALS.values())
+#: What the market will actually bid on -- taken from the simulator's own
+#: PRODUCTS list rather than rebuilt here, so it cannot drift from it again.
+#: Livestock is bought through the market but is not a product, so it is absent
+#: and a SELL for a cow is a dead order.
+#:
+#: Fertilizer IS on this list, at a base of 100 -- above wheat, carrot and
+#: tomato. An earlier version of this file excluded it as having "no market
+#: bid"; what fertilizer is actually excluded from is the town centre, which is
+#: a different thing. It is 17% of the winning field's season revenue (#157).
+TRADABLE = tuple(_sim.PRODUCTS)
 
 #: Cash held back from the herd for seed, wages and feed. The crop line is what
 #: earns; livestock is bought only from what is left after it is funded.
@@ -445,6 +454,12 @@ def _pasture_chore(tile_xy, tile, pos, inv, shed):
         return None  # no feed anywhere; the market will buy some
     if not tile.get("cared_today", False) and on_it:
         return ["CARE"]  # never a trip just to care -- only a free turn on site
+    if tile.get("fertilizer_available") and on_it:
+        # Free byproduct: a turn, no land, no seed, no growing time, and it
+        # clears at 100. Last in the order so it never displaces keeping the
+        # animal alive -- an animal escapes at consecutive_unfed >= 2, whereas
+        # fertilizer keeps.
+        return ["COLLECT_FERTILIZER"]
     return None
 
 
