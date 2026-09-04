@@ -208,9 +208,20 @@ CARRY_LIMIT = 6
 #: order they are appended below IS the priority.
 MAX_ORDERS = 10
 
-#: One wheat per feeding, and the herd eats every other day; the herders top up
-#: whenever they are at the shed anyway.
-FEED_CARRY = 4
+#: Wheat a herder carries out of the shed in one trip. Each FEED spends one
+#: wheat from the worker's own inventory, so this is how many animals a single
+#: trip can serve.
+FEED_CARRY = 8
+
+
+def feed_buffer(animals: int) -> int:
+    """Wheat to keep in the shed for a herd of `animals`.
+
+    One wheat per animal per feeding, and an animal escapes at
+    ``consecutive_unfed >= 2``. A fixed buffer starves the herd as it grows: the
+    ramp kept buying and the animals kept escaping, holding steady at 8 of 11.
+    """
+    return max(FEED_CARRY, 2 * animals)
 
 #: What the market will actually bid on. Livestock is bought here but never
 #: sold, and fertilizer has no bid at all.
@@ -263,10 +274,11 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     ramp and seed for every empty tile -- the crop line is what earns -- and the
     herd last, out of whatever surplus is left above ``CAPITAL_RESERVE``.
     """
-    orders: list = []
+    sells: list = []
+    buys: list = []
     budget = money
 
-    reserved = FEED_CARRY if animals else 0
+    reserved = feed_buffer(animals) if animals else 0
     for item, n in sorted(shed.items()):
         # Fertilizer has no market bid and livestock is not a tradable product,
         # so a SELL for either is a dead order burning one of the ten slots. The
@@ -277,7 +289,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         keep = reserved if item == "WHEAT" else 0
         sell = int(n) - keep
         if sell > 0:
-            orders.append(["SELL", item, sell])
+            sells.append(["SELL", item, sell])
 
     if hour == 0:
         want = max(0, hire_target(day) - hands)
@@ -285,13 +297,13 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             wage = hh.hand_wage(hands + k)
             if budget < wage:
                 break
-            orders.append(["HIRE"])
+            buys.append(["HIRE"])
             budget -= wage
 
     if quadrants < land_target(day) and quadrants - 1 < len(economy.LAND_COSTS):
         cost = economy.LAND_COSTS[quadrants - 1]
         if budget >= cost:
-            orders.append(["BUY_LAND"])
+            buys.append(["BUY_LAND"])
             budget -= cost
 
     crop = crop_for_day(day)
@@ -301,16 +313,17 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         seed_cost = CROPS[crop]["seed"]
         buy = min(want, int(budget // seed_cost))
         if buy > 0:
-            orders.append(["BUY_SEED", crop, buy])
+            buys.append(["BUY_SEED", crop, buy])
             budget -= buy * seed_cost
 
-    # The herd comes out of surplus only. Melon does not pay until day 10, so
-    # a ramp that spends the opening bankroll leaves nothing for seed and the
-    # farm never starts -- measured at 30 reward before this reserve existed.
-    # An animal bought lands in the shed and only becomes livestock when a
-    # herder walks it out to a pasture. Counting placed head alone re-buys the
-    # whole ramp on every one of the day's 24 turns -- measured at 79 sheep
-    # filling a 100-item shed, which then silently discarded every harvest.
+    # The herd comes out of surplus only. Melon does not pay until day 10, so a
+    # ramp that spends the opening bankroll leaves nothing for seed and the farm
+    # never starts -- measured at 30 reward before this reserve existed.
+    #
+    # An animal bought lands in the shed and only becomes livestock when a herder
+    # walks it out to a pasture. Counting placed head alone re-buys the whole
+    # ramp on every one of the day's 24 turns -- measured at 79 sheep filling a
+    # 100-item shed, which then silently discarded every harvest.
     pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
     for _ in range(max(0, animal_target(day) - animals - pending)):
         kind = HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"] else HERD_MIX[0]
@@ -320,17 +333,24 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         # The count is not optional: the sim's `_parse_order` rejects a
         # BUY_ANIMAL of length 2 and drops it without a word, which is
         # indistinguishable from having been unable to afford it.
-        orders.append(["BUY_ANIMAL", kind, 1])
+        buys.append(["BUY_ANIMAL", kind, 1])
         budget -= cost
 
     # Feed wheat for the herd -- bought, never grown, so the crop plan stays the
     # measured melon/strawberry pair.
-    if animals and shed.get("WHEAT", 0) < FEED_CARRY:
-        buy = min(FEED_CARRY, int(budget // CROPS["WHEAT"]["seed"]))
+    want_feed = feed_buffer(animals) if animals else 0
+    if want_feed and shed.get("WHEAT", 0) < want_feed:
+        short = want_feed - shed.get("WHEAT", 0)
+        buy = min(short, int(budget // CROPS["WHEAT"]["seed"]))
         if buy > 0:
-            orders.append(["BUY_PRODUCT", "WHEAT", buy])
+            buys.append(["BUY_PRODUCT", "WHEAT", buy])
 
-    return orders[:MAX_ORDERS]
+    # At dawn the whole crew is hired in one turn for under 150 in total wages,
+    # and money carries overnight -- so the buys claim their slots first and the
+    # sell sweep waits a turn. Any other hour, selling leads: the shed caps at
+    # 100 items and silently discards whatever arrives after that.
+    ordered = buys + sells if hour == 0 else sells + buys
+    return ordered[:MAX_ORDERS]
 
 
 def _pasture_chore(tile_xy, tile, pos, inv, shed):

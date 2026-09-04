@@ -291,7 +291,7 @@ def test_market_never_sells_the_feed_wheat_it_just_bought():
     # The herd eats bought wheat. Selling the shed indiscriminately would buy it
     # back and sell it again every turn, churning money into the spread.
     orders = fr.market_orders(day=20, hour=3, money=5_000, hands=10, quadrants=3,
-                              animals=8, shed={"WHEAT": fr.FEED_CARRY, "MILK": 3},
+                              animals=8, shed={"WHEAT": fr.feed_buffer(8), "MILK": 3},
                               seeds={}, empty_plots=0)
     assert not [o for o in orders if o[:2] == ["SELL", "WHEAT"]], orders
     assert ["SELL", "MILK", 3] in orders
@@ -299,7 +299,7 @@ def test_market_never_sells_the_feed_wheat_it_just_bought():
 
 def test_market_sells_only_the_wheat_above_the_feed_buffer():
     orders = fr.market_orders(day=20, hour=3, money=5_000, hands=10, quadrants=3,
-                              animals=8, shed={"WHEAT": fr.FEED_CARRY + 5},
+                              animals=8, shed={"WHEAT": fr.feed_buffer(8) + 5},
                               seeds={}, empty_plots=0)
     assert ["SELL", "WHEAT", 5] in orders
 
@@ -431,3 +431,35 @@ def test_livestock_in_the_shed_is_never_offered_to_the_market():
                               empty_plots=0)
     assert not [o for o in orders if o[:2] == ["SELL", "SHEEP"]], orders
     assert ["SELL", "MILK", 2] in orders
+
+
+def test_dawn_hires_are_not_crowded_out_by_the_sell_sweep():
+    # The whole crew is hired in the hour-0 turn and the day's wages total under
+    # 150, so hires must claim their slots before sells under the 10-order cap.
+    # Money carries overnight, so the sweep loses nothing by waiting a turn.
+    shed = {"MELON": 5, "STRAWBERRY": 5, "MILK": 5, "WOOL": 5, "EGG": 5}
+    orders = fr.market_orders(day=16, hour=0, money=50_000, hands=0, quadrants=3,
+                              animals=11, shed=shed, seeds={}, empty_plots=0)
+    assert sum(1 for o in orders if o[0] == "HIRE") == fr.hire_target(16), orders
+
+
+def test_feed_buffer_scales_with_the_herd():
+    # Each animal eats one wheat per feeding and escapes at consecutive_unfed
+    # >= 2. A fixed four-wheat buffer starves a herd of eleven, which then
+    # escapes as fast as it is bought -- measured stuck at 8 of 11 head.
+    assert fr.feed_buffer(11) > fr.feed_buffer(3)
+    assert fr.feed_buffer(11) >= 11
+
+
+def test_market_stocks_feed_for_the_whole_herd():
+    orders = fr.market_orders(day=20, hour=6, money=50_000, hands=10, quadrants=3,
+                              animals=11, shed={}, seeds={}, empty_plots=0)
+    buys = [o for o in orders if o[:2] == ["BUY_PRODUCT", "WHEAT"]]
+    assert buys and buys[0][2] >= 11, orders
+
+
+def test_the_whole_feed_buffer_is_held_back_from_the_sell_sweep():
+    orders = fr.market_orders(day=20, hour=6, money=5_000, hands=10, quadrants=3,
+                              animals=11, shed={"WHEAT": fr.feed_buffer(11)},
+                              seeds={}, empty_plots=0)
+    assert not [o for o in orders if o[:2] == ["SELL", "WHEAT"]], orders
