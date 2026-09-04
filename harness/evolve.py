@@ -197,7 +197,13 @@ def blended_fitness(anchor_share, pool_share, anchor_weight=DEFAULT_ANCHOR_WEIGH
         return anchor_share
     return anchor_weight * anchor_share + (1.0 - anchor_weight) * pool_share
 
-DEFAULT_ANCHORS = ("meta_bot", "ranch_hands", "market_farmer", "ranch_adaptive", "wheat_hands")
+#: The frozen comparability bar. `field_rival` joins the five original anchors
+#: because the champion swept all five 20/20 and none of them plants a single
+#: strawberry -- an instrument that cannot separate a better agent from a worse
+#: one (#181). Adding an anchor breaks comparability with runs recorded before
+#: this change; that is the intended cost.
+DEFAULT_ANCHORS = ("meta_bot", "ranch_hands", "market_farmer", "ranch_adaptive",
+                   "wheat_hands", "field_rival")
 
 def anchor_agents(names):
     """Return the agent callables for the given registered strategy names."""
