@@ -85,6 +85,80 @@ def animal_target(day: int) -> int:
     return _ramp(ANIMAL_RAMP, day)
 
 
+#: Board is 10x10 split into four 5x5 quadrants; NW starts unlocked and the rest
+#: are bought in the sim's fixed LAND_ORDER (NE, SW, SE). We never reach SE.
+BOARD = 10
+OWNED_QUADRANTS = ("NW", "NE", "SW")
+
+#: The shed sits at the board centre and each quadrant touches it at exactly one
+#: tile. NW's is (4, 4) -- the farmer's spawn and the only shed access we have
+#: until day 12, which is why the early layout is packed tight around it.
+SHED_ACCESS = {"NW": (4, 4), "NE": (5, 4), "SW": (4, 5), "SE": (5, 5)}
+
+#: Two of the eleven workers run the livestock line; the rest tend crop clusters.
+#: Indices 1 and 2 so the ramp's earliest hands are the herders -- the herd has
+#: to be established before the crop area outgrows one quadrant.
+LIVESTOCK_WORKERS = (1, 2)
+
+#: Tiles per crop worker. Watering is only needed every other day (a plant dies
+#: at ``consecutive_unwatered >= 2``), so three tiles fit comfortably inside one
+#: worker's 24-turn day without the walk eating the schedule.
+CLUSTER = 3
+
+
+def quadrant_of(x: int, y: int) -> str:
+    """The sim's own quadrant rule (`_quadrant_of`), mirrored for planning."""
+    half = BOARD // 2
+    return ("N" if y < half else "S") + ("W" if x < half else "E")
+
+
+def _walk_cost(tile) -> int:
+    """Manhattan steps from `tile` to its own quadrant's shed-access tile.
+
+    Every trip a worker makes is to or from the shed, so this is the honest
+    ordering key: it puts the tiles a worker can service quickly first.
+    """
+    x, y = tile
+    sx, sy = SHED_ACCESS[quadrant_of(x, y)]
+    return abs(x - sx) + abs(y - sy)
+
+
+def _quadrant_tiles(quadrant: str):
+    """Every tile of one quadrant, nearest-to-shed first."""
+    tiles = [(x, y) for y in range(BOARD) for x in range(BOARD)
+             if quadrant_of(x, y) == quadrant]
+    return sorted(tiles, key=lambda t: (_walk_cost(t), t))
+
+
+#: The five NW tiles closest to the shed become pasture: the livestock workers
+#: round-trip to the shed for feed wheat every other day, so their walk is the
+#: one that has to be short. Everything the herd needs before the day-12 land
+#: buy (4 head) fits here; the rest of the block follows into NE.
+PASTURE_TILES = tuple(_quadrant_tiles("NW")[1:6] + _quadrant_tiles("NE")[1:8])
+
+#: Crop land is everything else we will ever own, nearest-to-shed first, NW
+#: exhausted before NE and NE before SW -- which matches the measured field:
+#: ~20 planted inside one quadrant by day 8, jumping to 26 when NE opens.
+CROP_TILES = tuple(
+    t for q in OWNED_QUADRANTS for t in _quadrant_tiles(q) if t not in PASTURE_TILES
+)
+
+
+def _crop_slot(worker: int):
+    """Crop-cluster slot for a worker index, or ``None`` for the herders."""
+    if worker in LIVESTOCK_WORKERS:
+        return None
+    return worker if worker < LIVESTOCK_WORKERS[0] else worker - len(LIVESTOCK_WORKERS)
+
+
+def crop_cluster(worker: int):
+    """The tiles worker `worker` is responsible for -- ``()`` for a herder."""
+    slot = _crop_slot(worker)
+    if slot is None:
+        return ()
+    return CROP_TILES[slot * CLUSTER:(slot + 1) * CLUSTER]
+
+
 class FieldRivalStrategy(Strategy):
     name = "field_rival"
     benchmark = True

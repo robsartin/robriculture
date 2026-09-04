@@ -76,3 +76,60 @@ def test_ramps_are_monotone_nondecreasing():
     for fn in (fr.hire_target, fr.land_target, fr.animal_target):
         vals = [fn(d) for d in range(0, fr.SEASON_DAYS)]
         assert vals == sorted(vals), (fn.__name__, vals)
+
+
+# --- the tile layout: NW must carry the whole early game ---
+
+def test_crop_and_pasture_tiles_never_overlap():
+    assert not (set(fr.CROP_TILES) & set(fr.PASTURE_TILES))
+
+
+def test_every_tile_is_on_the_board_and_never_in_the_quadrant_we_never_buy():
+    # land_target caps at 3 quadrants: NW, then NE, then SW. SE is never owned,
+    # so a tile there would be permanently unreachable.
+    for tile in list(fr.CROP_TILES) + list(fr.PASTURE_TILES):
+        x, y = tile
+        assert 0 <= x < 10 and 0 <= y < 10, tile
+        assert fr.quadrant_of(x, y) in ("NW", "NE", "SW"), tile
+
+
+def test_pastures_needed_before_the_land_buy_are_in_the_starting_quadrant():
+    # The herd cannot all live in NW -- the field fills nearly all 25 NW tiles
+    # with crops by day 8. What must be in NW is every head the ramp calls for
+    # BEFORE the second quadrant is bought; the rest follow the land.
+    buy_day = next(d for d in range(fr.SEASON_DAYS) if fr.land_target(d) >= 2)
+    needed = fr.animal_target(buy_day - 1)
+    for x, y in fr.PASTURE_TILES[:needed]:
+        assert fr.quadrant_of(x, y) == "NW", (x, y)
+
+
+def test_pasture_block_covers_the_peak_herd():
+    assert len(fr.PASTURE_TILES) >= fr.animal_target(fr.SEASON_DAYS - 1)
+
+
+def test_early_crop_clusters_fall_inside_the_starting_quadrant():
+    # With the day-0 crew (hire_target(0) hands + the farmer) every assigned crop
+    # tile must be in NW, or the farm cannot reach the measured 12 melon by day 8.
+    workers = 1 + fr.hire_target(0)
+    for i in range(workers):
+        for x, y in fr.crop_cluster(i):
+            assert fr.quadrant_of(x, y) == "NW", (i, x, y)
+
+
+def test_livestock_workers_have_no_crop_cluster():
+    assert fr.crop_cluster(fr.LIVESTOCK_WORKERS[0]) == ()
+    assert fr.crop_cluster(fr.LIVESTOCK_WORKERS[1]) == ()
+
+
+def test_crop_clusters_partition_the_crop_tiles_without_repeats():
+    seen = []
+    for i in range(1 + fr.MAX_HANDS):
+        seen.extend(fr.crop_cluster(i))
+    assert len(seen) == len(set(seen)), "a tile is tended by two workers"
+    assert set(seen) <= set(fr.CROP_TILES)
+
+
+def test_full_crew_tends_enough_tiles_for_the_measured_peak():
+    # The field peaks at 27 planted tiles on day 16.
+    total = sum(len(fr.crop_cluster(i)) for i in range(1 + fr.MAX_HANDS))
+    assert total >= 27, total
