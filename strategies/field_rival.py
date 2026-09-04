@@ -48,6 +48,43 @@ def crop_for_day(day: int, season_days: int = SEASON_DAYS):
     return crop if hh.plantable(crop, day, season_days) else None
 
 
+#: Crew cap. The measured field tops out at 10 hands (11 workers with the
+#: farmer); the escalating fib wage makes a wider crew self-defeating (#33).
+MAX_HANDS = 10
+
+#: The measured ramps, as ``(from_day, target)`` breakpoints read straight off
+#: the replay medians in the module docstring. A step table rather than a curve
+#: fit: the numbers are a measurement, and a reader can check them against the
+#: table above line by line.
+HAND_RAMP = ((0, 6), (8, 7), (12, 9), (16, 10))
+LAND_RAMP = ((0, 1), (12, 2), (16, 3))
+ANIMAL_RAMP = ((0, 1), (4, 3), (8, 4), (12, 8), (16, 10), (24, 11))
+
+
+def _ramp(table, day: int) -> int:
+    """Value of a step table on `day` — the last breakpoint at or before it."""
+    value = table[0][1]
+    for from_day, target in table:
+        if day >= from_day:
+            value = target
+    return value
+
+
+def hire_target(day: int) -> int:
+    """Hands to have working on `day` (6 -> 10 over the season)."""
+    return _ramp(HAND_RAMP, day)
+
+
+def land_target(day: int) -> int:
+    """Quadrants to own on `day` (NW only, then NE by day 12, SW by day 16)."""
+    return _ramp(LAND_RAMP, day)
+
+
+def animal_target(day: int) -> int:
+    """Livestock head to be running on `day` (1 -> 11 over the season)."""
+    return _ramp(ANIMAL_RAMP, day)
+
+
 class FieldRivalStrategy(Strategy):
     name = "field_rival"
     benchmark = True
