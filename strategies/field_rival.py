@@ -26,6 +26,7 @@ It is flagged ``benchmark = True``: never packaged by ``scripts/submit.py``
 from __future__ import annotations
 
 from kaggisim.strategy import Strategy
+from kaggisim import economy
 from strategies import hired_hands as hh
 
 CROPS = hh.CROPS
@@ -195,6 +196,178 @@ def nearest_shed(pos):
     """
     return min(SHED_ACCESS.values(),
                key=lambda t: (abs(t[0] - pos[0]) + abs(t[1] - pos[1]), t))
+
+
+#: Units a worker carries before it banks. The shed holds 100 items in total, so
+#: produce only counts once it is dropped -- and a worker that hoards is a worker
+#: whose harvest never reaches the market.
+CARRY_LIMIT = 6
+
+#: The sim accepts at most this many market orders in a single turn. Hires, the
+#: land buy, animals, seed and sells all compete for the same ten slots, so the
+#: order they are appended below IS the priority.
+MAX_ORDERS = 10
+
+#: One wheat per feeding, and the herd eats every other day; the herders top up
+#: whenever they are at the shed anyway.
+FEED_CARRY = 4
+
+#: Animals we buy, cheapest first. Sheep are the better earner (200 vs 160) but
+#: cost 500, so the herd starts on cows and upgrades as money allows.
+HERD_MIX = ("COW", "SHEEP")
+
+
+def _tile_at(tiles, tile):
+    x, y = tile
+    return tiles[y][x]
+
+
+def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
+    """One crop worker's action: bank a full load, else tend the first tile in
+    its cluster that wants something, else walk any leftovers back to the shed.
+    """
+    shed_tile = nearest_shed(pos)
+    at_shed = [pos[0], pos[1]] == [shed_tile[0], shed_tile[1]]
+    carrying = sum(inv.values()) if inv else 0
+
+    if carrying >= CARRY_LIMIT:
+        return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
+
+    for tile in cluster:
+        action = plot_action(_tile_at(tiles, tile), crop, day, hour)
+        if action == ["PASS"]:
+            continue
+        if [pos[0], pos[1]] == [tile[0], tile[1]]:
+            return action
+        return hh.step_toward(pos, tile)
+
+    if carrying:
+        return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
+    return ["PASS"]
+
+
+def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
+                  empty_plots):
+    """This turn's market orders, in priority order under the 10-order cap.
+
+    Sells come first: they are what funds everything below them, and a shed at
+    its 100-item cap silently discards the next harvest. Then the crew, then the
+    land and herd ramps, and finally seed for the tiles standing empty.
+    """
+    orders: list = []
+    budget = money
+
+    reserved = FEED_CARRY if animals else 0
+    for item, n in sorted(shed.items()):
+        # Fertilizer has no market bid, and the herd's feed wheat must survive
+        # the sweep -- selling it back would just buy it again next turn.
+        keep = reserved if item == "WHEAT" else 0
+        sell = int(n) - keep
+        if sell > 0 and item != "FERTILIZER":
+            orders.append(["SELL", item, sell])
+
+    if hour == 0:
+        want = max(0, hire_target(day) - hands)
+        for k in range(1, want + 1):
+            wage = hh.hand_wage(hands + k)
+            if budget < wage:
+                break
+            orders.append(["HIRE"])
+            budget -= wage
+
+    if quadrants < land_target(day) and quadrants - 1 < len(economy.LAND_COSTS):
+        cost = economy.LAND_COSTS[quadrants - 1]
+        if budget >= cost:
+            orders.append(["BUY_LAND"])
+            budget -= cost
+
+    for _ in range(max(0, animal_target(day) - animals)):
+        kind = HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"] else HERD_MIX[0]
+        cost = economy.ANIMALS[kind]["cost"]
+        if budget < cost:
+            break
+        orders.append(["BUY_ANIMAL", kind])
+        budget -= cost
+
+    crop = crop_for_day(day)
+    if crop and empty_plots > 0:
+        held = seeds.get(crop, 0)
+        want = max(0, empty_plots - held)
+        seed_cost = CROPS[crop]["seed"]
+        buy = min(want, int(budget // seed_cost))
+        if buy > 0:
+            orders.append(["BUY_SEED", crop, buy])
+            budget -= buy * seed_cost
+
+    # Feed wheat for the herd -- bought, never grown, so the crop plan stays the
+    # measured melon/strawberry pair.
+    if animals and shed.get("WHEAT", 0) < FEED_CARRY:
+        buy = min(FEED_CARRY, int(budget // CROPS["WHEAT"]["seed"]))
+        if buy > 0:
+            orders.append(["BUY_PRODUCT", "WHEAT", buy])
+
+    return orders[:MAX_ORDERS]
+
+
+def _pasture_chore(tile_xy, tile, pos, inv, shed):
+    """The chore one pasture tile wants, or ``None`` when it is fully tended.
+
+    A pure state machine over the tile's own fields: build it, stock it, then
+    keep it harvested, fed and cared for. Feeding is the one that kills -- an
+    animal escapes at ``consecutive_unfed >= 2`` -- and FEED spends wheat from
+    the worker's own inventory, so the shed trip is part of the loop.
+    """
+    on_it = [pos[0], pos[1]] == [tile_xy[0], tile_xy[1]]
+    shed_tile = nearest_shed(pos)
+    at_shed = [pos[0], pos[1]] == [shed_tile[0], shed_tile[1]]
+
+    if tile == "LOCKED":
+        return None
+    if tile is None:
+        return ["BUILD_PASTURE"] if on_it else hh.step_toward(pos, tile_xy)
+    if not isinstance(tile, dict):
+        return None
+
+    if "animal" not in tile:
+        for kind in HERD_MIX:
+            if inv.get(kind, 0) > 0:
+                return ["PLACE", kind] if on_it else hh.step_toward(pos, tile_xy)
+        for kind in HERD_MIX:
+            if shed.get(kind, 0) > 0:
+                if at_shed:
+                    return ["PICKUP", kind, 1]
+                return hh.step_toward(pos, shed_tile)
+        return None  # nothing bought yet; the market will see to it
+
+    if tile.get("yield_units", 0) > 0:
+        return ["HARVEST"] if on_it else hh.step_toward(pos, tile_xy)
+    if not tile.get("fed_today", False):
+        if inv.get("WHEAT", 0) > 0:
+            return ["FEED"] if on_it else hh.step_toward(pos, tile_xy)
+        if shed.get("WHEAT", 0) > 0:
+            if at_shed:
+                return ["PICKUP", "WHEAT", min(shed["WHEAT"], FEED_CARRY)]
+            return hh.step_toward(pos, shed_tile)
+        return None  # no feed anywhere; the market will buy some
+    if not tile.get("cared_today", False) and on_it:
+        return ["CARE"]  # never a trip just to care -- only a free turn on site
+    return None
+
+
+def herd_worker_action(pastures, tiles, pos, inv, shed, hour):
+    """One herder's action: the first pasture wanting something, else bank."""
+    for tile_xy in pastures:
+        chore = _pasture_chore(tile_xy, _tile_at(tiles, tile_xy), pos, inv, shed)
+        if chore is not None:
+            return chore
+
+    produce = sum(n for item, n in (inv or {}).items() if item != "WHEAT")
+    if produce:
+        shed_tile = nearest_shed(pos)
+        if [pos[0], pos[1]] == [shed_tile[0], shed_tile[1]]:
+            return ["DROP"]
+        return hh.step_toward(pos, shed_tile)
+    return ["PASS"]
 
 
 class FieldRivalStrategy(Strategy):

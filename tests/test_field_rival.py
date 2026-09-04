@@ -201,3 +201,167 @@ def test_nearest_shed_is_reachable_from_anywhere_on_the_board():
     for y in range(10):
         for x in range(10):
             assert fr.nearest_shed((x, y)) in set(fr.SHED_ACCESS.values())
+
+
+# --- crop_worker_action: tend the cluster, then bank the harvest ---
+
+def _blank_board():
+    return [[None for _ in range(10)] for _ in range(10)]
+
+
+def test_crop_worker_steps_toward_a_tile_that_needs_work():
+    tiles = _blank_board()
+    action = fr.crop_worker_action(((0, 0),), tiles, (4, 4), {}, "MELON", 0, 0)
+    assert action in (["WEST"], ["NORTH"])
+
+
+def test_crop_worker_acts_on_the_tile_it_is_standing_on():
+    tiles = _blank_board()
+    assert fr.crop_worker_action(((4, 4),), tiles, (4, 4), {}, "MELON", 0, 0) == [
+        "PLANT", "MELON"]
+
+
+def test_crop_worker_carrying_a_full_load_heads_for_the_shed():
+    # The shed caps at 100 items total and yield only counts once it is banked,
+    # so a loaded worker banks before tending anything else.
+    tiles = _blank_board()
+    inv = {"MELON": fr.CARRY_LIMIT}
+    action = fr.crop_worker_action(((0, 0),), tiles, (0, 0), inv, "MELON", 5, 5)
+    assert action == ["EAST"], action
+
+
+def test_crop_worker_drops_when_it_is_loaded_and_standing_at_the_shed():
+    tiles = _blank_board()
+    inv = {"MELON": fr.CARRY_LIMIT}
+    assert fr.crop_worker_action((), tiles, (4, 4), inv, "MELON", 5, 5) == ["DROP"]
+
+
+def test_crop_worker_banks_leftovers_when_the_cluster_needs_nothing():
+    # Every tile watered and immature: nothing to do in the field, so an idle
+    # worker with anything in hand walks it back rather than holding it.
+    tiles = _blank_board()
+    tiles[4][4] = _plant(watered_today=True)
+    action = fr.crop_worker_action(((4, 4),), tiles, (4, 4), {"MELON": 1}, "MELON", 3, 5)
+    assert action == ["DROP"]
+
+
+# --- market_orders: the ramps, under the sim's 10-order-per-turn cap ---
+
+def test_market_never_exceeds_the_per_turn_order_cap():
+    # Dawn on the day both the land buy and the herd jump land, with money for
+    # everything -- the turn where hires, land, animals, seed and sells collide.
+    orders = fr.market_orders(day=12, hour=0, money=500_000, hands=0,
+                              quadrants=1, animals=0, shed={"MELON": 60},
+                              seeds={}, empty_plots=27)
+    assert len(orders) <= fr.MAX_ORDERS, orders
+
+
+def test_market_hires_toward_the_measured_ramp_at_dawn_only():
+    dawn = fr.market_orders(day=16, hour=0, money=500_000, hands=0, quadrants=3,
+                            animals=11, shed={}, seeds={}, empty_plots=0)
+    assert sum(1 for o in dawn if o[0] == "HIRE") == fr.hire_target(16)
+    midday = fr.market_orders(day=16, hour=7, money=500_000, hands=0, quadrants=3,
+                              animals=11, shed={}, seeds={}, empty_plots=0)
+    assert not [o for o in midday if o[0] == "HIRE"]
+
+
+def test_market_buys_land_when_the_ramp_calls_for_it_and_never_beyond_three():
+    at12 = fr.market_orders(day=12, hour=0, money=500_000, hands=10, quadrants=1,
+                            animals=11, shed={}, seeds={}, empty_plots=0)
+    assert ["BUY_LAND"] in at12
+    done = fr.market_orders(day=24, hour=0, money=500_000, hands=10, quadrants=3,
+                            animals=11, shed={}, seeds={}, empty_plots=0)
+    assert ["BUY_LAND"] not in done
+
+
+def test_market_sells_the_shed_down():
+    orders = fr.market_orders(day=20, hour=3, money=0, hands=10, quadrants=3,
+                              animals=11, shed={"MELON": 12}, seeds={},
+                              empty_plots=0)
+    assert ["SELL", "MELON", 12] in orders
+
+
+def test_market_buys_no_seed_it_cannot_pay_for():
+    orders = fr.market_orders(day=2, hour=3, money=0, hands=6, quadrants=1,
+                              animals=1, shed={}, seeds={}, empty_plots=20)
+    assert not [o for o in orders if o[0] == "BUY_SEED"]
+
+
+def test_market_never_sells_the_feed_wheat_it_just_bought():
+    # The herd eats bought wheat. Selling the shed indiscriminately would buy it
+    # back and sell it again every turn, churning money into the spread.
+    orders = fr.market_orders(day=20, hour=3, money=5_000, hands=10, quadrants=3,
+                              animals=8, shed={"WHEAT": fr.FEED_CARRY, "MILK": 3},
+                              seeds={}, empty_plots=0)
+    assert not [o for o in orders if o[:2] == ["SELL", "WHEAT"]], orders
+    assert ["SELL", "MILK", 3] in orders
+
+
+def test_market_sells_only_the_wheat_above_the_feed_buffer():
+    orders = fr.market_orders(day=20, hour=3, money=5_000, hands=10, quadrants=3,
+                              animals=8, shed={"WHEAT": fr.FEED_CARRY + 5},
+                              seeds={}, empty_plots=0)
+    assert ["SELL", "WHEAT", 5] in orders
+
+
+# --- herd_worker_action: the livestock state machine ---
+
+def test_herder_builds_the_pasture_it_is_standing_on():
+    tiles = _blank_board()
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {}, {}, 0) == ["BUILD_PASTURE"]
+
+
+def test_herder_places_an_animal_it_is_carrying_on_an_empty_pasture():
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE"}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {"COW": 1}, {}, 0) == [
+        "PLACE", "COW"]
+
+
+def test_herder_fetches_a_bought_animal_from_the_shed():
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE"}
+    action = fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {"COW": 1}, 0)
+    assert action == ["PICKUP", "COW", 1]
+
+
+def test_herder_harvests_a_producing_animal():
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 2,
+                   "fed_today": False, "cared_today": False}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {"WHEAT": 2}, {}, 9) == [
+        "HARVEST"]
+
+
+def test_herder_feeds_a_hungry_animal_from_its_own_wheat():
+    # An animal dies at consecutive_unfed >= 2, and FEED consumes wheat from the
+    # worker's own inventory, not the shed.
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": False, "cared_today": False}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {"WHEAT": 1}, {}, 9) == [
+        "FEED"]
+
+
+def test_herder_with_no_wheat_in_hand_goes_to_the_shed_for_feed():
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": False, "cared_today": False}
+    action = fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {"WHEAT": 9}, 9)
+    assert action == ["PICKUP", "WHEAT", fr.FEED_CARRY]
+
+
+def test_herder_cares_only_when_already_standing_on_a_fed_animal():
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": True, "cared_today": False}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {}, {}, 9) == ["CARE"]
+
+
+def test_herder_ignores_pasture_tiles_on_land_it_does_not_own_yet():
+    # PASTURE_TILES runs into NE, which is locked until day 12; a herder that
+    # walked out to build there would burn its day on a tile the sim no-ops.
+    tiles = _blank_board()
+    tiles[4][3] = "LOCKED"          # the herd's only assigned tile, (3, 4)
+    action = fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {}, 0)
+    assert action == ["PASS"], action
