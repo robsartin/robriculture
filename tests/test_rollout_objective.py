@@ -51,3 +51,15 @@ def test_timed_variant_reports_seconds():
                                        episode_steps=STEPS)
     assert money == final_money(states[0]["obs"], _ours(), _theirs(), SEED, episode_steps=STEPS)
     assert seconds > 0
+
+
+def test_final_money_is_unchanged_when_rolling_from_the_terminal_step():
+    """obs at step episode_steps - 1 has zero steps left to roll; the
+    while len(env.steps) < episode_steps loop must degenerate to a no-op
+    rather than skip or misbehave, leaving money exactly as captured."""
+    states, _ = capture_states(_ours(), _theirs(), SEED, days=[3], hour=23,
+                               episode_steps=STEPS)
+    obs = states[0]["obs"]
+    assert obs["step"] == STEPS - 1, "terminal step must have zero steps remaining"
+    got = final_money(obs, _ours(), _theirs(), SEED, episode_steps=STEPS)
+    assert got == obs["farms"][0]["money"]

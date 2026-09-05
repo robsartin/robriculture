@@ -61,3 +61,17 @@ def test_a_day_past_the_game_is_refused():
     a, b = _agents()
     with pytest.raises(ValueError):
         capture_states(a, b, SEED, days=[3], hour=0, episode_steps=STEPS)
+
+
+def test_captures_the_final_step_when_requested():
+    """The main loop stops one short of episode_steps (step 71 of 72, #172
+    fix-round-1 finding 1); the terminal (day, hour) must still be captured by
+    the trailing branch rather than silently missing from the result."""
+    a, b = _agents()
+    states, final = capture_states(a, b, SEED, days=[2], hour=23, episode_steps=STEPS)
+    assert len(states) == 1
+    s = states[0]
+    assert s["day"] == 2 and s["hour"] == 23
+    assert s["step"] == STEPS - 1
+    assert s["obs"]["day"] == 2 and s["obs"]["hour"] == 23
+    assert s["obs"]["farms"][0]["money"] == final
