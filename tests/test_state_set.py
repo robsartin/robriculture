@@ -75,3 +75,19 @@ def test_captures_the_final_step_when_requested():
     assert s["step"] == STEPS - 1
     assert s["obs"]["day"] == 2 and s["obs"]["hour"] == 23
     assert s["obs"]["farms"][0]["money"] == final
+
+
+def test_captures_the_opponents_private_state_alongside_ours():
+    # The harness drives the real game, so it knows the other farm's shed even
+    # though our observation never carries it. The truth rollout needs it
+    # (spec amendment 2026-09-05: seed 0 day 15 diverged by the opponent's
+    # unseen WHEAT 7 / FERTILIZER 11).
+    a, b = _agents()
+    states, _ = capture_states(a, b, SEED, days=[1, 2], hour=0, episode_steps=STEPS)
+    for s in states:
+        opp = s["opponent_private"]
+        assert {"shed", "seeds", "inventories"} <= set(opp)
+        assert opp is not s["obs"]["private"]
+    # The terminal-step path must carry it too.
+    last, _ = capture_states(*_agents(), SEED, days=[2], hour=23, episode_steps=STEPS)
+    assert "shed" in last[0]["opponent_private"]

@@ -63,3 +63,46 @@ def test_final_money_is_unchanged_when_rolling_from_the_terminal_step():
     assert obs["step"] == STEPS - 1, "terminal step must have zero steps remaining"
     got = final_money(obs, _ours(), _theirs(), SEED, episode_steps=STEPS)
     assert got == obs["farms"][0]["money"]
+
+
+class _Spy:
+    """An opponent that records the shed it was handed on its first turn."""
+
+    def __init__(self):
+        self.first_shed = None
+
+    def __call__(self, obs):
+        if self.first_shed is None:
+            self.first_shed = dict(obs["private"]["shed"])
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+
+
+def test_opponent_private_is_restored_into_the_other_seat_when_given():
+    states, _ = capture_states(_ours(), _theirs(), SEED, days=[DAY], hour=0,
+                               episode_steps=STEPS)
+    obs = states[0]["obs"]
+    stocked = {"shed": {"WHEAT": 7, "FERTILIZER": 11}, "seeds": {}, "inventories": [{}] * 11}
+    spy = _Spy()
+    final_money(obs, _ours(), spy, SEED, episode_steps=STEPS, opponent_private=stocked)
+    assert spy.first_shed == {"WHEAT": 7, "FERTILIZER": 11}
+    bare = _Spy()
+    final_money(obs, _ours(), bare, SEED, episode_steps=STEPS)
+    assert not any(bare.first_shed.values()), "POSITIVE CONTROL: rebuild already had stock; test proves nothing"
+
+
+def test_truth_reproduces_a_real_game_when_the_opponent_holds_stock():
+    # The defect the first Stage 1 run hit: seed 0, dense_farm vs meta_bot,
+    # hour 0 of day 15, opponent shed non-empty. ~15 s: one real game plus
+    # two half-game rollouts. Slow on purpose -- this is the exactness control
+    # for the state that broke it.
+    ours = lambda: make_agent(load("dense_farm")())
+    theirs = lambda: make_agent(load("meta_bot")())
+    states, truth = capture_states(ours(), theirs(), 0, days=[15], hour=0, episode_steps=720)
+    state = states[0]
+    assert any(state["opponent_private"]["shed"].values()), \
+        "POSITIVE CONTROL: the opponent's shed is empty here, the defect cannot show"
+    without = final_money(state["obs"], ours(), theirs(), 0, episode_steps=720)
+    with_stock = final_money(state["obs"], ours(), theirs(), 0, episode_steps=720,
+                             opponent_private=state["opponent_private"])
+    assert without != truth, "POSITIVE CONTROL: the plain rollout is already exact, nothing to fix"
+    assert with_stock == truth

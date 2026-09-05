@@ -8,8 +8,9 @@ Declared before code (docs/superpowers/specs/2026-09-05-mpc-sell-hold-objective-
 candidates are the champion behind `strategies.sell_discipline` at each
 `min_frac` in GRID; states are hour 0 of each day in --days from a real game of
 the bare champion vs the gate opponent on each --seed; prediction = the
-candidate mirrored on the other farm, truth = the real opponent there, both
-rolled to step 720 from the same state under the same seed; the statistic is
+candidate mirrored on the other farm, truth = the real opponent there, with
+its private state restored from the real game, both rolled to step 720 from
+the same state under the same seed; the statistic is
 Spearman rho over the grid, one per state; PASS iff the median over DEFINED
 states is >= BAR. Controls run first: the truth rollout at min_frac 0.0 must
 reproduce the real game's final money to the value, or the run is void.
@@ -94,7 +95,8 @@ def run_state(state, champion_name, opponent_name, grid=GRID):  # pragma: no cov
         p, t1 = timed_final_money(state["obs"], _candidate(champion_cls, f),
                                   _candidate(champion_cls, f), state["seed"], EPISODE_STEPS)
         t, t2 = timed_final_money(state["obs"], _candidate(champion_cls, f),
-                                  make_agent(opponent_cls()), state["seed"], EPISODE_STEPS)
+                                  make_agent(opponent_cls()), state["seed"], EPISODE_STEPS,
+                                  opponent_private=state["opponent_private"])
         predicted[f], truth[f] = p, t
         seconds += [t1, t2]
     row = score_state(predicted, truth)

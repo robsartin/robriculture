@@ -21,6 +21,13 @@ def capture_states(agent_a, agent_b, seed, days, hour=0, episode_steps=720):
     observation at hour `hour` of each day in `days` (in the order given) and
     `final_money` is seat 0's money when the game ends.
 
+    Each state also carries `opponent_private`: seat 1's `private` at the
+    same step, deep-copied. The harness drives the real game so it knows the
+    other farm's shed even though our observation never carries it; the
+    truth rollout restores it (spec amendment 2026-09-05: seed 0 day 15
+    diverged on the opponent's unseen stock). The planner's mirror never
+    sees it.
+
     Both agents are callables `agent(obs) -> action`. A requested (day, hour)
     at or past `episode_steps` is refused up front rather than silently
     missing from the result (#153: a partial set must not look like a set).
@@ -36,7 +43,7 @@ def capture_states(agent_a, agent_b, seed, days, hour=0, episode_steps=720):
 
     env = make("kaggriculture", configuration={"episodeSteps": episode_steps, "seed": seed})
     env.reset(2)
-    found = {}
+    found, opp_found = {}, {}
     # `episode_steps` configures the total state count (len(env.steps)), which
     # is the reset state plus (episode_steps - 1) env.step() calls; calling
     # step() episode_steps times overruns an already-done env.
@@ -44,13 +51,16 @@ def capture_states(agent_a, agent_b, seed, days, hour=0, episode_steps=720):
         obs0 = env.state[0].observation
         if step in wanted:
             found[step] = copy.deepcopy(obs0)
+            opp_found[step] = copy.deepcopy(env.state[1].observation["private"])
         env.step([agent_a(obs0), agent_b(env.state[1].observation)])
     if episode_steps - 1 in wanted:
         found[episode_steps - 1] = copy.deepcopy(env.state[0].observation)
+        opp_found[episode_steps - 1] = copy.deepcopy(env.state[1].observation["private"])
     final_money = float(env.state[0].observation["farms"][0]["money"])
     states = []
     for day in days:
         step = int(day) * TURNS_PER_DAY + int(hour)
         states.append({"seed": seed, "day": int(day), "hour": int(hour),
-                       "step": step, "obs": found[step]})
+                       "step": step, "obs": found[step],
+                       "opponent_private": opp_found[step]})
     return states, final_money
