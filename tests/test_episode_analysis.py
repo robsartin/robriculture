@@ -305,3 +305,46 @@ def test_price_realisation_keeps_the_raw_per_unit_sequence():
     steps[0][0]["observation"]["market"]["inventory"] = {"STRAWBERRY": 10000}
     out = ea.price_realisation(steps, player=0)
     assert out["unit_prices"]["STRAWBERRY"] == [120, 118, 116]
+
+
+# --- BUY_PRODUCT: the outflow the decomposition used to drop on the floor ---
+#
+# `dense_farm` buys 432 wheat a season through BUY_PRODUCT. Counting none of it
+# left decompose reporting a -19,000 residual on a 35,000 game -- 55% of final
+# money, against the ~7% the module treats as normal. Silently dropping an
+# order verb turns "we cannot price this" into "this never happened".
+
+def test_buying_a_product_is_a_real_outflow():
+    # The sim quotes a BUY at the post-buy inventory, so the first unit off a
+    # 10,000-unit wheat market costs market_price(WHEAT, 9999).
+    from kaggisim.economy import market_price
+    spend = ea.order_spend([["BUY_PRODUCT", "WHEAT", 1]], hires_before=0,
+                           quadrants=1, prices={"WHEAT": 25},
+                           inventory={"WHEAT": 10000})
+    assert spend == market_price("WHEAT", 9999)
+
+
+def test_buying_walks_the_price_up_as_it_drains_the_market():
+    # Each unit bought lifts the price of the next, the mirror of a big sell.
+    from kaggisim.economy import market_price
+    flat = 50 * market_price("WHEAT", 9999)
+    walked = ea.order_spend([["BUY_PRODUCT", "WHEAT", 50]], hires_before=0,
+                            quadrants=1, prices={"WHEAT": 25},
+                            inventory={"WHEAT": 10000})
+    assert walked > flat
+
+
+def test_bought_product_lands_in_its_own_spend_bucket():
+    from kaggisim.economy import market_price
+    out = ea.spend_by_category([["BUY_PRODUCT", "FERTILIZER", 2]], hires_before=0,
+                               quadrants=1, prices={"FERTILIZER": 100},
+                               inventory={"FERTILIZER": 10000})
+    assert out["product"] == market_price("FERTILIZER", 9999) + market_price("FERTILIZER", 9998)
+    assert out["seed"] == 0
+
+
+def test_buying_falls_back_to_the_quote_when_inventory_is_unknown():
+    # Degrade rather than disappear -- the failure this whole test block exists
+    # to stop is an unpriceable order counting as zero.
+    assert ea.order_spend([["BUY_PRODUCT", "WHEAT", 4]], hires_before=0,
+                          quadrants=1, prices={"WHEAT": 30}) == 120

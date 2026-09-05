@@ -33,13 +33,42 @@ def _fib(n: int) -> int:
     return a
 
 
-def order_spend(orders, hires_before, quadrants):
+def buy_product_cost(item, units, prices=None, inventory=None):
+    """Cost of buying `units` of `item` off the market, walked like the sim.
+
+    A BUY drains market inventory, which moves the quote *up* against the buyer
+    -- the mirror image of a big sell. The sim quotes each unit at the
+    post-buy inventory (`market_price(item, inv - 1)`), so a buy/sell
+    round-trip against an unchanged market nets zero.
+
+    Estimated, not exact: the sim aborts the rest of an order the moment money
+    or shed space runs out, and this cannot see either. It is therefore an
+    upper bound on a truncated order -- which is the honest direction, because
+    the alternative already cost us a 55%-of-final-money residual that read as
+    a sell-side mystery.
+    """
+    price = (prices or {}).get(item)
+    inv = (inventory or {}).get(item)
+    if inv is None:
+        return units * int(price) if price else 0
+    total = 0
+    inv = int(inv)
+    for _ in range(units):
+        total += market_price(item, inv - 1)
+        inv -= 1
+    return total
+
+
+def order_spend(orders, hires_before, quadrants, prices=None, inventory=None):
     """Exact cost of one turn's market orders.
 
-    Every outflow in the sim is a listed price -- seed cost, animal cost, the
-    quadrant ladder, and the n-th hire of the day at ``fib(n)``. Nothing here is
-    estimated, which is why the residual in `decompose` is attributable to the
-    sell side alone.
+    Seed cost, animal cost, the quadrant ladder and the n-th hire of the day at
+    ``fib(n)`` are listed prices and exact. ``BUY_PRODUCT`` is not: it walks the
+    market curve and the sim truncates it on money or shed space, so it is
+    estimated the same way sell revenue is. The residual in `decompose`
+    therefore covers both sides of the ledger -- which is what it was already
+    doing silently, since dropping BUY_PRODUCT entirely booked a -19,000
+    residual on a 35,000 game as a sell-side mystery (#146).
     """
     spend = 0
     hires = hires_before
@@ -60,12 +89,14 @@ def order_spend(orders, hires_before, quadrants):
         elif op == "BUY_ANIMAL" and len(order) >= 2 and order[1] in ANIMALS:
             n = int(order[2]) if len(order) >= 3 else 1
             spend += ANIMALS[order[1]]["cost"] * n
+        elif op == "BUY_PRODUCT" and len(order) >= 3:
+            spend += buy_product_cost(order[1], int(order[2]), prices, inventory)
     return spend
 
 
-def spend_by_category(orders, hires_before, quadrants):
+def spend_by_category(orders, hires_before, quadrants, prices=None, inventory=None):
     """`order_spend` split into named buckets, for the write-up."""
-    out = {"seed": 0, "hire": 0, "land": 0, "animal": 0}
+    out = {"seed": 0, "hire": 0, "land": 0, "animal": 0, "product": 0}
     hires = hires_before
     owned = quadrants
     for order in orders:
@@ -84,6 +115,9 @@ def spend_by_category(orders, hires_before, quadrants):
         elif op == "BUY_ANIMAL" and len(order) >= 2 and order[1] in ANIMALS:
             n = int(order[2]) if len(order) >= 3 else 1
             out["animal"] += ANIMALS[order[1]]["cost"] * n
+        elif op == "BUY_PRODUCT" and len(order) >= 3:
+            out["product"] += buy_product_cost(order[1], int(order[2]),
+                                               prices, inventory)
     return out
 
 
@@ -294,7 +328,7 @@ def decompose(steps, player):
     rest of the numbers are not to be trusted.
     """
     revenue: dict = {}
-    spend = {"seed": 0, "hire": 0, "land": 0, "animal": 0}
+    spend = {"seed": 0, "hire": 0, "land": 0, "animal": 0, "product": 0}
     actions: dict = {}
     start_money = None
     final_money = 0.0
@@ -328,7 +362,8 @@ def decompose(steps, player):
                                          turn["banked"], turn["inv_levels"]).items():
             revenue[item] = revenue.get(item, 0) + amount
         for bucket, amount in spend_by_category(orders, hires_today,
-                                                turn["quadrants"]).items():
+                                                turn["quadrants"], turn["prices"],
+                                                turn["inv_levels"]).items():
             spend[bucket] += amount
         hires_today += sum(1 for o in orders
                            if isinstance(o, list) and o and o[0] == "HIRE")
