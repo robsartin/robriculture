@@ -566,3 +566,24 @@ def test_feeding_still_outranks_collecting_fertilizer():
                    "fertilizer_available": True}
     assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {"WHEAT": 1}, {}, 9) == [
         "FEED"]
+
+
+# --- #211: a weed on a pasture tile must not strand the herd ---
+
+def test_herder_digs_a_weed_that_landed_on_its_pasture_tile():
+    # The sim spawns a weed on ANY empty tile, and a pasture tile starts empty.
+    # A weed is a dict without "animal", so the state machine used to fall into
+    # the place/fetch branch and answer PLACE forever -- and PLACE on a weed is
+    # a silent no-op, so the tile (and the animal) were stranded for the game.
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "WEED"}
+    assert fr.herd_worker_action(((3, 4),), tiles, (3, 4), {"COW": 1}, {}, 0) == [
+        "DIG"]
+
+
+def test_herder_walks_to_a_weeded_pasture_tile_to_dig_it():
+    # DIG only works from on the tile, so the chore has to route the walk too.
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "WEED"}
+    action = fr.herd_worker_action(((3, 4),), tiles, (4, 4), {"COW": 1}, {}, 0)
+    assert action == fr.hh.step_toward((4, 4), (3, 4)), action

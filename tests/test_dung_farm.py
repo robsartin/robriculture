@@ -200,7 +200,8 @@ def test_a_weed_on_a_pasture_tile_is_dug_rather_than_placed_on():
     xy = fr.PASTURE_TILES[1]
     weed = {"kind": "WEED"}
     assert dg.pasture_chore(xy, weed, list(xy), {"SHEEP": 1}, {}) == ["DIG"]
-    assert fr._pasture_chore(xy, weed, list(xy), {"SHEEP": 1}, {}) == ["PLACE", "SHEEP"]
+    # The benchmark carried the same defect until #211 fixed it; both now dig.
+    assert fr._pasture_chore(xy, weed, list(xy), {"SHEEP": 1}, {}) == ["DIG"]
 
 
 def test_a_weeded_pasture_is_walked_to_rather_than_answered_from_afar():
@@ -227,9 +228,10 @@ def test_the_herder_is_not_pinned_by_a_weeded_pasture():
     got = dg.herd_worker_action(list(fr.PASTURE_TILES[:3]), tiles, list(weeded),
                                 {"SHEEP": 1}, {}, hour=5)
     assert got == ["DIG"]
-    # The benchmark's scan is what stalls: a PLACE the sim silently no-ops.
+    # The benchmark's scan used to stall here on a PLACE the sim silently
+    # no-ops; since #211 it digs the weed too.
     assert fr.herd_worker_action(list(fr.PASTURE_TILES[:3]), tiles, list(weeded),
-                                 {"SHEEP": 1}, {}, hour=5) == ["PLACE", "SHEEP"]
+                                 {"SHEEP": 1}, {}, hour=5) == ["DIG"]
 
 
 def test_an_unweeded_pasture_is_still_the_benchmarks_own_chore():

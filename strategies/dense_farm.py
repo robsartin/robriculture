@@ -20,11 +20,18 @@ inside a 6,000-11,200 noise floor. More crop revenue is precisely what that
 matchup is short of, and our crop line is the strongest in the replay data
 (55,958 against the winning field's 28,361, #157).
 
-`field_rival` stays frozen. Its helpers now take `caps` with the module default,
-so its own decisions are byte-identical -- pinned by
-`tests/test_dense_farm.py::test_the_frozen_benchmark_decides_exactly_as_before`.
-It is the only anchor calibrated to the field that beats us, and mutating it
+`field_rival` is not tuned by this experiment. Its helpers take `caps` with the
+module default, so #202 left its crop decisions byte-identical -- pinned by
+`tests/test_dense_farm.py::test_the_crop_caps_parameter_is_behaviour_preserving_at_its_default`.
+It is the only anchor calibrated to the field that beats us, and *tuning* it
 would move the measuring stick under the thing being measured.
+
+It is no longer byte-frozen, though: #211 fixed a defect in its herd state
+machine on 2026-09-05 (a weed on a pasture tile stranded the herd for the rest
+of the game). That is a correctness fix, not a calibration change -- it makes
+the anchor stronger and less noisy -- but it does mean the numbers in #181,
+#184, #193 and #202 were measured against the pre-fix `field_rival`. See the
+2026-09-05 amendment to ADR-0007.
 """
 
 from __future__ import annotations
