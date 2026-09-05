@@ -843,6 +843,156 @@ The body keeps the existing summary and adds a "Stage 1 result" section with the
 
 ---
 
+---
+
+### Task 6: Restore the opponent's private state in the truth rollout (added after the first run)
+
+**Why:** the declared run voided at seed 0, day 15: `control truth@0.0=68715 real=68451`. Diagnosed
+by experiment (all five states, plain vs patched): the four passing days had an empty opponent
+shed at hour 0; day 15's opponent held `{"WHEAT": 7, "FERTILIZER": 11}`, which `forward.rebuild`
+cannot know from our observation, so the rebuilt `meta_bot` played differently and moved the
+shared market. Patching seat 1's `private` from the real game makes day 15 exact (68451) and
+leaves days 3/5/7/10 exact. The spec's Truth section carries the dated amendment. Prediction
+(the mirror) is NOT changed: the planner never has the opponent's private state.
+
+**Files:**
+- Modify: `harness/state_set.py` (capture seat 1's `private` alongside seat 0's observation)
+- Modify: `harness/rollout_objective.py` (`opponent_private=None` keyword on `final_money` and `timed_final_money`)
+- Modify: `harness/objective_check.py` (`run_state` passes `state["opponent_private"]` to the TRUTH rollout only; docstrings)
+- Test: `tests/test_state_set.py`, `tests/test_rollout_objective.py`
+
+**Interfaces:**
+- Consumes: everything from Tasks 2-4.
+- Produces: each state dict gains `"opponent_private": dict` (seat 1's `private`, deep-copied at the same step); `final_money(obs, our_agent, opponent_agent, seed, episode_steps=720, opponent_private=None)` — when given, the rebuilt env's OTHER seat gets `observation["private"] = deepcopy(opponent_private)` before the first step; `timed_final_money` passes it through unchanged.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `tests/test_state_set.py`:
+
+```python
+def test_captures_the_opponents_private_state_alongside_ours():
+    # The harness drives the real game, so it knows the other farm's shed even
+    # though our observation never carries it. The truth rollout needs it
+    # (spec amendment 2026-09-05: seed 0 day 15 diverged by the opponent's
+    # unseen WHEAT 7 / FERTILIZER 11).
+    a, b = _agents()
+    states, _ = capture_states(a, b, SEED, days=[1, 2], hour=0, episode_steps=STEPS)
+    for s in states:
+        opp = s["opponent_private"]
+        assert {"shed", "seeds", "inventories"} <= set(opp)
+        assert opp is not s["obs"]["private"]
+    # The terminal-step path must carry it too.
+    last, _ = capture_states(*_agents(), SEED, days=[2], hour=23, episode_steps=STEPS)
+    assert "shed" in last[0]["opponent_private"]
+```
+
+Append to `tests/test_rollout_objective.py`:
+
+```python
+class _Spy:
+    """An opponent that records the shed it was handed on its first turn."""
+
+    def __init__(self):
+        self.first_shed = None
+
+    def __call__(self, obs):
+        if self.first_shed is None:
+            self.first_shed = dict(obs["private"]["shed"])
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+
+
+def test_opponent_private_is_restored_into_the_other_seat_when_given():
+    states, _ = capture_states(_ours(), _theirs(), SEED, days=[DAY], hour=0,
+                               episode_steps=STEPS)
+    obs = states[0]["obs"]
+    stocked = {"shed": {"WHEAT": 7, "FERTILIZER": 11}, "seeds": {}, "inventories": [{}] * 11}
+    spy = _Spy()
+    final_money(obs, _ours(), spy, SEED, episode_steps=STEPS, opponent_private=stocked)
+    assert spy.first_shed == {"WHEAT": 7, "FERTILIZER": 11}
+    bare = _Spy()
+    final_money(obs, _ours(), bare, SEED, episode_steps=STEPS)
+    assert not any(bare.first_shed.values()), "POSITIVE CONTROL: rebuild already had stock; test proves nothing"
+
+
+def test_truth_reproduces_a_real_game_when_the_opponent_holds_stock():
+    # The defect the first Stage 1 run hit: seed 0, dense_farm vs meta_bot,
+    # hour 0 of day 15, opponent shed non-empty. ~15 s: one real game plus
+    # two half-game rollouts. Slow on purpose -- this is the exactness control
+    # for the state that broke it.
+    ours = lambda: make_agent(load("dense_farm")())
+    theirs = lambda: make_agent(load("meta_bot")())
+    states, truth = capture_states(ours(), theirs(), 0, days=[15], hour=0, episode_steps=720)
+    state = states[0]
+    assert any(state["opponent_private"]["shed"].values()), \
+        "POSITIVE CONTROL: the opponent's shed is empty here, the defect cannot show"
+    without = final_money(state["obs"], ours(), theirs(), 0, episode_steps=720)
+    with_stock = final_money(state["obs"], ours(), theirs(), 0, episode_steps=720,
+                             opponent_private=state["opponent_private"])
+    assert without != truth, "POSITIVE CONTROL: the plain rollout is already exact, nothing to fix"
+    assert with_stock == truth
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `.venv/bin/python -m pytest -q tests/test_state_set.py tests/test_rollout_objective.py`
+Expected: the state_set test fails with `KeyError: 'opponent_private'`; the spy test fails with `TypeError: final_money() got an unexpected keyword argument 'opponent_private'`; the reproduction test fails the same way (TypeError) — and once the keyword exists but does nothing, it must fail on `assert with_stock == truth` with 68715 != 68451. Record both stages.
+
+- [ ] **Step 3: Implement**
+
+`harness/state_set.py` — in `capture_states`, capture both seats at a wanted step:
+
+```python
+    found, opp_found = {}, {}
+    for step in range(episode_steps - 1):
+        obs0 = env.state[0].observation
+        if step in wanted:
+            found[step] = copy.deepcopy(obs0)
+            opp_found[step] = copy.deepcopy(env.state[1].observation["private"])
+        env.step([agent_a(obs0), agent_b(env.state[1].observation)])
+    if episode_steps - 1 in wanted:
+        found[episode_steps - 1] = copy.deepcopy(env.state[0].observation)
+        opp_found[episode_steps - 1] = copy.deepcopy(env.state[1].observation["private"])
+```
+
+and add `"opponent_private": opp_found[step]` to each state dict. Extend the docstring: the other seat's `private` is captured because the truth rollout restores it (spec amendment 2026-09-05); the planner's mirror never sees it.
+
+`harness/rollout_objective.py`:
+
+```python
+def final_money(obs, our_agent, opponent_agent, seed, episode_steps=720, opponent_private=None) -> float:
+    us = int(obs.get("player", 0))
+    env = forward.rebuild(obs, episode_steps=episode_steps, seed=seed)
+    if opponent_private is not None:
+        env.state[1 - us].observation["private"] = copy.deepcopy(opponent_private)
+    ...
+```
+
+(`import copy` at the top.) `timed_final_money(..., opponent_private=None)` passes it through. Replace the module docstring's paragraph about the opponent's private shed with: the observation never carries it, so a caller that knows it (the harness, from the real game) passes `opponent_private` for the TRUTH rollout; the mirror prediction never does, because the planner never has it — that asymmetry is the point of the measurement.
+
+`harness/objective_check.py` — in `run_state`, the truth call becomes
+`timed_final_money(state["obs"], _candidate(champion_cls, f), make_agent(opponent_cls()), state["seed"], EPISODE_STEPS, opponent_private=state["opponent_private"])`; the mirror call is unchanged. Update the module docstring's "truth = the real opponent there" to "truth = the real opponent there, with its private state restored from the real game".
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `.venv/bin/python -m pytest -q tests/test_state_set.py tests/test_rollout_objective.py tests/test_objective_check.py`
+Expected: all pass, including the ~15 s reproduction.
+
+- [ ] **Step 5: Re-smoke the CLI on the state that broke (blocking, ~1 min)**
+
+Run: `.venv/bin/python -m harness.objective_check --seeds 0 --days 15`
+Expected: `seed 0 day 15: control truth@0.0=68451 real=68451 OK`.
+
+- [ ] **Step 6: Full suite as CI runs it, plus the coverage numbers** (same command as Task 4 Step 6).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add harness/state_set.py harness/rollout_objective.py harness/objective_check.py tests/test_state_set.py tests/test_rollout_objective.py
+git commit -m "truth rollout restores the opponent's private state; the control failed without it (#172)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
 ## Self-review
 
 - **Spec coverage:** wrapper knob (Task 1), state set with the (seed, day) grid and hour 0 (Task 2, Task 4 defaults), prediction vs truth via one function with a swapped opponent (Task 3), per-state Spearman via `ladder_correlation.spearman`, median verdict with undefined excluded, control-first with a void on mismatch, cost measured and recorded (Task 4), champion as a flag defaulting to `dense_farm` with gate opponent from `champion.json` (Task 4), results to the issue and PR (Task 5). Stage 2 excluded.

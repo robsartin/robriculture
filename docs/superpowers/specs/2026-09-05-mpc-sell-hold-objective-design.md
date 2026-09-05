@@ -45,6 +45,16 @@ opponent** (`meta_bot`) on the other farm, and read our final money. Both rollou
 `kaggisim.forward.rebuild` under the same seed, so weeds are identical between them; the only
 difference is who plays the other farm.
 
+> **Amendment 2026-09-05, after the first run.** The truth rollout also restores the
+> opponent's **private state** (shed, seeds, inventories) captured from the real game.
+> The harness drives that game, so it knows the state even though the live planner never
+> will. Without it the positive control failed at seed 0, day 15 — truth 68,715 against a
+> real 68,451, with the opponent holding WHEAT 7 / FERTILIZER 11 at the snapshot — and
+> passed only on the days whose opponent shed happened to be empty. Restoring the private
+> state makes all five day-15-inclusive controls exact (measured before the fix was
+> written). The **prediction** is unchanged: the mirror still starts the other farm with an
+> empty shed, per Decision 5, because that is the planner's real information set.
+
 **Statistic.** Spearman rho between predicted and true final money over the 11 candidates,
 one rho per state, using `harness.ladder_correlation.spearman` (stdlib, tie-averaged).
 
