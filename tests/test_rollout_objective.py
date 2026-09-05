@@ -81,7 +81,8 @@ def test_opponent_private_is_restored_into_the_other_seat_when_given():
     states, _ = capture_states(_ours(), _theirs(), SEED, days=[DAY], hour=0,
                                episode_steps=STEPS)
     obs = states[0]["obs"]
-    stocked = {"shed": {"WHEAT": 7, "FERTILIZER": 11}, "seeds": {}, "inventories": [{}] * 11}
+    stocked = {"shed": {"WHEAT": 7, "FERTILIZER": 11}, "seeds": {},
+              "inventories": [{} for _ in range(11)]}
     spy = _Spy()
     final_money(obs, _ours(), spy, SEED, episode_steps=STEPS, opponent_private=stocked)
     assert spy.first_shed == {"WHEAT": 7, "FERTILIZER": 11}

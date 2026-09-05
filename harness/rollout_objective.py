@@ -49,5 +49,5 @@ def timed_final_money(obs, our_agent, opponent_agent, seed, episode_steps=720,
     says to budget from measurement, not from #159's one-sided numbers."""
     t0 = time.perf_counter()
     money = final_money(obs, our_agent, opponent_agent, seed, episode_steps,
-                        opponent_private)
+                        opponent_private=opponent_private)
     return money, time.perf_counter() - t0
