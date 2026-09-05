@@ -954,3 +954,32 @@ def test_one_shot_crops_are_unaffected_when_not_at_risk():
     # loses only 6 plants a game. This change must not disturb it.
     tile = _live(crop="MELON", planted_day=0, yield_units=3, unwatered=0)
     assert np._plot_action(tile, 11, "MELON") == ["HARVEST"]
+
+
+# --- #211: a weed on an animal tile must not strand the herd ---
+
+def test_animal_chore_digs_a_weed_on_its_tile():
+    # The sim spawns a weed on ANY empty tile, and an animal tile starts empty.
+    # A weed is a dict without "animal", so `_is_animal` is False and the setup
+    # branch answered PLACE forever -- a silent no-op on a weed, stranding the
+    # tile and the animal for the rest of the game.
+    tiles = [[None] * 10 for _ in range(10)]
+    tiles[0][5] = {"kind": "WEED"}
+    got = np._animal_chore((5, 0), "COW", (5, 0), tiles, {"COW": 1}, {}, ("NW", "NE"))
+    assert got == ["DIG"], got
+
+
+def test_animal_job_action_digs_a_weed_on_its_tile():
+    tiles = [[None] * 10 for _ in range(10)]
+    tiles[0][5] = {"kind": "WEED"}
+    got = np._animal_job_action((5, 0), "COW", (5, 0), tiles,
+                                {"COW": 1}, {}, ("NW", "NE"))
+    assert got == ["DIG"], got
+
+
+def test_animal_chore_walks_to_a_weeded_tile_to_dig_it():
+    # DIG only works from on the tile, so the chore has to route the walk too.
+    tiles = [[None] * 10 for _ in range(10)]
+    tiles[0][5] = {"kind": "WEED"}
+    got = np._animal_chore((5, 0), "COW", (0, 0), tiles, {"COW": 1}, {}, ("NW", "NE"))
+    assert got[0] in ("EAST", "WEST", "NORTH", "SOUTH"), got

@@ -221,3 +221,81 @@ reproducible writeup — the writeup becomes a byproduct rather than a scramble.
 
 - A mechanism for **testing ADRs** (keeping ADRs honest against the code they
   describe) is wanted but deferred to its own issue.
+
+## Amendments
+
+### 2026-09-05 — the frozen anchor `field_rival` was changed to fix a defect (#211)
+
+**What this corrects.** The original decision above is unchanged: an experiment
+is still measured against the designated gate opponent, and an anchor is still
+not tuned in the middle of an experiment. What it did *not* say, and what this
+amendment records, is what happens when a frozen anchor turns out to be
+**incorrect** rather than merely weak. It says so now: a defect in an anchor is
+fixed, dated, and recorded here — it is not preserved for the sake of exact
+reproduction.
+
+**The defect.** The simulator's `_spawn_weeds` converts *any* empty tile to
+`{"kind": "WEED"}` at `weedSpawnChance` (0.005) per day. A pasture tile starts
+empty, so a pasture tile could become a weed. A weed is a dict with no
+`"animal"` key, so `field_rival._pasture_chore` fell past its `tile is None`
+BUILD_PASTURE branch into the place/fetch branch and answered `["PLACE", "COW"]`
+for the rest of the game. The sim's PLACE requires `tile["kind"] == "PASTURE"`,
+so on a weed it is a **silent no-op**: the worker fetched an animal, walked out,
+placed into nothing, and repeated — and first-match scanning over the pasture
+list meant it never moved on to another tile either. The same shape existed in
+`neuropilot._animal_chore` (`["PLACE", "COW", 1]`). Both modules already dug
+weeds on the *crop* path; neither did on the pasture path.
+
+**The change.** Both state machines now return DIG for a weed on a pasture /
+animal tile, which clears the tile back to `None` and lets the existing
+BUILD_PASTURE branch recover it. `balanced_farm` and `dense_farm` inherit
+`field_rival`'s herd state machine and are fixed by the same edit.
+
+**Why an anchor was allowed to move.** This is a correctness fix, not a
+calibration change. Three reasons it is the conservative direction:
+
+- The anchor gets **stronger**, so past PROMOTE verdicts measured against the
+  pre-fix version become *harder* to reproduce, never easier.
+- The defect was a **random** event (a per-tile, per-day dice roll), so it was
+  an invisible source of seed-to-seed variance in exactly the measurement
+  #181 exists to stabilise. A benchmark whose herd randomly strands is not a
+  stable measuring stick.
+- Option 2 — fixing only the contender line and leaving the anchor
+  byte-frozen — was rejected: it would mean knowingly measuring every future
+  experiment against an opponent we had already proven broken.
+
+**What this costs.** `field_rival`'s behaviour changed on 2026-09-05. The
+results recorded in **#181, #184, #193 and #202** were measured against the
+**pre-fix** `field_rival` and are not exactly reproducible against `main` after
+this date. Re-run them against the post-fix anchor before treating any of those
+numbers as current. Their *direction* is expected to survive — the anchor got
+stronger, not weaker — but the magnitudes are stale.
+
+**Measured effect** (kaggle-environments 1.32.7, seeds 300-331 x both side
+assignments = 64 games per condition, `dense_farm` vs `field_rival`; full
+table in issue #211):
+
+| | before | after |
+|---|---|---|
+| games where the dead-PLACE loop fired (`dense_farm` / `field_rival`) | 17% / 16% | **0% / 0%** |
+| dead PLACE emissions across 64 games | 2,882 / 2,646 | **0 / 0** |
+| turns holding a weed on a wanted pasture tile (mean per game) | 124 / 120 | **33 / 37** |
+| final money (median) | 40,681 / 30,940 | 38,634 / 29,348 |
+
+Weed *incidence* is unchanged, as it must be — the sim rolls the same dice
+either way. What changes is duration: the weed is now cleared instead of held
+for the rest of the game.
+
+**The money effect is below the noise floor and is not claimed as a gain.**
+Paired per-seed, per-side: 43 of 64 games are bit-identical, and the median
+delta is +0 with a mean of +359 (`dense_farm`) and -268 (`field_rival`) against
+a paired stdev of ~3,800 and the 6,000-11,200 seed-to-seed stdev of #181.
+Restricted to the games where the loop actually fired, `dense_farm` gains a
+median +2,798 (n=11, range -5,699 to +18,434) — real, but with a spread that
+still swamps it. The justification for this change is correctness and reduced
+variance, not score.
+
+**Convention going forward.** An anchor may be changed to fix a defect. It may
+not be changed to make it stronger, weaker, or differently calibrated. Every
+such change is recorded here with its date and the issues whose numbers it
+invalidates.

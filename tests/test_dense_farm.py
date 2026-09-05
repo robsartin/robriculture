@@ -34,10 +34,17 @@ def _standing(**kw):
 
 # --- the benchmark must not move ---
 
-def test_the_frozen_benchmark_decides_exactly_as_before():
-    # Threading a `caps` parameter through must be behaviour-preserving at its
-    # default. If this ever fails, every number measured against `field_rival`
-    # in #181, #184 and #193 is retroactively suspect.
+def test_the_crop_caps_parameter_is_behaviour_preserving_at_its_default():
+    # Threading a `caps` parameter through `crop_for_plot` must not move the
+    # benchmark's crop decisions at its default.
+    #
+    # This pins the CROP path only, and its name used to overclaim: it said the
+    # benchmark "decides exactly as before" while checking one function's one
+    # parameter. #211 fixed a defect in `field_rival`'s HERD path (a weed on a
+    # pasture tile stranded the herd permanently) and this test stayed green
+    # throughout -- it never touched `_pasture_chore`. `field_rival`'s
+    # behaviour DID change on 2026-09-05; see docs/adr/0007's amendment. The
+    # name now says what is actually pinned.
     for day in range(0, fr.SEASON_DAYS):
         for standing in ({}, _standing(MELON=12), _standing(STRAWBERRY=15),
                          _standing(MELON=12, STRAWBERRY=15, WHEAT=5)):

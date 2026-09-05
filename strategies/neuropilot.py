@@ -455,6 +455,16 @@ def _animal_chore(tile_pos, kind: str, pos, tiles, inv: dict, shed: dict, unlock
     tile = _tile_at(tiles, tile_pos)
     on = _on(pos, tile_pos)
 
+    # --- #211: clear a weed before anything else. ---
+    # The sim weeds ANY empty tile at 0.005/day and an animal tile starts
+    # empty. A weed is a dict with no "animal" key, so `_is_animal` is False
+    # and the setup branch below used to answer PLACE forever -- and the sim's
+    # PLACE requires kind == "PASTURE", so on a weed it is a SILENT no-op,
+    # stranding the tile and the animal for the rest of the game. DIG clears
+    # it back to None, which the BUILD_PASTURE branch then recovers.
+    if isinstance(tile, dict) and tile.get("kind") == "WEED":
+        return acts.dig() if on else _step_toward(pos, tile_pos)
+
     # --- Setup: pasture -> animal in hand -> placed. ---
     if not _is_animal(tile):
         if inv.get(kind, 0) > 0:

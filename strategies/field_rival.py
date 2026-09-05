@@ -433,6 +433,17 @@ def _pasture_chore(tile_xy, tile, pos, inv, shed):
     if not isinstance(tile, dict):
         return None
 
+    if tile.get("kind") == "WEED":
+        # #211: the sim weeds ANY empty tile at 0.005/day, and a pasture tile
+        # starts empty. A weed is a dict with no "animal" key, so it used to
+        # fall through to the place/fetch branch below and answer PLACE
+        # forever -- and the sim's PLACE requires kind == "PASTURE", so on a
+        # weed it is a SILENT no-op. The worker fetched an animal, walked out,
+        # placed into nothing and repeated; first-match scanning meant it never
+        # moved on to another tile either. DIG clears the tile back to None,
+        # and the BUILD_PASTURE branch above recovers it on the next turn.
+        return ["DIG"] if on_it else hh.step_toward(pos, tile_xy)
+
     if "animal" not in tile:
         for kind in HERD_MIX:
             if inv.get(kind, 0) > 0:
