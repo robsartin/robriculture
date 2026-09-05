@@ -376,3 +376,80 @@ def decompose(steps, player):
         "final_money": final_money,
         "residual": final_money - accounted,
     }
+
+
+def _sold_units(orders, item, shed, banked):
+    """Units of `item` one turn's SELL orders can actually fill.
+
+    Same conservatism as `sell_revenue`: an order is capped at the stock that
+    exists, counting what this turn's DROPs bank, because the interpreter runs
+    unit actions before the market.
+    """
+    available = int((shed or {}).get(item, 0)) + int((banked or {}).get(item, 0))
+    units = 0
+    for order in orders:
+        if not isinstance(order, list) or len(order) < 3 or order[0] != "SELL":
+            continue
+        if order[1] != item:
+            continue
+        fill = min(int(order[2]), available - units)
+        if fill > 0:
+            units += fill
+    return units
+
+
+def _sells_item(slot, item):
+    """True when this slot's action carries a SELL order for `item`."""
+    action = (slot or {}).get("action")
+    if not isinstance(action, dict):
+        return False
+    return any(isinstance(o, list) and len(o) >= 3 and o[0] == "SELL" and o[1] == item
+               for o in (action.get("market") or []))
+
+
+def first_sale(steps, player, item):
+    """The first turn `player` actually sells `item`, decomposed (#205).
+
+    ``None`` when the item never reaches the market. Otherwise the `day` and
+    `hour` the order was chosen on, the `units` it filled, the estimated
+    `revenue`, the realised `price` per unit, the market `inventory` the sale
+    opened against, and `contested`.
+
+    Read `contested` before the price. Both players commit unit-by-unit against
+    the same pre-commit inventory, so on a turn the opponent also sells into,
+    this side's own walk down the curve is an *overestimate* -- the interleaved
+    units pushed the real fills further down it.
+
+    An order that cannot fill is not a sale: a SELL against an empty shed costs
+    nothing and moves nothing, and reporting it would date the sale to a turn
+    where no melon changed hands.
+    """
+    for t in range(len(steps)):
+        slot = _slot(steps, t, player)
+        prior = _slot(steps, t - 1, player) if t else None
+        if slot is None or prior is None:
+            continue
+        if not _sells_item(slot, item):
+            continue
+        obs = prior.get("observation") or {}
+        action = slot.get("action")
+        orders = action.get("market") or []
+        shed = (obs.get("private") or {}).get("shed") or {}
+        banked = banked_this_turn(action, (obs.get("private") or {}).get("inventories") or [])
+        units = _sold_units(orders, item, shed, banked)
+        if units <= 0:
+            continue
+        market = obs.get("market") or {}
+        revenue = sell_revenue(orders, market.get("prices") or {}, shed, banked,
+                               market.get("inventory") or None).get(item, 0)
+        return {
+            "day": obs.get("day"),
+            "hour": obs.get("hour"),
+            "units": units,
+            "revenue": revenue,
+            "price": revenue / units,
+            "inventory": (market.get("inventory") or {}).get(item),
+            "quoted": (market.get("prices") or {}).get(item),
+            "contested": _sells_item(_slot(steps, t, 1 - player), item),
+        }
+    return None
