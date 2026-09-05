@@ -5,7 +5,13 @@
 # working with the kaggriculture env. Keep this matched to what Kaggle runs to
 # avoid "works locally, errors on submit" surprises — bump it if the leaderboard
 # runtime updates.
-kaggle-environments==1.32.4
+#
+# 1.32.7 is what the ladder runs, read from `module_version` in all 63
+# downloaded replays (#195). The previous 1.32.4 pin was stale, so CI was
+# testing against a simulator the competition does not use — and the two
+# disagree about outcomes, not just prices: #193's contender won 11/16 against
+# the champion on 1.32.7 and 0/16 on 1.32.4.
+kaggle-environments==1.32.7
 kaggle>=1.6.0            # CLI, only needed for submitting/downloading
 
 # Pulled in by kaggle-environments; pinned for reproducibility.
