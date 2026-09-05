@@ -151,3 +151,9 @@ def test_ghost_players_are_callables_that_replay_both_recorded_scripts():
     players = gb.ghost_players(gb.episode_digest("ep.json", _full_replay()))
     assert [p({"step": 0}) for p in players] == [{"farmer": ["NORTH"]},
                                                  {"farmer": ["SOUTH"]}]
+
+
+def test_standing_melon_is_zero_for_a_seat_the_observation_does_not_carry():
+    """A single-farm observation must read as no melon, not raise."""
+    steps = [[{"observation": {"farms": [{"tiles": _board(11)}]}}, {"observation": {}}]]
+    assert gb.standing_melon(steps, 0, player=1) == 0

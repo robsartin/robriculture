@@ -81,3 +81,19 @@ def test_from_replay_scripts_the_named_player_not_the_other_one():
     replay = {"steps": _steps([None, A1], [None, A2])}
     assert Ghost.from_replay(replay, 1).act({"step": 0}) == A2
     assert Ghost.from_replay(replay, 0).act({"step": 0}) == A1
+
+
+def test_ghost_passes_on_a_slot_the_replay_did_not_record():
+    """A timeout mid-episode is a None slot: the ghost does nothing there
+    rather than sliding the rest of the script forward by one turn."""
+    ghost = Ghost([None, A1, None, A2])
+    assert ghost.act({"step": 1}) == PASS
+    assert ghost.act({"step": 2}) == A2
+
+
+def test_reset_puts_a_reused_ghost_back_at_the_start_of_its_script():
+    """The counter fallback desyncs if a ghost is reused across episodes."""
+    ghost = Ghost([None, A1, A2])
+    ghost.act({})
+    ghost.reset()
+    assert ghost.act({}) == A1
