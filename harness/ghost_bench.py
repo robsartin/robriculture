@@ -54,6 +54,12 @@ MELON_TRIGGER_TILES = 10
 #: Day 8, mid-day. The replay medians in `strategies/field_rival.py` (11-12 melon
 #: at day 8) are sampled mid-day, so the trigger is read at the same hour they
 #: were measured at rather than at a boundary where a day's planting is half done.
+#:
+#: Validated as an instrument rather than assumed, twice. It reads 12 for
+#: `field_rival` on seeds 0/1/2 -- that agent's own documented archetype -- and 0
+#: for `starter`, so it both fires and can read zero. Run over the raw replays it
+#: also reproduces the wins-vs-losses trigger split that docs/findings.md records
+#: from #178, which is the measurement it has to be the same instrument as.
 PROBE_STEP = 8 * 24 + 12
 
 #: A full season, as the ladder runs it.
