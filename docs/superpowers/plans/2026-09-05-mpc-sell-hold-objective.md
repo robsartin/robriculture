@@ -282,12 +282,12 @@ def test_captures_our_observation_at_the_requested_days():
 
 def test_snapshots_are_copies_not_views_of_the_live_env():
     a, b = _agents()
-    states, _ = capture_states(a, b, SEED, days=[1], hour=0, episode_steps=STEPS)
-    money_at_day_1 = states[0]["obs"]["farms"][0]["money"]
-    # A second capture of the same game reproduces the value: the first was not
-    # mutated by the game continuing to its end.
-    again, _ = capture_states(*_agents(), SEED, days=[1], hour=0, episode_steps=STEPS)
-    assert again[0]["obs"]["farms"][0]["money"] == money_at_day_1
+    states, final = capture_states(a, b, SEED, days=[1], hour=0, episode_steps=STEPS)
+    snap = states[0]["obs"]
+    # A view of the live observation would read the game's LAST turn by the
+    # time capture_states returns; a copy still reads day 1, hour 0.
+    assert snap["day"] == 1 and snap["hour"] == 0
+    assert snap["farms"][0]["money"] != final, "POSITIVE CONTROL: money never moved after day 1"
 
 
 def test_the_drive_lands_where_env_run_lands():
