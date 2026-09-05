@@ -21,48 +21,18 @@ from __future__ import annotations
 
 import math
 
-from kaggisim.economy import MARKET_PARAMS
-
-#: The market never pays below this per unit (mirrors the sim).
-PRICE_FLOOR = 1
+from kaggisim import economy
+from kaggisim.economy import MARKET_PARAMS, PRICE_FLOOR
 
 
-def _shape(func: str, x: float) -> float:
-    """The curve shape applied to the distance from the inventory anchor ``I0``.
-
-    Mirrors the sim's ``_shape``: ``log``/``sqrt`` are gentle (deep markets that
-    absorb volume), ``sq`` is steep (shallow markets that floor fast).
-    """
-    x = max(0.0, x)
-    if func == "linear":
-        return x
-    if func == "sq":
-        return x * x
-    if func == "sqrt":
-        return math.sqrt(x)
-    if func == "log":
-        return math.log(1.0 + x)
-    if func == "log10":
-        return math.log10(1.0 + x)
-    return x
-
-
-def market_price(item: str, inventory: float, params=MARKET_PARAMS) -> int:
-    """The unit price the market pays for ``item`` at ``inventory`` (floored).
-
-    Below the anchor ``I0`` the product is scarce and clears *above* base; above
-    ``I0`` (you've been selling) it clears *below* base. Selling one unit raises
-    inventory by one, so successive units clear a little lower.
-    """
-    p = params[item]
-    base, I0, T = p["base"], p["I0"], p["T"]
-    if inventory < I0:
-        amp = p["below_target"] * base / _shape(p["below_func"], T)
-        price = base + amp * _shape(p["below_func"], I0 - inventory)
-    else:
-        amp = p["above_target"] * base / _shape(p["above_func"], T)
-        price = base - amp * _shape(p["above_func"], inventory - I0)
-    return max(PRICE_FLOOR, int(round(price)))
+#: The curve itself lives in `kaggisim.economy` and is re-exported here, not
+#: reimplemented. This module used to carry its own copy of `_shape` and
+#: `market_price`; when 1.32.7 added the `hinge` scarcity curve (#195) only one
+#: of the two was updated, and the duplicate silently kept pricing carrot,
+#: tomato and egg on the old formula. A second source of truth for a value is a
+#: drift generator -- one source, cited from both places.
+_shape = economy._shape
+market_price = economy.market_price
 
 
 def marginal_revenue(item: str, inventory: float, units: int) -> int:

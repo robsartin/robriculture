@@ -65,7 +65,10 @@ SEASON_DAYS = 30
 TURNS_PER_DAY = 24
 TURNS = SEASON_DAYS * TURNS_PER_DAY
 SHOP_INTERVAL = 4
-CENTER_INTERVAL = 12
+#: 1.32.7's `townCenterSellInterval` default. It was 12 here, which was already
+#: wrong for the pinned sim too (#182) and is doubly wrong now: the centre
+#: drains once a day, not twice (#195).
+CENTER_INTERVAL = 24
 
 #: Non-animal tiles on a fully-bought 10x10 board (100 less the 13 animal tiles).
 CROP_TILES = 87
@@ -81,18 +84,21 @@ def town_demand(turns: int = TURNS) -> dict:
 
     The town is the *only* thing removing market inventory, so this bounds what
     either player can sell all season. Shops consume every `SHOP_INTERVAL`
-    turns (doubled for single-product shops); the town centre consumes every
-    `CENTER_INTERVAL` turns at a multiplier that steps up by day band.
+    turns (doubled for single-product shops); the town centre drains a flat one
+    unit of every town-centre product every `CENTER_INTERVAL` turns.
+
+    1.32.4 ramped the centre by day band (1x/2x/4x) via a
+    `TOWN_CENTER_DEMAND_SCHEDULE` constant. **1.32.7 removed that entirely** and
+    the drain is now flat (#195), which cuts melon's whole-season demand from
+    140 units to 30 -- the trap is far tighter than the old model said.
 
     Assumes every shop unlocked. They unlock progressively, so early-season
-    demand is lower and this is an upper bound on the schedule.
+    demand is lower and this is an upper bound.
     """
     demand: dict = collections.Counter()
     for step in range(0, turns, CENTER_INTERVAL):
-        day = step // TURNS_PER_DAY
-        mult = next(m for threshold, m in sim.TOWN_CENTER_DEMAND_SCHEDULE if day >= threshold)
         for item in sim.TOWN_CENTER_PRODUCTS:
-            demand[item] += mult
+            demand[item] += 1
     for step in range(0, turns, SHOP_INTERVAL):
         for products in sim.SHOPS.values():
             mult = 2 if len(products) == 1 else 1

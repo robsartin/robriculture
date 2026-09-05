@@ -11,20 +11,23 @@ import pytest
 from harness import ceiling_lp as lp
 
 
-def test_town_demand_matches_the_schedule_by_hand():
-    """The town centre consumes every 12 turns at 1x/2x/4x by day band, so over
-    a 30-day season each of its products sees 20 events at each multiplier."""
+def test_town_demand_matches_the_centre_cadence_by_hand():
+    """1.32.7 drains a flat 1 unit per town-centre product every
+    `townCenterSellInterval` (24) turns -- the 1x/2x/4x day-band schedule of
+    1.32.4 is gone (#195). Over a 720-turn season that is 30 events.
+
+    MELON is a town-centre product and appears in no shop, so its demand is the
+    centre cadence alone -- the cleanest hand-check available, and it is 30, not
+    the 140 the old schedule gave."""
     demand = lp.town_demand()
-    # MELON is a town-centre product and appears in no shop, so its demand is
-    # the centre schedule alone -- the cleanest hand-check available.
-    assert demand["MELON"] == 20 * 1 + 20 * 2 + 20 * 4
+    assert demand["MELON"] == lp.TURNS // lp.CENTER_INTERVAL == 30
 
 
 def test_single_product_shops_consume_double():
     """YARN_STORE sells only WOOL, so it consumes 2 per event rather than 1 --
     the rule that makes WOOL a bigger market than its shop count suggests."""
     demand = lp.town_demand()
-    centre_only = 20 * 1 + 20 * 2 + 20 * 4
+    centre_only = lp.TURNS // lp.CENTER_INTERVAL
     shop_events = lp.TURNS // lp.SHOP_INTERVAL
     assert demand["WOOL"] == centre_only + shop_events * 2
 

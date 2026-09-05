@@ -20,14 +20,37 @@ own Evaluation page). Only the latest two submissions play. A crash is an auto-l
 
 ### Melon is a trap, and it is the centre of everything
 
-`SHOP_DEMAND` lists melon under **no shop**. Its only buyer is the town centre, giving it
-roughly **140 units of demand a season**, against wheat's ~1,040 and strawberry's ~860
-(#162). Both players together harvest ~171. Melon also carries the steepest glut curve in
-`MARKET_PARAMS` (`sq`, 3.60).
+`SHOP_DEMAND` lists melon under **no shop**. Its only buyer is the town centre, and on the
+simulator the ladder actually runs that centre drains a flat **one unit per product every
+24 turns** — so melon's whole-season demand is **30 units** (#195).
 
-So melon has the highest base price (250) and the smallest market. Its price collapses
-from ~270 to ~40 by day 12 in a typical game, and never recovers, because nothing drains
-it.
+| product | season demand | shops |
+|---|---|---|
+| WHEAT | 930 | 5 |
+| STRAWBERRY | 750 | 4 |
+| CARROT | 570 | 2 |
+| MILK | 570 | 3 |
+| TOMATO / EGG / WOOL | 390 | 2 / 2 / 1 |
+| **MELON** | **30** | **0** |
+| FERTILIZER | **0** | **0** — in no shop *and* excluded from the town centre |
+
+**Both players together harvest ~171 melon against 30 units of demand.** Melon also
+carries the steepest glut curve in `MARKET_PARAMS` (`sq`, 3.60), so it has the highest base
+price (250) and by far the smallest market. Its price collapses from ~270 to ~40 by day 12
+and never recovers, because almost nothing drains it.
+
+> **Corrected 2026-09-05 (#195).** This section previously said ~140 units, from
+> `TOWN_CENTER_DEMAND_SCHEDULE`'s 1x/2x/4x day-band ramp. **1.32.7 deleted that schedule**
+> and made the drain flat, and the ladder runs 1.32.7 — all 63 downloaded replays carry
+> `module_version: 1.32.7`, while `requirements.txt` had pinned 1.32.4. The trap is
+> **4.6x tighter** than this document claimed, not looser. The conclusions drawn from it
+> all hold a fortiori.
+
+Fertilizer deserves its own line in that table: it is in **no shop and is explicitly
+excluded from the town centre** (`TOWN_CENTER_PRODUCTS = [p for p in PRODUCTS if p !=
+"FERTILIZER"]`), so **nothing ever removes it from the market**. Its inventory only rises.
+It is sellable and clears at a base of 100, but every unit sold depresses it permanently —
+melon's trap with no floor under it at all.
 
 This single fact explains results that looked unrelated for weeks:
 
