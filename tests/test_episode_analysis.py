@@ -460,3 +460,28 @@ def test_first_sale_counts_stock_banked_in_the_same_turn():
 def test_first_sale_is_none_when_the_item_is_never_sold():
     steps = [_pair(_idle(day=0), _idle(day=0)), _pair(_idle(day=1), _idle(day=1))]
     assert ea.first_sale(steps, 0, "MELON") is None
+
+
+def test_first_sale_ignores_other_items_sold_in_the_same_sweep():
+    # The champion sweeps its whole shed every turn, so wheat and fertilizer
+    # ride along in the same order list. Counting them would date the melon
+    # sale to whichever turn the shed first held anything at all.
+    before = _idle(day=8, hour=4, shed={"WHEAT": 6, "MELON": 4},
+                   prices={"WHEAT": 25, "MELON": 250}, inventory={"MELON": 10000})
+    sweep = _step(0, {"farmer": ["PASS"], "hands": [],
+                      "market": [["SELL", "WHEAT", 6], ["SELL", "MELON", 4],
+                                 ["BUY_SEED", "STRAWBERRY", 1]]},
+                  day=8, hour=5)
+    steps = [_pair(before, _idle(day=8, hour=4)), _pair(sweep, _idle(day=8, hour=5))]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got["units"] == 4
+    assert got["revenue"] == 4 * 250
+
+
+def test_first_sale_survives_a_step_with_no_action():
+    # Real replays carry steps whose action is absent -- an agent that timed out,
+    # or the terminal step. A crash there would lose the whole measurement.
+    stale = _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250}),
+                  {"observation": {}})
+    steps = [stale, _pair(_sells("MELON", 4, day=10, hour=12), {"observation": {}})]
+    assert ea.first_sale(steps, 0, "MELON")["contested"] is False
