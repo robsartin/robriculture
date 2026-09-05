@@ -42,8 +42,9 @@ sheds are full and markets glutted, which is where a sell decision matters.
 
 **Truth.** From the same state, roll every candidate to step 720 with the **real gate
 opponent** (`meta_bot`) on the other farm, and read our final money. Both rollouts use
-`kaggisim.forward.rebuild` under the same seed, so weeds are identical between them; the only
-difference is who plays the other farm.
+`kaggisim.forward.rebuild` under the same seed, so weeds are identical between them; the
+differences are who plays the other farm and, for the truth only, that the other farm starts
+with its real private stock; the mirror starts with an empty shed (Decision 5).
 
 > **Amendment 2026-09-05, after the first run.** The truth rollout also restores the
 > opponent's **private state** (shed, seeds, inventories) captured from the real game.
@@ -54,6 +55,8 @@ difference is who plays the other farm.
 > state makes all five day-15-inclusive controls exact (measured before the fix was
 > written). The **prediction** is unchanged: the mirror still starts the other farm with an
 > empty shed, per Decision 5, because that is the planner's real information set.
+> Interpretation: a low rho can therefore come from the private-state gap as well as from
+> the mirror being a poor opponent model; the write-up must say which it looks like.
 
 **Statistic.** Spearman rho between predicted and true final money over the 11 candidates,
 one rho per state, using `harness.ladder_correlation.spearman` (stdlib, tie-averaged).
