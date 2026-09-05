@@ -94,17 +94,18 @@ def _ramp(table, day: int) -> int:
     return value
 
 
-def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS):
+def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS, caps=None):
     """The crop for one more empty tile, given what is already in the ground.
 
     The day's headline crop until its cap is met, then wheat: extra tiles are
     worth more filled with a crop whose market we are not already flooding.
     """
+    caps = CROP_CAP if caps is None else caps
     crop = crop_for_day(day, season_days)
-    if crop and standing.get(crop, 0) < CROP_CAP.get(crop, 10 ** 6):
+    if crop and standing.get(crop, 0) < caps.get(crop, 10 ** 6):
         return crop
     if (ch.cc_plantable(LATE_CROP, day, season_days)
-            and standing.get(LATE_CROP, 0) < CROP_CAP.get(LATE_CROP, 10 ** 6)):
+            and standing.get(LATE_CROP, 0) < caps.get(LATE_CROP, 10 ** 6)):
         return LATE_CROP
     return None
 
@@ -320,7 +321,7 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
-                  empty_plots, standing=None):
+                  empty_plots, standing=None, caps=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -361,12 +362,13 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             budget -= cost
 
     standing = standing or {}
-    crop = crop_for_plot(day, standing)
+    caps = CROP_CAP if caps is None else caps
+    crop = crop_for_plot(day, standing, caps=caps)
     if crop and empty_plots > 0:
         # Never stock more seed of a capped crop than its remaining headroom:
         # buying 25 strawberry seeds to fill 25 tiles is how the price we sell
         # into gets crashed.
-        cap = CROP_CAP.get(crop)
+        cap = caps.get(crop)
         room = empty_plots if cap is None else max(0, cap - standing.get(crop, 0))
         want = max(0, min(empty_plots, room) - seeds.get(crop, 0))
         seed_cost = CROPS[crop]["seed"]
@@ -510,6 +512,12 @@ class FieldRivalStrategy(Strategy):
     #: must never become a submission by accident.
     benchmark = True
 
+    #: The crop caps this agent runs. A class attribute so a contender can carry
+    #: its own without touching this module's frozen defaults (#202); every
+    #: helper above takes `caps` with the module default, so `field_rival`'s own
+    #: decisions are unchanged -- pinned by tests/test_dense_farm.py.
+    CAPS = CROP_CAP
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -538,7 +546,7 @@ class FieldRivalStrategy(Strategy):
                 continue
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
-            crop = crop_for_plot(day, standing)
+            crop = crop_for_plot(day, standing, caps=self.CAPS)
             action = crop_worker_action(crop_cluster(i), tiles, pos, inv, crop, day, hour)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
@@ -559,7 +567,8 @@ class FieldRivalStrategy(Strategy):
 
         market = market_orders(day, hour, me["money"], len(hands),
                                len(me.get("unlocked_quadrants") or ["NW"]),
-                               animals, shed, seeds, empty, standing)
+                               animals, shed, seeds, empty, standing,
+                               caps=self.CAPS)
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
