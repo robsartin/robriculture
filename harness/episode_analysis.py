@@ -18,7 +18,7 @@ looking plausible. That check is the point of the module.
 from __future__ import annotations
 
 from kaggisim import economy
-from kaggisim.economy import market_price
+from kaggisim.economy import base_price, market_price
 
 CROPS = economy.CROPS
 ANIMALS = economy.ANIMALS
@@ -108,18 +108,16 @@ def banked_this_turn(action, inventories):
     return out
 
 
-def sell_revenue(orders, prices, shed, banked=None, inventory=None):
-    """Estimated proceeds per item from one turn's SELL orders.
+def unit_prices(orders, prices, shed, banked=None, inventory=None):
+    """Realised price of each unit sold this turn, per item, in commit order.
 
-    Two deliberate conservatisms, both of which would otherwise invent money:
-    an order is capped at the stock that actually exists (the sim partially
-    fills), and an item with no quoted price contributes nothing -- livestock
-    and anything else the market does not bid on.
+    The walk `sell_revenue` performs, exposed rather than summed away. Revenue
+    answers "how much did we make"; only the per-unit sequence answers "what is
+    a unit still worth after we have sold N of them" -- the question in #146.
 
-    ``banked`` is what this turn's DROPs add to the shed. The interpreter runs
-    every unit action before the market, so a crew that banks its harvest and
-    sells it in the same turn is the normal case; capping at the observed
-    pre-DROP shed erased almost all real revenue.
+    Same two conservatisms as `sell_revenue`, because it is the same walk: an
+    order is capped at the stock that actually exists, and an item with no
+    quoted price contributes nothing.
     """
     out: dict = {}
     for order in orders:
@@ -133,23 +131,104 @@ def sell_revenue(orders, prices, shed, banked=None, inventory=None):
         units = min(int(order[2]), available)
         if units <= 0:
             continue
+        seq = out.setdefault(item, [])
         inv = (inventory or {}).get(item)
         if inv is None:
-            out[item] = out.get(item, 0) + units * int(price)
+            seq.extend([int(price)] * units)
             continue
         # Walk the curve, as the sim does: each unit is quoted against the
         # inventory the previous units have already added to. Measured on a real
         # episode, 96 melon quoted at 244 realised 190/unit -- pricing the whole
         # order at the opening quote overstates it by 28%.
-        total = 0
         inv = int(inv)
         for _ in range(units):
             unit_price = market_price(item, inv)
-            total += unit_price
+            seq.append(unit_price)
             if unit_price > 1:      # sales at the floor add no market supply
                 inv += 1
-        out[item] = out.get(item, 0) + total
     return out
+
+
+def sell_revenue(orders, prices, shed, banked=None, inventory=None):
+    """Estimated proceeds per item from one turn's SELL orders.
+
+    Exactly `unit_prices` summed per item -- one walk, so the two can never
+    disagree.
+
+    Two deliberate conservatisms, both of which would otherwise invent money:
+    an order is capped at the stock that actually exists (the sim partially
+    fills), and an item with no quoted price contributes nothing -- livestock
+    and anything else the market does not bid on.
+
+    ``banked`` is what this turn's DROPs add to the shed. The interpreter runs
+    every unit action before the market, so a crew that banks its harvest and
+    sells it in the same turn is the normal case; capping at the observed
+    pre-DROP shed erased almost all real revenue.
+    """
+    return {item: sum(seq)
+            for item, seq in unit_prices(orders, prices, shed, banked, inventory).items()}
+
+
+#: Share of a season's units treated as "end of season" when reporting the
+#: realised price a market has decayed to (#146). A quarter is enough units to
+#: average out the per-unit sawtooth without reaching back to opening prices.
+LATE_WINDOW = 0.25
+
+
+def summarize_prices(seq, item):
+    """Summary of one item's season-long sequence of realised unit prices.
+
+    ``pct_of_base`` is the whole season's average; ``late_pct_of_base`` is the
+    last ``LATE_WINDOW`` of units -- what a unit was still worth once the season
+    had done its selling, which is the number #146 asks about. A season that
+    opens at base and closes at the $1 floor averages to something reassuring;
+    only the late window shows the floor.
+    """
+    seq = list(seq)
+    base = base_price(item)
+    if not seq:
+        return {"units": 0, "revenue": 0, "mean_price": 0.0, "base": base,
+                "pct_of_base": 0.0, "late_units": 0, "late_mean_price": 0.0,
+                "late_pct_of_base": 0.0, "last_unit_price": 0}
+    revenue = sum(seq)
+    mean = revenue / len(seq)
+    late_n = max(1, int(round(len(seq) * LATE_WINDOW)))
+    late = seq[-late_n:]
+    late_mean = sum(late) / len(late)
+    return {
+        "units": len(seq),
+        "revenue": revenue,
+        "mean_price": mean,
+        "base": base,
+        "pct_of_base": (mean / base) if base else 0.0,
+        "late_units": len(late),
+        "late_mean_price": late_mean,
+        "late_pct_of_base": (late_mean / base) if base else 0.0,
+        "last_unit_price": seq[-1],
+    }
+
+
+def price_realisation(steps, player):
+    """Realised price per unit, per product, across one side of one season.
+
+    ``items`` is `summarize_prices` per product actually sold. ``final_quotes``
+    is the market's own closing quote, read straight off the last observation
+    rather than reconstructed -- the positive control on the walk: if our
+    reconstruction says we crashed a market and the recorded quote disagrees,
+    the instrument is what is broken.
+    """
+    seqs: dict = {}
+    for turn in _turns(steps, player):
+        for item, seq in unit_prices(turn["orders"], turn["prices"], turn["shed"],
+                                     turn["banked"], turn["inv_levels"]).items():
+            seqs.setdefault(item, []).extend(seq)
+    last = _slot(steps, len(steps) - 1, player) if steps else None
+    quotes = (((last or {}).get("observation") or {}).get("market") or {}).get("prices") or {}
+    return {
+        "items": {item: summarize_prices(seq, item) for item, seq in seqs.items()},
+        "final_quotes": dict(quotes),
+        "unit_prices": seqs,
+    }
 
 
 def _slot(steps, t, player):
@@ -158,6 +237,52 @@ def _slot(steps, t, player):
     if not step or player >= len(step):
         return None
     return step[player]
+
+
+def _turns(steps, player):
+    """One dict per turn, pairing each action with the state it was chosen from.
+
+    The action recorded at index t was chosen from -- and applied to -- the
+    observation at index t-1. Verified on a real episode: the SELL of 96 melon
+    sits at index 289 while the shed holding those melon is index 288, and the
+    money moves across that pair. Reading an order against the observation at
+    its own index prices it against the state it already produced, which scored
+    the champion's whole season at 994 against an actual 48,144.
+
+    Shared by `decompose` and `price_realisation` so the two can never drift
+    apart on which observation an order is priced against.
+    """
+    for t in range(len(steps)):
+        slot = _slot(steps, t, player)
+        if slot is None:
+            continue
+        prior = _slot(steps, t - 1, player) if t else None
+        obs = (prior or {}).get("observation") or {}
+        farms = obs.get("farms")
+        if farms:
+            me = farms[obs.get("player", player)] if len(farms) > 1 else farms[0]
+            quadrants = len(me.get("unlocked_quadrants") or ["NW"])
+            sheds = (obs.get("private") or {}).get("shed") or {}
+            prices = (obs.get("market") or {}).get("prices") or {}
+            inv_levels = (obs.get("market") or {}).get("inventory") or None
+        else:
+            quadrants, sheds, prices, inv_levels = 1, {}, {}, None
+
+        action = slot.get("action")
+        if not isinstance(action, dict):
+            continue
+        yield {
+            "slot": slot,
+            "day": obs.get("day"),
+            "quadrants": quadrants,
+            "shed": sheds,
+            "prices": prices,
+            "inv_levels": inv_levels,
+            "action": action,
+            "orders": action.get("market") or [],
+            "banked": banked_this_turn(
+                action, (obs.get("private") or {}).get("inventories") or []),
+        }
 
 
 def decompose(steps, player):
@@ -176,18 +301,10 @@ def decompose(steps, player):
     hires_today = 0
     last_day = None
 
-    # The action recorded at index t was chosen from -- and applied to -- the
-    # observation at index t-1. Verified on a real episode: the SELL of 96 melon
-    # sits at index 289 while the shed holding those melon is index 288, and the
-    # money moves across that pair. Reading an order against the observation at
-    # its own index prices it against the state it already produced, which
-    # scored the champion's whole season at 994 against an actual 48,144.
     for t in range(len(steps)):
         slot = _slot(steps, t, player)
-        prior = _slot(steps, t - 1, player) if t else None
         if slot is None:
             continue
-        obs = (prior or {}).get("observation") or {}
         money_obs = (slot.get("observation") or {})
         money_farms = money_obs.get("farms")
         if money_farms:
@@ -197,33 +314,21 @@ def decompose(steps, player):
                 start_money = float(me_now.get("money", 0))
             final_money = float(me_now.get("money", 0))
 
-        farms = obs.get("farms")
-        if farms:
-            me = farms[obs.get("player", player)] if len(farms) > 1 else farms[0]
-            day = obs.get("day")
-            if day != last_day:
-                hires_today = 0          # the sim clears the crew nightly
-                last_day = day
-            quadrants = len(me.get("unlocked_quadrants") or ["NW"])
-            sheds = (obs.get("private") or {}).get("shed") or {}
-            prices = (obs.get("market") or {}).get("prices") or {}
-            inv_levels = (obs.get("market") or {}).get("inventory") or None
-        else:
-            quadrants, sheds, prices, inv_levels = 1, {}, {}, None
+    for turn in _turns(steps, player):
+        if turn["day"] != last_day:
+            hires_today = 0              # the sim clears the crew nightly
+            last_day = turn["day"]
 
-        action = slot.get("action")
-        if not isinstance(action, dict):
-            continue
-
-        for act in [action.get("farmer")] + list(action.get("hands") or []):
+        for act in [turn["action"].get("farmer")] + list(turn["action"].get("hands") or []):
             if isinstance(act, list) and act:
                 actions[act[0]] = actions.get(act[0], 0) + 1
 
-        orders = action.get("market") or []
-        banked = banked_this_turn(action, (obs.get("private") or {}).get("inventories") or [])
-        for item, amount in sell_revenue(orders, prices, sheds, banked, inv_levels).items():
+        orders = turn["orders"]
+        for item, amount in sell_revenue(orders, turn["prices"], turn["shed"],
+                                         turn["banked"], turn["inv_levels"]).items():
             revenue[item] = revenue.get(item, 0) + amount
-        for bucket, amount in spend_by_category(orders, hires_today, quadrants).items():
+        for bucket, amount in spend_by_category(orders, hires_today,
+                                                turn["quadrants"]).items():
             spend[bucket] += amount
         hires_today += sum(1 for o in orders
                            if isinstance(o, list) and o and o[0] == "HIRE")
