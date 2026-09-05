@@ -59,3 +59,6 @@ class SellDiscipline(Strategy):
             "hands": action.get("hands", []),
             "market": cap_sells(action.get("market", []), inventory, self.min_frac),
         }
+
+    def reset(self) -> None:
+        self.inner.reset()

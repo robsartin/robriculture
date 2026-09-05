@@ -71,3 +71,43 @@ def test_wrapper_caps_only_the_market_and_names_itself():
     assert got["market"] == [["HIRE"]]
     assert s.name == "inner@1.0"
     assert s.benchmark is False
+
+
+class _ResettableInner(Strategy):
+    name = "resettable-inner"
+
+    def __init__(self):
+        self.was_reset = False
+
+    def act(self, obs):
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+
+    def reset(self):
+        self.was_reset = True
+
+
+def test_reset_is_forwarded_to_the_inner_strategy():
+    inner = _ResettableInner()
+    s = SellDiscipline(inner, 0.5)
+    s.reset()
+    assert inner.was_reset is True
+
+
+def test_min_frac_zero_is_the_champion_to_the_value_on_a_seeded_game():
+    # The spec's positive control #1: the wrapper at 0.0 must be the bare
+    # champion on a real game, both seats' rewards equal to the value. Pins
+    # that cap_sells rebuilds ["SELL", item, n] without losing anything.
+    from kaggle_environments import make
+    from kaggisim.strategy import make_agent
+    from strategies import load
+    champion, opponent = load("dense_farm"), load("meta_bot")
+
+    def rewards(ours):
+        env = make("kaggriculture", configuration={"episodeSteps": 240, "seed": 3})
+        env.run([make_agent(ours), make_agent(opponent())])
+        return [s.reward or 0 for s in env.steps[-1]]
+
+    bare = rewards(champion())
+    wrapped = rewards(SellDiscipline(champion(), 0.0))
+    assert bare[0] > 0, "POSITIVE CONTROL: no money moved, test proves nothing"
+    assert wrapped == bare
