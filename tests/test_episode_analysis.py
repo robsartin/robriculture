@@ -348,3 +348,115 @@ def test_buying_falls_back_to_the_quote_when_inventory_is_unknown():
     # to stop is an unpriceable order counting as zero.
     assert ea.order_spend([["BUY_PRODUCT", "WHEAT", 4]], hires_before=0,
                           quadrants=1, prices={"WHEAT": 30}) == 120
+# --- the first sale of one item: the melon-sprint necessary condition (#205) ---
+
+
+def _pair(a_slot, b_slot):
+    """One replay step holding both players' slots."""
+    return [a_slot, b_slot]
+
+
+def _idle(day=0, hour=0, shed=None, prices=None, inventory=None):
+    """A turn that does nothing. The observation it carries is the one the NEXT
+    step's action was chosen from -- the module's own indexing convention."""
+    slot = _step(0, {"farmer": ["PASS"], "hands": [], "market": []},
+                 prices=prices, shed=shed, day=day, hour=hour)
+    if inventory is not None:
+        slot["observation"]["market"]["inventory"] = inventory
+    return slot
+
+
+def _sells(item, n, day=0, hour=0):
+    """A turn whose only market order is a SELL."""
+    return _step(0, {"farmer": ["PASS"], "hands": [],
+                     "market": [["SELL", item, n]]}, day=day, hour=hour)
+
+
+def test_first_sale_reports_the_day_the_item_first_reaches_the_market():
+    # The order is read against the observation it was CHOSEN from, one step
+    # earlier -- so the reported day/hour are that observation's, not the one
+    # the sale produced.
+    steps = [
+        _pair(_idle(day=9), _idle(day=9)),
+        _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 4, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got is not None, "the sale was never found"
+    assert (got["day"], got["hour"]) == (10, 11)
+
+
+def test_first_sale_reports_the_realised_price_per_unit():
+    # Realised, not quoted: the sim walks the curve per unit, so four melon
+    # opening at inventory 10000 do not all fetch the 250 on the ticker.
+    steps = [
+        _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250},
+                    inventory={"MELON": 10000}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 4, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got["units"] == 4
+    assert got["price"] == got["revenue"] / 4
+    # Four units barely move melon's curve (250 - 0.01*n^2), so the realised
+    # price here IS the quote; the walk is demonstrated on a real batch below.
+    assert got["price"] == 250
+
+
+def test_first_sale_prices_a_real_batch_below_the_quote():
+    # Melon carries the steepest glut in the table (sq/3.60). A hundred units
+    # walk it from 250 to 150, so the batch realises well under the ticker --
+    # which is the whole reason batch size is the design parameter (#205).
+    steps = [
+        _pair(_idle(day=10, hour=11, shed={"MELON": 100}, prices={"MELON": 250},
+                    inventory={"MELON": 10000}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 100, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got["units"] == 100
+    assert got["quoted"] == 250
+    assert 200 < got["price"] < 220
+
+
+def test_first_sale_flags_a_turn_the_opponent_also_sold_into():
+    # Both sides commit unit-by-unit against the same pre-commit inventory, so a
+    # contested turn's per-side walk is an overestimate and must say so.
+    before = _idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250},
+                   inventory={"MELON": 10000})
+    sale = _sells("MELON", 4, day=10, hour=12)
+    contested = [_pair(before, before), _pair(sale, sale)]
+    assert ea.first_sale(contested, 0, "MELON")["contested"] is True
+    alone = [_pair(before, _idle(day=10, hour=11)),
+             _pair(sale, _idle(day=10, hour=12))]
+    assert ea.first_sale(alone, 0, "MELON")["contested"] is False
+
+
+def test_first_sale_skips_an_order_that_cannot_fill():
+    # A SELL against an empty shed moves nothing. Dating the first sale to it
+    # would claim we were first on a turn no melon changed hands.
+    steps = [
+        _pair(_idle(day=9, hour=2, prices={"MELON": 250}), _idle(day=9, hour=2)),
+        _pair(_sells("MELON", 4, day=9, hour=3), _idle(day=9, hour=3)),
+        _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 4, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    assert ea.first_sale(steps, 0, "MELON")["day"] == 10
+
+
+def test_first_sale_counts_stock_banked_in_the_same_turn():
+    # The crew banks its harvest and sells it in the same turn -- capping at the
+    # pre-DROP shed would report no sale at all.
+    before = _idle(day=10, hour=11, prices={"MELON": 250})
+    before["observation"]["private"]["inventories"] = [{"MELON": 5}]
+    sale = _step(0, {"farmer": ["DROP"], "hands": [],
+                     "market": [["SELL", "MELON", 5]]}, day=10, hour=12)
+    steps = [_pair(before, _idle(day=10, hour=11)), _pair(sale, _idle(day=10, hour=12))]
+    assert ea.first_sale(steps, 0, "MELON")["units"] == 5
+
+
+def test_first_sale_is_none_when_the_item_is_never_sold():
+    steps = [_pair(_idle(day=0), _idle(day=0)), _pair(_idle(day=1), _idle(day=1))]
+    assert ea.first_sale(steps, 0, "MELON") is None
