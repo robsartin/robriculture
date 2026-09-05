@@ -110,3 +110,44 @@ def test_the_declared_criteria_are_the_ones_the_issue_states():
     assert (gb.RESIDUAL_TOLERANCE, gb.CONTROL_MINIMUM) == (0.073, 55)
     assert (gb.LADDER_WIN_RATE, gb.WIN_RATE_TOLERANCE) == (0.403, 0.10)
     assert (gb.TRIGGER_SHARE, gb.MELON_TRIGGER_TILES) == (0.50, 10)
+
+
+def _full_replay():
+    """A downloaded replay is ~21 MB of observations; the bench needs the
+    actions, the seed, the seat and the recorded rewards, and nothing else."""
+    return {
+        "info": {"TeamNames": ["Minikotey", "Rob Sartin"], "seed": 7},
+        "rewards": [53043.0, 47207.0],
+        "steps": [
+            [{"action": None, "observation": {"big": "x" * 1000}},
+             {"action": None, "observation": {}}],
+            [{"action": {"farmer": ["NORTH"]}, "observation": {"big": "x" * 1000}},
+             {"action": {"farmer": ["SOUTH"]}, "observation": {}}],
+        ],
+    }
+
+
+def test_episode_digest_keeps_both_scripts_the_seat_the_seed_and_the_rewards():
+    d = gb.episode_digest("ep.json", _full_replay())
+    assert d["episode"] == "ep.json"
+    assert d["seed"] == 7
+    assert d["seat"] == 1
+    assert d["rewards"] == [53043.0, 47207.0]
+    assert d["scripts"] == [[None, {"farmer": ["NORTH"]}], [None, {"farmer": ["SOUTH"]}]]
+
+
+def test_episode_digest_drops_the_observations_it_was_built_from():
+    # 63 replays at ~21 MB each cannot all be resident; holding one whole replay
+    # per bench row was enough to make the run thrash.
+    d = gb.episode_digest("ep.json", _full_replay())
+    assert d["scripts"][0][1] == {"farmer": ["NORTH"]}, "the actions must survive"
+    assert "x" * 1000 not in repr(d), "the observations must not"
+
+
+def test_ghost_players_are_callables_that_replay_both_recorded_scripts():
+    """A Strategy is not an agent. Passing the Ghost object itself to env.run
+    ran a whole 63-episode control that reported every farm still holding its
+    3,000 starting money -- 'DONE', and completely empty."""
+    players = gb.ghost_players(gb.episode_digest("ep.json", _full_replay()))
+    assert [p({"step": 0}) for p in players] == [{"farmer": ["NORTH"]},
+                                                 {"farmer": ["SOUTH"]}]

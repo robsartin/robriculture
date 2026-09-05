@@ -31,7 +31,7 @@ import os
 import sys
 
 from strategies.field_rival import standing_crops
-from strategies.ghost import Ghost
+from strategies.ghost import Ghost, replay_actions
 
 #: Our team name as the episode API records it, used to find which seat we sat in.
 OUR_TEAM = "Rob Sartin"
@@ -126,15 +126,47 @@ def control_passed(residuals, tolerance=RESIDUAL_TOLERANCE, minimum=CONTROL_MINI
     return sum(1 for r in residuals if r <= tolerance) >= minimum
 
 
+def episode_digest(name, replay):
+    """Everything the bench needs from a replay, with the observations dropped.
+
+    A downloaded replay is ~21 MB on disk and far more once parsed; 63 of them
+    resident at once made the run thrash before it finished a single season.
+    What the bench actually needs is both players' action scripts, the seed, our
+    seat and the recorded rewards -- a few hundred KB -- so the replay is
+    digested at load and the parsed observations are released immediately.
+    """
+    return {
+        "episode": name,
+        "seed": episode_seed(replay),
+        "seat": seat_of(replay),
+        "rewards": [float(r or 0) for r in (replay.get("rewards") or [0.0, 0.0])],
+        "scripts": [replay_actions(replay["steps"], 0),
+                    replay_actions(replay["steps"], 1)],
+    }
+
+
+def ghost_players(digest):
+    """Both seats of an episode as `kaggle_environments`-ready agent callables.
+
+    A `Strategy` is not an agent -- it has to go through `make_agent`. Passing
+    the Ghost objects straight to `env.run` ran a whole 63-episode control that
+    came back "DONE" with both farms still holding their 3,000 starting money.
+    """
+    from kaggisim.strategy import make_agent
+    return [make_agent(Ghost(script)) for script in digest["scripts"]]
+
+
 # --- Full-game entrypoints: 63 seasons a run, integration by nature ---
 
 
-def load_replays(directory):  # pragma: no cover
-    """Every downloaded replay in `directory`, sorted by filename."""
+def load_digests(directory):  # pragma: no cover
+    """Digest every downloaded replay in `directory`, one resident at a time."""
     out = []
     for path in sorted(glob.glob(os.path.join(directory, "*.json"))):
         with open(path) as handle:
-            out.append((os.path.basename(path), json.load(handle)))
+            replay = json.load(handle)
+        out.append(episode_digest(os.path.basename(path), replay))
+        del replay
     return out
 
 
@@ -149,45 +181,44 @@ def _make_env(seed):  # pragma: no cover
     return make("kaggriculture", configuration=config)
 
 
-def control_row(name, replay):  # pragma: no cover
+def control_row(digest):  # pragma: no cover
     """Ghost BOTH seats and re-drive the episode: the #204 positive control.
 
     Both sides must be ghosted. The two farms sell into one shared market, so a
     ghost whose opponent plays anything else is not reproducing its replay --
     it is playing a different game with the same opening moves.
     """
-    seed = episode_seed(replay)
-    env = _make_env(seed)
-    env.run([Ghost.from_replay(replay, 0), Ghost.from_replay(replay, 1)])
+    env = _make_env(digest["seed"])
+    env.run(ghost_players(digest))
     got = [s.reward or 0 for s in env.steps[-1]]
-    recorded = [float(r or 0) for r in replay.get("rewards") or [0, 0]]
-    us = seat_of(replay)
+    us = digest["seat"]
     rival = 1 - us
     return {
-        "episode": name,
-        "seed": seed,
-        "rival_residual": residual_fraction(got[rival], recorded[rival]),
-        "our_residual": residual_fraction(got[us], recorded[us]),
+        "episode": digest["episode"],
+        "seed": digest["seed"],
+        "rival_residual": residual_fraction(got[rival], digest["rewards"][rival]),
+        "our_residual": residual_fraction(got[us], digest["rewards"][us]),
+        "recorded": digest["rewards"],
+        "replayed": got,
         "statuses": [s.status for s in env.steps[-1]],
     }
 
 
-def bench_row(name, replay, agent):  # pragma: no cover
+def bench_row(digest, strategy):  # pragma: no cover
     """One bench game: our champion live in our seat, the rival ghosted."""
     from kaggisim.strategy import make_agent
 
-    us = seat_of(replay)
+    us = digest["seat"]
     rival = 1 - us
-    ghost = Ghost.from_replay(replay, rival)
     players = [None, None]
-    players[us] = make_agent(agent())
-    players[rival] = make_agent(ghost)
+    players[us] = make_agent(strategy())
+    players[rival] = ghost_players(digest)[rival]
 
-    env = _make_env(episode_seed(replay))
+    env = _make_env(digest["seed"])
     env.run(players)
     rewards = [s.reward or 0 for s in env.steps[-1]]
     return {
-        "episode": name,
+        "episode": digest["episode"],
         "win": rewards[us] > rewards[rival],
         "tie": rewards[us] == rewards[rival],
         "ours": rewards[us],
@@ -208,11 +239,16 @@ def main(argv=None):  # pragma: no cover
 
     from strategies import load
 
-    replays = load_replays(args.replays)
+    replays = load_digests(args.replays)
     print(f"{len(replays)} replays from {args.replays}\n")
 
     print("=== positive control: ghosts re-drive their own replays ===")
-    control = [control_row(name, replay) for name, replay in replays]
+    control = []
+    for i, digest in enumerate(replays, 1):
+        row = control_row(digest)
+        control.append(row)
+        print(f"  [{i}/{len(replays)}] {row['episode']} "
+              f"residual rival {row['rival_residual']:.3%} ours {row['our_residual']:.3%}")
     residuals = [row["rival_residual"] for row in control]
     inside = sum(1 for r in residuals if r <= RESIDUAL_TOLERANCE)
     for row in control:
@@ -233,7 +269,13 @@ def main(argv=None):  # pragma: no cover
             name = json.load(handle)["submit_default"]
     print(f"=== bench: {name} vs 63 ghosts ===")
     strategy = load(name)
-    rows = [bench_row(ep, replay, strategy) for ep, replay in replays]
+    rows = []
+    for i, digest in enumerate(replays, 1):
+        row = bench_row(digest, strategy)
+        rows.append(row)
+        print(f"  [{i}/{len(replays)}] {row['episode']} "
+              f"{'WIN ' if row['win'] else 'loss'} {row['ours']:>9,.0f} vs "
+              f"{row['rival']:>9,.0f}  melon@d8 {row['rival_melon_day8']}")
 
     triggered = sum(1 for row in rows if row["rival_melon_day8"] >= MELON_TRIGGER_TILES)
     share = triggered / len(rows) if rows else 0.0
