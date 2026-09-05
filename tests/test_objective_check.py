@@ -3,7 +3,7 @@ grid, the per-state rho, undefined states excluded not scored, and the bar."""
 
 from __future__ import annotations
 
-from harness.objective_check import BAR, GRID, format_table, score_state, verdict
+from harness.objective_check import BAR, GRID, ControlFailed, format_table, score_state, verdict
 
 
 def test_the_grid_is_the_declared_eleven_with_the_control_first():
@@ -26,6 +26,12 @@ def test_score_state_is_undefined_when_truth_has_no_rank_variance():
     assert score_state(predicted, truth)["rho"] is None
 
 
+def test_score_state_reports_the_count_of_distinct_truth_values():
+    predicted = {0.0: 1.0, 0.5: 2.0, 1.0: 3.0}
+    truth = {0.0: 7.0, 0.5: 7.0, 1.0: 9.0}
+    assert score_state(predicted, truth)["distinct_truth"] == 2
+
+
 def test_verdict_passes_at_the_bar_and_fails_just_under_it():
     assert verdict([0.4, 0.4, 0.4])["passed"] is True
     assert verdict([0.39, 0.39, 0.39])["passed"] is False
@@ -46,12 +52,32 @@ def test_verdict_with_nothing_defined_fails_and_says_so():
 def test_format_table_has_one_line_per_state_and_prints_undefined():
     rows = [
         {"seed": 0, "day": 3, "n": 11, "rho": 0.5, "predicted_best": 0.2, "true_best": 0.3,
-         "seconds_per_rollout": 0.71},
+         "seconds_per_rollout": 0.71, "distinct_truth": 9},
         {"seed": 0, "day": 5, "n": 11, "rho": None, "predicted_best": 0.0, "true_best": 0.0,
-         "seconds_per_rollout": 0.60},
+         "seconds_per_rollout": 0.60, "distinct_truth": 1},
     ]
     text = format_table(rows)
     lines = [ln for ln in text.splitlines() if ln.strip()]
     assert len(lines) == 3                      # header + 2 rows
     assert "undefined" in lines[2]
     assert "0.50" in lines[1] and "0.71" in lines[1]
+
+
+def test_format_table_shows_the_distinct_column():
+    rows = [
+        {"seed": 0, "day": 3, "n": 11, "rho": 0.5, "predicted_best": 0.2, "true_best": 0.3,
+         "seconds_per_rollout": 0.71, "distinct_truth": 9},
+    ]
+    text = format_table(rows)
+    lines = text.splitlines()
+    header_cols = lines[0].split()
+    assert "distinct" in header_cols
+    assert header_cols.index("distinct") == header_cols.index("n") + 1
+    assert "9" in lines[1].split()
+
+
+def test_control_failed_carries_seed_day_got_real_and_names_them_in_str():
+    err = ControlFailed(seed=0, day=15, got=68715.0, real=68451.0)
+    assert (err.seed, err.day, err.got, err.real) == (0, 15, 68715.0, 68451.0)
+    text = str(err)
+    assert "0" in text and "15" in text and "68715" in text and "68451" in text
