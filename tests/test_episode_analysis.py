@@ -195,3 +195,156 @@ def test_revenue_falls_back_to_the_quote_when_inventory_is_unknown():
     got = ea.sell_revenue([["SELL", "MELON", 2]], prices={"MELON": 200},
                           shed={"MELON": 2}, inventory=None)
     assert got == {"MELON": 400}
+
+
+# --- realised price per unit: the #146 instrument ---
+#
+# Revenue alone cannot answer "are we crashing our own market?". The question is
+# what each *unit* fetched, and how that decayed over the season. `sell_revenue`
+# already walks the curve unit by unit; `unit_prices` exposes the walk itself.
+
+def test_unit_prices_reports_each_units_own_realised_price():
+    # Strawberry glut is linear/1.60 off T=100, so each unit sold above the
+    # anchor costs the next one 1.92: 120 -> 118 -> 116.
+    got = ea.unit_prices([["SELL", "STRAWBERRY", 3]], prices={"STRAWBERRY": 120},
+                         shed={"STRAWBERRY": 3}, inventory={"STRAWBERRY": 10000})
+    assert got == {"STRAWBERRY": [120, 118, 116]}
+
+
+def test_unit_prices_sum_to_the_reported_sell_revenue():
+    # The two must not be able to drift: one is the sum of the other.
+    orders = [["SELL", "STRAWBERRY", 40]]
+    kwargs = dict(prices={"STRAWBERRY": 120}, shed={"STRAWBERRY": 40},
+                  inventory={"STRAWBERRY": 10000})
+    prices = ea.unit_prices(orders, **kwargs)
+    assert ea.sell_revenue(orders, **kwargs) == {
+        "STRAWBERRY": sum(prices["STRAWBERRY"])}
+
+
+def test_unit_prices_is_capped_by_stock_like_sell_revenue():
+    got = ea.unit_prices([["SELL", "MELON", 40]], prices={"MELON": 250},
+                         shed={"MELON": 3})
+    assert got == {"MELON": [250, 250, 250]}
+
+
+def test_summarize_prices_reports_the_mean_against_the_items_base():
+    # Strawberry's base is 120; a season averaging 90 realised 75% of base.
+    got = ea.summarize_prices([120, 60], "STRAWBERRY")
+    assert got["units"] == 2
+    assert got["revenue"] == 180
+    assert got["mean_price"] == 90.0
+    assert got["base"] == 120
+    assert got["pct_of_base"] == 0.75
+
+
+def test_summarize_prices_end_of_season_window_is_the_last_quarter_of_units():
+    # The question is what a unit fetched *after* the season's selling, not on
+    # average across it -- so the reported end-of-season price is the last
+    # LATE_WINDOW of units, here the final two of eight.
+    seq = [120, 120, 120, 120, 120, 120, 30, 6]
+    got = ea.summarize_prices(seq, "STRAWBERRY")
+    assert got["late_units"] == 2
+    assert got["late_mean_price"] == 18.0
+    assert got["late_pct_of_base"] == 0.15
+    assert got["last_unit_price"] == 6
+
+
+def test_summarize_prices_late_window_never_empties_on_a_tiny_season():
+    got = ea.summarize_prices([120], "STRAWBERRY")
+    assert got["late_units"] == 1
+    assert got["late_mean_price"] == 120.0
+
+
+def test_price_realisation_accumulates_units_sold_across_the_whole_season():
+    steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 120}, shed={"STRAWBERRY": 2})],
+        [_step(3240, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "STRAWBERRY", 2]]}, prices={"STRAWBERRY": 60},
+            shed={"STRAWBERRY": 2})],
+        [_step(3360, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "STRAWBERRY", 2]]}, prices={"STRAWBERRY": 60}, shed={})],
+    ]
+    out = ea.price_realisation(steps, player=0)
+    berry = out["items"]["STRAWBERRY"]
+    assert berry["units"] == 4
+    assert berry["revenue"] == 2 * 120 + 2 * 60
+    assert berry["mean_price"] == 90.0
+
+
+def test_price_realisation_reports_the_markets_closing_quote():
+    # A positive control on the reconstruction: the market's own end-of-season
+    # quote is recorded, not inferred, so a walk that has drifted is visible.
+    steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 120}, shed={})],
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 7}, shed={})],
+    ]
+    out = ea.price_realisation(steps, player=0)
+    assert out["final_quotes"]["STRAWBERRY"] == 7
+
+
+def test_summarize_prices_of_an_item_never_sold_is_all_zero():
+    # A product with no sales must read as zero, not as a division by zero.
+    got = ea.summarize_prices([], "MELON")
+    assert got["units"] == 0
+    assert got["mean_price"] == 0.0
+    assert got["late_pct_of_base"] == 0.0
+    assert got["base"] == 250
+
+
+def test_price_realisation_keeps_the_raw_per_unit_sequence():
+    # The decay *shape* is the finding; a mean alone cannot show it.
+    steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 120}, shed={"STRAWBERRY": 3})],
+        [_step(3354, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "STRAWBERRY", 3]]}, prices={"STRAWBERRY": 120}, shed={})],
+    ]
+    steps[0][0]["observation"]["market"]["inventory"] = {"STRAWBERRY": 10000}
+    out = ea.price_realisation(steps, player=0)
+    assert out["unit_prices"]["STRAWBERRY"] == [120, 118, 116]
+
+
+# --- BUY_PRODUCT: the outflow the decomposition used to drop on the floor ---
+#
+# `dense_farm` buys 432 wheat a season through BUY_PRODUCT. Counting none of it
+# left decompose reporting a -19,000 residual on a 35,000 game -- 55% of final
+# money, against the ~7% the module treats as normal. Silently dropping an
+# order verb turns "we cannot price this" into "this never happened".
+
+def test_buying_a_product_is_a_real_outflow():
+    # The sim quotes a BUY at the post-buy inventory, so the first unit off a
+    # 10,000-unit wheat market costs market_price(WHEAT, 9999).
+    from kaggisim.economy import market_price
+    spend = ea.order_spend([["BUY_PRODUCT", "WHEAT", 1]], hires_before=0,
+                           quadrants=1, prices={"WHEAT": 25},
+                           inventory={"WHEAT": 10000})
+    assert spend == market_price("WHEAT", 9999)
+
+
+def test_buying_walks_the_price_up_as_it_drains_the_market():
+    # Each unit bought lifts the price of the next, the mirror of a big sell.
+    from kaggisim.economy import market_price
+    flat = 50 * market_price("WHEAT", 9999)
+    walked = ea.order_spend([["BUY_PRODUCT", "WHEAT", 50]], hires_before=0,
+                            quadrants=1, prices={"WHEAT": 25},
+                            inventory={"WHEAT": 10000})
+    assert walked > flat
+
+
+def test_bought_product_lands_in_its_own_spend_bucket():
+    from kaggisim.economy import market_price
+    out = ea.spend_by_category([["BUY_PRODUCT", "FERTILIZER", 2]], hires_before=0,
+                               quadrants=1, prices={"FERTILIZER": 100},
+                               inventory={"FERTILIZER": 10000})
+    assert out["product"] == market_price("FERTILIZER", 9999) + market_price("FERTILIZER", 9998)
+    assert out["seed"] == 0
+
+
+def test_buying_falls_back_to_the_quote_when_inventory_is_unknown():
+    # Degrade rather than disappear -- the failure this whole test block exists
+    # to stop is an unpriceable order counting as zero.
+    assert ea.order_spend([["BUY_PRODUCT", "WHEAT", 4]], hires_before=0,
+                          quadrants=1, prices={"WHEAT": 30}) == 120
