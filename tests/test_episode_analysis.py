@@ -195,3 +195,293 @@ def test_revenue_falls_back_to_the_quote_when_inventory_is_unknown():
     got = ea.sell_revenue([["SELL", "MELON", 2]], prices={"MELON": 200},
                           shed={"MELON": 2}, inventory=None)
     assert got == {"MELON": 400}
+
+
+# --- realised price per unit: the #146 instrument ---
+#
+# Revenue alone cannot answer "are we crashing our own market?". The question is
+# what each *unit* fetched, and how that decayed over the season. `sell_revenue`
+# already walks the curve unit by unit; `unit_prices` exposes the walk itself.
+
+def test_unit_prices_reports_each_units_own_realised_price():
+    # Strawberry glut is linear/1.60 off T=100, so each unit sold above the
+    # anchor costs the next one 1.92: 120 -> 118 -> 116.
+    got = ea.unit_prices([["SELL", "STRAWBERRY", 3]], prices={"STRAWBERRY": 120},
+                         shed={"STRAWBERRY": 3}, inventory={"STRAWBERRY": 10000})
+    assert got == {"STRAWBERRY": [120, 118, 116]}
+
+
+def test_unit_prices_sum_to_the_reported_sell_revenue():
+    # The two must not be able to drift: one is the sum of the other.
+    orders = [["SELL", "STRAWBERRY", 40]]
+    kwargs = dict(prices={"STRAWBERRY": 120}, shed={"STRAWBERRY": 40},
+                  inventory={"STRAWBERRY": 10000})
+    prices = ea.unit_prices(orders, **kwargs)
+    assert ea.sell_revenue(orders, **kwargs) == {
+        "STRAWBERRY": sum(prices["STRAWBERRY"])}
+
+
+def test_unit_prices_is_capped_by_stock_like_sell_revenue():
+    got = ea.unit_prices([["SELL", "MELON", 40]], prices={"MELON": 250},
+                         shed={"MELON": 3})
+    assert got == {"MELON": [250, 250, 250]}
+
+
+def test_summarize_prices_reports_the_mean_against_the_items_base():
+    # Strawberry's base is 120; a season averaging 90 realised 75% of base.
+    got = ea.summarize_prices([120, 60], "STRAWBERRY")
+    assert got["units"] == 2
+    assert got["revenue"] == 180
+    assert got["mean_price"] == 90.0
+    assert got["base"] == 120
+    assert got["pct_of_base"] == 0.75
+
+
+def test_summarize_prices_end_of_season_window_is_the_last_quarter_of_units():
+    # The question is what a unit fetched *after* the season's selling, not on
+    # average across it -- so the reported end-of-season price is the last
+    # LATE_WINDOW of units, here the final two of eight.
+    seq = [120, 120, 120, 120, 120, 120, 30, 6]
+    got = ea.summarize_prices(seq, "STRAWBERRY")
+    assert got["late_units"] == 2
+    assert got["late_mean_price"] == 18.0
+    assert got["late_pct_of_base"] == 0.15
+    assert got["last_unit_price"] == 6
+
+
+def test_summarize_prices_late_window_never_empties_on_a_tiny_season():
+    got = ea.summarize_prices([120], "STRAWBERRY")
+    assert got["late_units"] == 1
+    assert got["late_mean_price"] == 120.0
+
+
+def test_price_realisation_accumulates_units_sold_across_the_whole_season():
+    steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 120}, shed={"STRAWBERRY": 2})],
+        [_step(3240, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "STRAWBERRY", 2]]}, prices={"STRAWBERRY": 60},
+            shed={"STRAWBERRY": 2})],
+        [_step(3360, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "STRAWBERRY", 2]]}, prices={"STRAWBERRY": 60}, shed={})],
+    ]
+    out = ea.price_realisation(steps, player=0)
+    berry = out["items"]["STRAWBERRY"]
+    assert berry["units"] == 4
+    assert berry["revenue"] == 2 * 120 + 2 * 60
+    assert berry["mean_price"] == 90.0
+
+
+def test_price_realisation_reports_the_markets_closing_quote():
+    # A positive control on the reconstruction: the market's own end-of-season
+    # quote is recorded, not inferred, so a walk that has drifted is visible.
+    steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 120}, shed={})],
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 7}, shed={})],
+    ]
+    out = ea.price_realisation(steps, player=0)
+    assert out["final_quotes"]["STRAWBERRY"] == 7
+
+
+def test_summarize_prices_of_an_item_never_sold_is_all_zero():
+    # A product with no sales must read as zero, not as a division by zero.
+    got = ea.summarize_prices([], "MELON")
+    assert got["units"] == 0
+    assert got["mean_price"] == 0.0
+    assert got["late_pct_of_base"] == 0.0
+    assert got["base"] == 250
+
+
+def test_price_realisation_keeps_the_raw_per_unit_sequence():
+    # The decay *shape* is the finding; a mean alone cannot show it.
+    steps = [
+        [_step(3000, {"farmer": ["PASS"], "hands": [], "market": []},
+               prices={"STRAWBERRY": 120}, shed={"STRAWBERRY": 3})],
+        [_step(3354, {"farmer": ["PASS"], "hands": [], "market": [
+            ["SELL", "STRAWBERRY", 3]]}, prices={"STRAWBERRY": 120}, shed={})],
+    ]
+    steps[0][0]["observation"]["market"]["inventory"] = {"STRAWBERRY": 10000}
+    out = ea.price_realisation(steps, player=0)
+    assert out["unit_prices"]["STRAWBERRY"] == [120, 118, 116]
+
+
+# --- BUY_PRODUCT: the outflow the decomposition used to drop on the floor ---
+#
+# `dense_farm` buys 432 wheat a season through BUY_PRODUCT. Counting none of it
+# left decompose reporting a -19,000 residual on a 35,000 game -- 55% of final
+# money, against the ~7% the module treats as normal. Silently dropping an
+# order verb turns "we cannot price this" into "this never happened".
+
+def test_buying_a_product_is_a_real_outflow():
+    # The sim quotes a BUY at the post-buy inventory, so the first unit off a
+    # 10,000-unit wheat market costs market_price(WHEAT, 9999).
+    from kaggisim.economy import market_price
+    spend = ea.order_spend([["BUY_PRODUCT", "WHEAT", 1]], hires_before=0,
+                           quadrants=1, prices={"WHEAT": 25},
+                           inventory={"WHEAT": 10000})
+    assert spend == market_price("WHEAT", 9999)
+
+
+def test_buying_walks_the_price_up_as_it_drains_the_market():
+    # Each unit bought lifts the price of the next, the mirror of a big sell.
+    from kaggisim.economy import market_price
+    flat = 50 * market_price("WHEAT", 9999)
+    walked = ea.order_spend([["BUY_PRODUCT", "WHEAT", 50]], hires_before=0,
+                            quadrants=1, prices={"WHEAT": 25},
+                            inventory={"WHEAT": 10000})
+    assert walked > flat
+
+
+def test_bought_product_lands_in_its_own_spend_bucket():
+    from kaggisim.economy import market_price
+    out = ea.spend_by_category([["BUY_PRODUCT", "FERTILIZER", 2]], hires_before=0,
+                               quadrants=1, prices={"FERTILIZER": 100},
+                               inventory={"FERTILIZER": 10000})
+    assert out["product"] == market_price("FERTILIZER", 9999) + market_price("FERTILIZER", 9998)
+    assert out["seed"] == 0
+
+
+def test_buying_falls_back_to_the_quote_when_inventory_is_unknown():
+    # Degrade rather than disappear -- the failure this whole test block exists
+    # to stop is an unpriceable order counting as zero.
+    assert ea.order_spend([["BUY_PRODUCT", "WHEAT", 4]], hires_before=0,
+                          quadrants=1, prices={"WHEAT": 30}) == 120
+# --- the first sale of one item: the melon-sprint necessary condition (#205) ---
+
+
+def _pair(a_slot, b_slot):
+    """One replay step holding both players' slots."""
+    return [a_slot, b_slot]
+
+
+def _idle(day=0, hour=0, shed=None, prices=None, inventory=None):
+    """A turn that does nothing. The observation it carries is the one the NEXT
+    step's action was chosen from -- the module's own indexing convention."""
+    slot = _step(0, {"farmer": ["PASS"], "hands": [], "market": []},
+                 prices=prices, shed=shed, day=day, hour=hour)
+    if inventory is not None:
+        slot["observation"]["market"]["inventory"] = inventory
+    return slot
+
+
+def _sells(item, n, day=0, hour=0):
+    """A turn whose only market order is a SELL."""
+    return _step(0, {"farmer": ["PASS"], "hands": [],
+                     "market": [["SELL", item, n]]}, day=day, hour=hour)
+
+
+def test_first_sale_reports_the_day_the_item_first_reaches_the_market():
+    # The order is read against the observation it was CHOSEN from, one step
+    # earlier -- so the reported day/hour are that observation's, not the one
+    # the sale produced.
+    steps = [
+        _pair(_idle(day=9), _idle(day=9)),
+        _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 4, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got is not None, "the sale was never found"
+    assert (got["day"], got["hour"]) == (10, 11)
+
+
+def test_first_sale_reports_the_realised_price_per_unit():
+    # Realised, not quoted: the sim walks the curve per unit, so four melon
+    # opening at inventory 10000 do not all fetch the 250 on the ticker.
+    steps = [
+        _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250},
+                    inventory={"MELON": 10000}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 4, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got["units"] == 4
+    assert got["price"] == got["revenue"] / 4
+    # Four units barely move melon's curve (250 - 0.01*n^2), so the realised
+    # price here IS the quote; the walk is demonstrated on a real batch below.
+    assert got["price"] == 250
+
+
+def test_first_sale_prices_a_real_batch_below_the_quote():
+    # Melon carries the steepest glut in the table (sq/3.60). A hundred units
+    # walk it from 250 to 150, so the batch realises well under the ticker --
+    # which is the whole reason batch size is the design parameter (#205).
+    steps = [
+        _pair(_idle(day=10, hour=11, shed={"MELON": 100}, prices={"MELON": 250},
+                    inventory={"MELON": 10000}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 100, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got["units"] == 100
+    assert got["quoted"] == 250
+    assert 200 < got["price"] < 220
+
+
+def test_first_sale_flags_a_turn_the_opponent_also_sold_into():
+    # Both sides commit unit-by-unit against the same pre-commit inventory, so a
+    # contested turn's per-side walk is an overestimate and must say so.
+    before = _idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250},
+                   inventory={"MELON": 10000})
+    sale = _sells("MELON", 4, day=10, hour=12)
+    contested = [_pair(before, before), _pair(sale, sale)]
+    assert ea.first_sale(contested, 0, "MELON")["contested"] is True
+    alone = [_pair(before, _idle(day=10, hour=11)),
+             _pair(sale, _idle(day=10, hour=12))]
+    assert ea.first_sale(alone, 0, "MELON")["contested"] is False
+
+
+def test_first_sale_skips_an_order_that_cannot_fill():
+    # A SELL against an empty shed moves nothing. Dating the first sale to it
+    # would claim we were first on a turn no melon changed hands.
+    steps = [
+        _pair(_idle(day=9, hour=2, prices={"MELON": 250}), _idle(day=9, hour=2)),
+        _pair(_sells("MELON", 4, day=9, hour=3), _idle(day=9, hour=3)),
+        _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250}),
+              _idle(day=10, hour=11)),
+        _pair(_sells("MELON", 4, day=10, hour=12), _idle(day=10, hour=12)),
+    ]
+    assert ea.first_sale(steps, 0, "MELON")["day"] == 10
+
+
+def test_first_sale_counts_stock_banked_in_the_same_turn():
+    # The crew banks its harvest and sells it in the same turn -- capping at the
+    # pre-DROP shed would report no sale at all.
+    before = _idle(day=10, hour=11, prices={"MELON": 250})
+    before["observation"]["private"]["inventories"] = [{"MELON": 5}]
+    sale = _step(0, {"farmer": ["DROP"], "hands": [],
+                     "market": [["SELL", "MELON", 5]]}, day=10, hour=12)
+    steps = [_pair(before, _idle(day=10, hour=11)), _pair(sale, _idle(day=10, hour=12))]
+    assert ea.first_sale(steps, 0, "MELON")["units"] == 5
+
+
+def test_first_sale_is_none_when_the_item_is_never_sold():
+    steps = [_pair(_idle(day=0), _idle(day=0)), _pair(_idle(day=1), _idle(day=1))]
+    assert ea.first_sale(steps, 0, "MELON") is None
+
+
+def test_first_sale_ignores_other_items_sold_in_the_same_sweep():
+    # The champion sweeps its whole shed every turn, so wheat and fertilizer
+    # ride along in the same order list. Counting them would date the melon
+    # sale to whichever turn the shed first held anything at all.
+    before = _idle(day=8, hour=4, shed={"WHEAT": 6, "MELON": 4},
+                   prices={"WHEAT": 25, "MELON": 250}, inventory={"MELON": 10000})
+    sweep = _step(0, {"farmer": ["PASS"], "hands": [],
+                      "market": [["SELL", "WHEAT", 6], ["SELL", "MELON", 4],
+                                 ["BUY_SEED", "STRAWBERRY", 1]]},
+                  day=8, hour=5)
+    steps = [_pair(before, _idle(day=8, hour=4)), _pair(sweep, _idle(day=8, hour=5))]
+    got = ea.first_sale(steps, 0, "MELON")
+    assert got["units"] == 4
+    assert got["revenue"] == 4 * 250
+
+
+def test_first_sale_survives_a_step_with_no_action():
+    # Real replays carry steps whose action is absent -- an agent that timed out,
+    # or the terminal step. A crash there would lose the whole measurement.
+    stale = _pair(_idle(day=10, hour=11, shed={"MELON": 4}, prices={"MELON": 250}),
+                  {"observation": {}})
+    steps = [stale, _pair(_sells("MELON", 4, day=10, hour=12), {"observation": {}})]
+    assert ea.first_sale(steps, 0, "MELON")["contested"] is False
