@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import copy
 
-TURNS_PER_DAY = 24
+from kaggisim.economy import CONFIG_DEFAULTS
+
+TURNS_PER_DAY = CONFIG_DEFAULTS["turnsPerDay"]
 
 
 def capture_states(agent_a, agent_b, seed, days, hour=0, episode_steps=720):
