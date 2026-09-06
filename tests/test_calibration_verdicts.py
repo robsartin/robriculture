@@ -34,3 +34,10 @@ def test_load_verdicts_returns_rates_by_name():
 def test_no_member_is_duplicated():
     names = [m["name"] for m in _members()]
     assert len(names) == len(set(names))
+
+
+def test_every_member_names_its_source():
+    for m in _members():
+        assert m["source"] in ("recorded", "fresh"), m
+        if m["source"] == "fresh":
+            assert m["issue"] == 172 and m["opponent"] == "meta_bot" and m["games"] == 16, m

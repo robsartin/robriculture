@@ -104,3 +104,40 @@ def test_floor_holds_only_when_every_member_beats_the_floor():
     assert triage.floor_holds({"a": 10.0, "b": 5.0}, 4.0) is True
     assert triage.floor_holds({"a": 10.0, "b": 4.0}, 4.0) is False     # a tie fails
     assert triage.floor_holds({"a": 10.0, "b": 3.0}, 4.0) is False
+
+
+def test_head_to_head_alternates_seats_and_counts_strict_wins():
+    seen = []
+
+    def play(agent_a, agent_b, seed):
+        seen.append((agent_a, agent_b, seed))
+        # seat 0 gets 10, seat 1 gets 5, except seed 3 is a tie
+        return (7.0, 7.0) if seed == 3 else (10.0, 5.0)
+
+    got = triage.head_to_head_rate("me", opponent="them", seeds=(0, 1, 2, 3), play=play, agents=_names)
+    assert seen == [("me", "them", 0), ("them", "me", 1), ("me", "them", 2), ("them", "me", 3)]
+    # seed 0: me in seat 0 wins; seed 1: me in seat 1 loses; seed 2: wins; seed 3: tie -> not a win
+    assert got == {"name": "me", "opponent": "them", "wins": 2, "games": 4, "seeds": "0-3"}
+
+
+def test_measure_verdicts_shapes_rows_for_the_file():
+    play = lambda a, b, seed: (10.0, 5.0)
+    rows = triage.measure_verdicts(["x", "y"], opponent="them", seeds=(0, 1), play=play, agents=_names)
+    assert [r["name"] for r in rows] == ["x", "y"]
+    for r in rows:
+        assert r["games"] == 2 and r["issue"] == 172 and r["source"] == "fresh"
+        assert r["seeds"] == "0-1" and "opponent" in r
+
+
+def test_append_verdicts_adds_rows_and_refuses_duplicates(tmp_path):
+    import json
+    path = tmp_path / "v.json"
+    path.write_text(json.dumps({"protocol": "p", "members": [
+        {"name": "a", "wins": 1, "games": 2, "seeds": "0-1", "issue": 1, "source": "recorded"}]}))
+    triage.append_verdicts([{"name": "b", "wins": 2, "games": 2, "seeds": "0-1", "issue": 172,
+                             "source": "fresh", "opponent": "meta_bot"}], path=str(path))
+    assert [m["name"] for m in json.load(open(path))["members"]] == ["a", "b"]
+    import pytest
+    with pytest.raises(ValueError):
+        triage.append_verdicts([{"name": "a", "wins": 0, "games": 2, "seeds": "0-1", "issue": 172,
+                                 "source": "fresh", "opponent": "meta_bot"}], path=str(path))

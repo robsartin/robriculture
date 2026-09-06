@@ -113,3 +113,54 @@ def calibrate(scores, verdicts, bar=BAR, minimum=MIN_MEMBERS):
 def floor_holds(scores, floor_score):
     """Every member strictly beats the floor strategy's score; a tie fails."""
     return all(v > floor_score for v in scores.values())
+
+
+#: The seed set dense_farm's recorded row used (#202), so fresh rows sit on it.
+FRESH_SEEDS = tuple(range(100, 116))
+GATE = "meta_bot"
+
+
+def _seed_range(seeds):
+    return f"{min(seeds)}-{max(seeds)}" if len(seeds) > 1 else str(seeds[0])
+
+
+def head_to_head_rate(name, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None):
+    """`name` vs `opponent` over `seeds`, sides alternated (seat 0 on even
+    seeds, seat 1 on odd -- the repo's convention, see opening_bench.our_seat).
+    A win is strictly more reward; a tie is not a win."""
+    play = play or _default_play()
+    agents = agents or _default_agents()
+    wins = 0
+    for seed in seeds:
+        if seed % 2 == 0:
+            ours, theirs = play(agents(name), agents(opponent), seed)
+        else:
+            theirs, ours = play(agents(opponent), agents(name), seed)
+        wins += int(ours > theirs)
+    return {"name": name, "opponent": opponent, "wins": wins, "games": len(seeds),
+            "seeds": _seed_range(seeds)}
+
+
+def measure_verdicts(names, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None):
+    """Rows shaped for calibration_verdicts.json, marked fresh and cited to #172."""
+    rows = []
+    for name in names:
+        row = head_to_head_rate(name, opponent, seeds, play, agents)
+        row.update(issue=172, source="fresh")
+        rows.append(row)
+    return rows
+
+
+def append_verdicts(rows, path=VERDICTS_PATH):
+    """Append fresh rows to the verdicts file; a name already present is an
+    error, never a silent overwrite of a recorded verdict."""
+    with open(path) as f:
+        data = json.load(f)
+    present = {m["name"] for m in data["members"]}
+    clash = [r["name"] for r in rows if r["name"] in present]
+    if clash:
+        raise ValueError(f"already in the verdicts file: {clash}")
+    data["members"].extend(rows)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
