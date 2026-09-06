@@ -204,3 +204,59 @@ def test_resolve_opponents_raises_naming_missing_agents_when_pool_is_short_by_on
             discover_fn=lambda: {"agent_a": _stub("agent_a")},
             build=lambda names: {n: _stub(n) for n in names},
             manifest_path=manifest_path)
+
+
+def test_resolve_opponents_warns_and_returns_partial_pool_when_allow_partial(tmp_path, capsys):
+    """allow_partial=True is the explicit opt-out: the operator accepts a
+    shortfall, so the loud raise becomes a loud warning instead, and the run
+    proceeds against whatever was actually found (#153)."""
+    manifest_path = _write_manifest(tmp_path, ["agent_a", "agent_b"])
+
+    # Precondition: this pool really is short by one -- prove it the same way
+    # the raise test does, before trusting that allow_partial changed anything.
+    with __import__("pytest").raises(RuntimeError):
+        external_pool.resolve_opponents(
+            ["meta_bot"], include_external=True,
+            discover_fn=lambda: {"agent_a": _stub("agent_a")},
+            build=lambda names: {n: _stub(n) for n in names},
+            manifest_path=manifest_path)
+
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True, allow_partial=True,
+        discover_fn=lambda: {"agent_a": _stub("agent_a")},
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest_path)
+
+    assert set(agents) == {"meta_bot", "agent_a"}
+    err = capsys.readouterr().err
+    assert "agent_b" in err
+
+
+def test_resolve_opponents_passes_unchanged_when_pool_is_complete(tmp_path, capsys):
+    """A pool that matches the manifest exactly must neither raise nor warn --
+    the guard only fires on an actual shortfall (#153)."""
+    manifest_path = _write_manifest(tmp_path, ["agent_a", "agent_b"])
+
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        discover_fn=lambda: {"agent_a": _stub("agent_a"), "agent_b": _stub("agent_b")},
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest_path)
+
+    assert set(agents) == {"meta_bot", "agent_a", "agent_b"}
+    assert capsys.readouterr().err == ""
+
+
+def test_resolve_opponents_includes_a_discovered_agent_absent_from_the_manifest(tmp_path):
+    """An extra file on disk that the manifest never listed is not a shortfall
+    -- it is merged in the same as any other discovered agent, matching what
+    discover_external_agents already returns to its caller (#153)."""
+    manifest_path = _write_manifest(tmp_path, ["agent_a"])
+
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        discover_fn=lambda: {"agent_a": _stub("agent_a"), "bonus_agent": _stub("bonus_agent")},
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest_path)
+
+    assert set(agents) == {"meta_bot", "agent_a", "bonus_agent"}
