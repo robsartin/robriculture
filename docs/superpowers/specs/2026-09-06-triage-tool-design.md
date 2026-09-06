@@ -53,6 +53,16 @@ a point-estimate one. The table above is illustrative; the committed source of t
 `harness/calibration_verdicts.json` (name, recorded rate as wins/games, seeds, issue), and
 the tool cites that file rather than repeating it.
 
+> **Amendment 2026-09-06, after Task 2's research.** Only four strategies have a citable
+> 16-seed rate against `meta_bot` (`neuropilot`, `dense_farm`, `dung_farm`, `balanced_farm`);
+> `splitbrain`, `field_rival`, `meta_rancher` and the four weak anchors have none. Rob's
+> decision, taken before any self-play number existed: **measure fresh 16-seed alternated
+> head-to-heads against `meta_bot` for `splitbrain`, `field_rival`, `meta_rancher`,
+> `ranch_hands` and `wheat_hands`**, on seeds 100-115 (the seed set `dense_farm`'s recorded
+> row used), and calibrate on all nine. Fresh rows carry `"source": "fresh"` and `"issue": 172`;
+> recorded rows carry `"source": "recorded"`. The minimum of five, the bar of 0.40 and the
+> prediction are unchanged; only the truth source widened.
+
 **Statistic.** Spearman rho (`harness.ladder_correlation.spearman`, tie-averaged) between the
 self-play score and the recorded rate over the calibration set.
 

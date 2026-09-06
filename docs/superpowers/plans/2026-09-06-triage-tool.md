@@ -610,7 +610,178 @@ Do not post either file; do not commit anything (`git status` must show no track
 
 ---
 
+---
+
+### Task 5: Fresh head-to-heads for the short calibration set (added after Task 2; run BEFORE Task 3)
+
+**Why:** Task 2 could cite only four recorded rates; the spec's amendment of 2026-09-06 widens the
+truth source to fresh 16-seed alternated head-to-heads against `meta_bot` for five more strategies.
+
+**Files:**
+- Modify: `harness/triage.py` (append `head_to_head_rate`, `measure_verdicts`, `append_verdicts`)
+- Modify: `harness/calibration_verdicts.json` (add `"source"` to every row; append the five fresh rows produced by the run)
+- Test: `tests/test_triage.py` (append), `tests/test_calibration_verdicts.py` (append)
+
+**Interfaces:**
+- Consumes: Task 1's injected `play`/`agents`; Task 2's `VERDICTS_PATH`, `load_verdicts`.
+- Produces: `FRESH_SEEDS = tuple(range(100, 116))`, `GATE = "meta_bot"`; `head_to_head_rate(name, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None) -> {"name","opponent","wins","games","seeds"}` with sides alternated (name in seat 0 on even seeds, seat 1 on odd; a win is strictly more reward than the opponent; a tie is not a win); `measure_verdicts(names, ...) -> list[dict]` of rows shaped for the file with `"issue": 172, "source": "fresh"`; `append_verdicts(rows, path=VERDICTS_PATH) -> None` which refuses (raises `ValueError`) to add a name already present.
+
+- [ ] **Step 1: Write the failing tests** (append to `tests/test_triage.py`)
+
+```python
+def test_head_to_head_alternates_seats_and_counts_strict_wins():
+    seen = []
+
+    def play(agent_a, agent_b, seed):
+        seen.append((agent_a, agent_b, seed))
+        # seat 0 gets 10, seat 1 gets 5, except seed 3 is a tie
+        return (7.0, 7.0) if seed == 3 else (10.0, 5.0)
+
+    got = triage.head_to_head_rate("me", opponent="them", seeds=(0, 1, 2, 3), play=play, agents=_names)
+    assert seen == [("me", "them", 0), ("them", "me", 1), ("me", "them", 2), ("them", "me", 3)]
+    # seed 0: me in seat 0 wins; seed 1: me in seat 1 loses; seed 2: wins; seed 3: tie -> not a win
+    assert got == {"name": "me", "opponent": "them", "wins": 2, "games": 4, "seeds": "0-3"}
+
+
+def test_measure_verdicts_shapes_rows_for_the_file():
+    play = lambda a, b, seed: (10.0, 5.0)
+    rows = triage.measure_verdicts(["x", "y"], opponent="them", seeds=(0, 1), play=play, agents=_names)
+    assert [r["name"] for r in rows] == ["x", "y"]
+    for r in rows:
+        assert r["games"] == 2 and r["issue"] == 172 and r["source"] == "fresh"
+        assert r["seeds"] == "0-1" and "opponent" in r
+
+
+def test_append_verdicts_adds_rows_and_refuses_duplicates(tmp_path):
+    import json
+    path = tmp_path / "v.json"
+    path.write_text(json.dumps({"protocol": "p", "members": [
+        {"name": "a", "wins": 1, "games": 2, "seeds": "0-1", "issue": 1, "source": "recorded"}]}))
+    triage.append_verdicts([{"name": "b", "wins": 2, "games": 2, "seeds": "0-1", "issue": 172,
+                             "source": "fresh", "opponent": "meta_bot"}], path=str(path))
+    assert [m["name"] for m in json.load(open(path))["members"]] == ["a", "b"]
+    import pytest
+    with pytest.raises(ValueError):
+        triage.append_verdicts([{"name": "a", "wins": 0, "games": 2, "seeds": "0-1", "issue": 172,
+                                 "source": "fresh", "opponent": "meta_bot"}], path=str(path))
+```
+
+Append to `tests/test_calibration_verdicts.py`:
+
+```python
+def test_every_member_names_its_source():
+    for m in _members():
+        assert m["source"] in ("recorded", "fresh"), m
+        if m["source"] == "fresh":
+            assert m["issue"] == 172 and m["opponent"] == "meta_bot" and m["games"] == 16, m
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `.venv/bin/python -m pytest -q tests/test_triage.py tests/test_calibration_verdicts.py`
+Expected: three `AttributeError` (no `head_to_head_rate` / `measure_verdicts` / `append_verdicts`) and `KeyError: 'source'` from the verdicts test.
+
+- [ ] **Step 3: Implement** (append to `harness/triage.py`; `json`/`os` are already imported at the top)
+
+```python
+#: The seed set dense_farm's recorded row used (#202), so fresh rows sit on it.
+FRESH_SEEDS = tuple(range(100, 116))
+GATE = "meta_bot"
+
+
+def _seed_range(seeds):
+    return f"{min(seeds)}-{max(seeds)}" if len(seeds) > 1 else str(seeds[0])
+
+
+def head_to_head_rate(name, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None):
+    """`name` vs `opponent` over `seeds`, sides alternated (seat 0 on even
+    seeds, seat 1 on odd -- the repo's convention, see opening_bench.our_seat).
+    A win is strictly more reward; a tie is not a win."""
+    play = play or _default_play()
+    agents = agents or _default_agents()
+    wins = 0
+    for seed in seeds:
+        if seed % 2 == 0:
+            ours, theirs = play(agents(name), agents(opponent), seed)
+        else:
+            theirs, ours = play(agents(opponent), agents(name), seed)
+        wins += int(ours > theirs)
+    return {"name": name, "opponent": opponent, "wins": wins, "games": len(seeds),
+            "seeds": _seed_range(seeds)}
+
+
+def measure_verdicts(names, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None):
+    """Rows shaped for calibration_verdicts.json, marked fresh and cited to #172."""
+    rows = []
+    for name in names:
+        row = head_to_head_rate(name, opponent, seeds, play, agents)
+        row.update(issue=172, source="fresh")
+        rows.append(row)
+    return rows
+
+
+def append_verdicts(rows, path=VERDICTS_PATH):
+    """Append fresh rows to the verdicts file; a name already present is an
+    error, never a silent overwrite of a recorded verdict."""
+    with open(path) as f:
+        data = json.load(f)
+    present = {m["name"] for m in data["members"]}
+    clash = [r["name"] for r in rows if r["name"] in present]
+    if clash:
+        raise ValueError(f"already in the verdicts file: {clash}")
+    data["members"].extend(rows)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+```
+
+Then edit `harness/calibration_verdicts.json` by hand: add `"source": "recorded"` to each of the four existing rows.
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `.venv/bin/python -m pytest -q tests/test_triage.py tests/test_calibration_verdicts.py`
+Expected: all pass.
+
+- [ ] **Step 5: Commit the code (before the run)**
+
+```bash
+git add harness/triage.py harness/calibration_verdicts.json tests/test_triage.py tests/test_calibration_verdicts.py
+git commit -m "triage: fresh head-to-head verdicts, sides alternated, appended never overwritten (#172 Stage 2)
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 6: Run the declared measurement, blocking (~5 x 16 games x ~2 s, under 4 minutes), and append**
+
+```bash
+.venv/bin/python - <<'PY'
+import os
+os.environ.setdefault("ROBRICULTURE_STRICT", "1")
+from harness import triage
+rows = triage.measure_verdicts(["splitbrain", "field_rival", "meta_rancher", "ranch_hands", "wheat_hands"])
+for r in rows:
+    print(r)
+triage.append_verdicts(rows)
+PY
+.venv/bin/python -m pytest -q tests/test_calibration_verdicts.py
+```
+
+Expected: five rows printed with `games: 16`, the file now has nine members, the invariants test passes.
+
+- [ ] **Step 7: Commit the data**
+
+```bash
+git add harness/calibration_verdicts.json
+git commit -m "calibration_verdicts: five fresh 16-seed rates vs meta_bot on seeds 100-115 (#172)
+
+<one line per row: name wins/16>
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
 ## Self-review
+
+- **Amendment 2026-09-06:** Task 5 (fresh head-to-heads) was added after Task 2 found only four recorded rates; it runs before Task 3 so the CLI's calibration sees nine members.
 
 - **Spec coverage:** prediction definition and constants (Task 1); verdicts file with wins/games + issue, `load_verdicts`, `calibrate` with `n < 5` void and undefined-rho void, `floor_holds` with tie failing (Task 2); controls first, determinism, exit codes 0/1/2, strict mode, `--top K`, never writes champion.json (Task 3); the declared run and the record (Task 4); the slow real-game floor test (Task 3 Step 1). Out-of-scope items untouched.
 - **Placeholders:** none — the one ambiguous test draft in Task 2 Step 2 is immediately replaced by its exact committed form.
