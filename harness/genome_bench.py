@@ -100,9 +100,13 @@ def main(argv=None):  # pragma: no cover
                     help="also benchmark against real competitor agents fetched locally "
                          "into external_agents/ (#78); measurement only, off by default "
                          "so the frozen bar stays reproducible")
+    ap.add_argument("--allow-partial-pool", action="store_true",
+                    help="accept a --include-external pool that is short of the manifest "
+                         "with a loud warning instead of raising (#153); off by default.")
     args = ap.parse_args(argv)
 
-    agents = build_bench_agents(args.anchors, include_external=args.include_external)
+    agents = build_bench_agents(args.anchors, include_external=args.include_external,
+                                allow_partial=args.allow_partial_pool)
     out = benchmark_genome(load_genome(args.genome), anchor_names=args.anchors,
                            games=args.games, seed_base=args.seed_base,
                            agents_override=agents)

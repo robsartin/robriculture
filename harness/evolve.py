@@ -311,6 +311,23 @@ def evolve(generations, pop_size, games, sigma, sample_k, hof_cap,
     }
 
 
+def run_pool_names(anchor_names, include_external, resolved_external=None):
+    """Return the sorted opponent names a run's pool actually used.
+
+    A checkpoint's `run_settings` recorded `include_external: true` but not
+    *who* was in the pool, so a checkpoint from a shrunken 6-agent pool was
+    indistinguishable from a full 7-agent one (#153). `resolved_external` is
+    whatever `harness.external_pool.resolve_opponents` returned when the run
+    asked for external opponents (its own shortfall guard already decided
+    whether that succeeded, partially succeeded under --allow-partial-pool, or
+    raised) -- this function only names the pool that resulted, it does not
+    re-resolve it.
+    """
+    if not include_external:
+        return sorted(anchor_names)
+    return sorted(resolved_external)
+
+
 def main(argv=None):  # pragma: no cover
     ap = argparse.ArgumentParser(description="robriculture neuroevolution (#66)")
     ap.add_argument("--generations", type=int, default=10)
@@ -325,7 +342,10 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--include-external", action="store_true",
                     help="add the locally-fetched real competitor agents to the fitness "
                          "pool (#149). Off by default so the frozen bar stays comparable "
-                         "across runs; raises if external_agents/ is empty.")
+                         "across runs; raises if the pool is short of the manifest.")
+    ap.add_argument("--allow-partial-pool", action="store_true",
+                    help="accept a --include-external pool that is short of the manifest "
+                         "with a loud warning instead of raising (#153); off by default.")
     ap.add_argument("--anchor-weight", type=float, default=DEFAULT_ANCHOR_WEIGHT,
                     help="weight on the anchor share vs the sibling pool (default 0.75)")
     ap.add_argument("--out", default=GENOME_ARTIFACT, help="where to save the champion genome")
@@ -335,6 +355,17 @@ def main(argv=None):  # pragma: no cover
     args = ap.parse_args(argv)
 
     seed_genome = load_genome(args.seed_genome) if args.seed_genome else None
+
+    # Externals are opponents only. resolve_opponents raises rather than
+    # silently handing back a shrunken or internal-only pool, so a run can
+    # never report an "external" number it did not measure (#149, #153);
+    # --allow-partial-pool trades that raise for a loud warning when the
+    # operator explicitly accepts a shortfall.
+    resolved_external = (
+        external_pool.resolve_opponents(
+            args.anchors, include_external=True, allow_partial=args.allow_partial_pool)
+        if args.include_external else None)
+    anchor_override = list(resolved_external.values()) if resolved_external is not None else None
 
     run_settings = {
         "generations": args.generations,
@@ -346,19 +377,16 @@ def main(argv=None):  # pragma: no cover
         "seed": args.seed,
         "anchors": args.anchors,
         "include_external": args.include_external,
+        "allow_partial_pool": args.allow_partial_pool,
+        # The resolved pool composition (#153), so a checkpoint says which
+        # pool it was measured against instead of just include_external: true.
+        "resolved_pool": run_pool_names(args.anchors, args.include_external, resolved_external),
         "anchor_weight": args.anchor_weight,
         "seed_genome": args.seed_genome,
     }
 
     ckpt = None if args.dry_run else (
         lambda g, f, h: checkpoint_genome(args.out, g, f, h, settings=run_settings))
-
-    # Externals are opponents only. resolve_opponents raises rather than
-    # silently handing back the internal-only pool, so a run can never report an
-    # "external" number it did not measure (#149).
-    anchor_override = (
-        list(external_pool.resolve_opponents(args.anchors, include_external=True).values())
-        if args.include_external else None)
 
     result = evolve(
         generations=args.generations,
