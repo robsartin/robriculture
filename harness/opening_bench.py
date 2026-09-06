@@ -282,14 +282,25 @@ def win_rate(rows):
     return sum(1 for row in rows if won(row)) / len(rows) if rows else 0.0
 
 
-def criterion_passed(champion_rate, anchor_rates):
+def anchor_rates(rates):
+    """Just the anchor rows out of `rates`, for the printed summary line.
+
+    The champion has its own row now that it is outside `DEFAULT_ANCHORS`, and
+    minning over the whole dict reported the champion's rate as the worst
+    anchor. Display only -- `criterion_passed` never read that number.
+    """
+    return {name: rates[name] for name in ANCHORS if name in rates}
+
+
+def criterion_passed(champion_rate, rates):
     """#207 verbatim: >= 60% of 16 vs the champion AND >= 90% vs each anchor.
 
-    An anchor missing from `anchor_rates` fails: absence of a measurement is
-    not a pass.
+    An anchor missing from `rates` fails: absence of a measurement is not a
+    pass. Extra rows in `rates` -- the champion's own, `RECORDED_ONLY` -- are
+    ignored; only the six anchors are gated here.
     """
     return (champion_rate >= CHAMPION_BAR
-            and all(anchor_rates.get(name, -1.0) >= ANCHOR_BAR for name in ANCHORS))
+            and all(rates.get(name, -1.0) >= ANCHOR_BAR for name in ANCHORS))
 
 
 def contender(book):
@@ -508,7 +519,9 @@ def main(argv=None):  # pragma: no cover
         print(f"  vs {opponent:15s} {wins:>2d}/{len(rows_o)} = {rate:6.1%}{role}{tag}")
     champion_rate = rates[CHAMPION]
     print(f"\n  champion ({CHAMPION}) {champion_rate:.1%}  (need >= {CHAMPION_BAR:.0%})")
-    print(f"  anchors      min {min(rates.values()):.1%}  (need >= {ANCHOR_BAR:.0%} each)")
+    only_anchors = anchor_rates(rates)
+    print(f"  anchors      min {min(only_anchors.values()):.1%}  "
+          f"(need >= {ANCHOR_BAR:.0%} each, over {len(only_anchors)})")
     verdict = criterion_passed(champion_rate, rates)
     print(f"  VERDICT: {'PROMOTE' if verdict else 'REJECTED'}")
     out["criterion"] = {"games": games, "rates": rates,

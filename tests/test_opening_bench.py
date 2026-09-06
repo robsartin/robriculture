@@ -235,6 +235,17 @@ def test_dense_farm_is_measured_but_not_gated():
     assert not set(ob.RECORDED_ONLY) & set(ob.GATED_OPPONENTS)
 
 
+def test_anchor_rates_excludes_the_champion_row():
+    """The printed "anchors min" line must not min over the champion. The
+    re-run's transcript reported `anchors min 37.5%` when every anchor row read
+    16/16 -- that 37.5% was `rival_aware`, which now has a row of its own.
+    Display only: the verdict never read this dict."""
+    rates = {a: 1.0 for a in ob.ANCHORS}
+    rates[ob.CHAMPION] = 0.375
+    assert ob.anchor_rates(rates) == {a: 1.0 for a in ob.ANCHORS}
+    assert min(ob.anchor_rates(rates).values()) == 1.0
+
+
 def test_criterion_fails_when_an_anchor_was_never_measured():
     """A missing anchor must not read as a pass by absence."""
     rates = {a: 1.0 for a in ob.ANCHORS if a != "field_rival"}
