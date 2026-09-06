@@ -2,6 +2,8 @@
 
     python -m harness.rival_bench --controls      # the three spec controls, ~2 min
     python -m harness.rival_bench --criterion     # 16 seeds x 7 opponents, ~8 min
+    python -m harness.rival_bench --ablation      # unconditional-COW ablation, recorded not gated
+    python -m harness.rival_bench --timing        # cows-from-day-N timing arm, recorded not gated
     python -m harness.rival_bench                 # both, controls first
 
 Declared before code (docs/superpowers/specs/2026-09-06-rival-aware-herd-design.md):
@@ -25,6 +27,12 @@ CHAMPION_BAR = 0.60
 ANCHOR_BAR = 0.90
 CONTROL_SEED = 400
 QUIET_RIVAL = "wheat_hands"        # places no SHEEP (it does buy cows)
+
+#: The cows-from-day-N timing arm (#219, declared 2026-09-06): does a clock
+#: with no rival reading reproduce rival_aware's edge, or does the rival
+#: signal do something a clock cannot? Recorded, not gated.
+TIMING_DAYS = (4, 6, 8, 10, 12)
+TIMING_NAME = "cows_from_day"
 
 
 def animal_buys(actions):
@@ -76,6 +84,50 @@ def ablation_verdict(contender_wins, ablation_wins, games):
     if gap <= 0:
         return "rival signal does no work"
     return "cannot tell"
+
+
+def first_day_at_or_above(series, threshold):
+    """The first `day` in `series` (a list of `(day, value)` per turn, in
+    order) whose `value >= threshold`; `None` if it is never reached.
+
+    First match wins even if a later turn's value drops back below the
+    threshold -- this answers "when did it first show up", not "is it still
+    showing now"."""
+    for day, value in series:
+        if value >= threshold:
+            return day
+    return None
+
+
+def format_timing(rows, contender_wins, ablation_wins):
+    """One line per day-N row, then the two recorded reference rates."""
+    lines = [f"{'N':>4} {'wins':>7} {'rate':>7}"]
+    for r in rows:
+        games = r["games"]
+        rate = (r["wins"] / games) if games else 0.0
+        lines.append(f"{r['day']:>4} {r['wins']:>3}/{games:<3} {rate:>7.1%}")
+    lines.append(f"rival_aware {contender_wins}/16")
+    lines.append(f"unconditional cows {ablation_wins}/16")
+    return "\n".join(lines)
+
+
+def timing_reading(rows, contender_wins, ablation_wins):
+    """The declared reading rule for the timing arm:
+
+    - some day-N row within 1 win of the contender -> a clock reproduces it,
+      timing explains the gap;
+    - every day-N row within 1 win of the ablation (at or below it) -> no
+      clock gets past unconditional cows, the rival signal does something a
+      clock cannot;
+    - otherwise -> partial, name the best clock.
+    """
+    if any(r["wins"] >= contender_wins - 1 for r in rows):
+        return "a clock reproduces the contender: timing explains the gap"
+    if all(r["wins"] <= ablation_wins + 1 for r in rows):
+        return ("no clock gets past unconditional cows: the rival signal "
+                "does something a clock cannot")
+    best = max(rows, key=lambda r: r["wins"])
+    return f"partial: the best clock is N={best['day']} at {best['wins']}/{best['games']}"
 
 
 def format_rows(rows):
@@ -160,6 +212,12 @@ CONTENDER_CHAMPION_WINS = 15
 #: registered in strategies/, so it cannot be promoted or submitted by accident.
 ABLATION_NAME = "always_cow"
 
+#: The unconditional-COW ablation's recorded rate against the champion (#219
+#: ablation addendum, issue comment, 2026-09-06) -- cited here, not
+#: re-measured, so the timing arm's printed line can compare against it
+#: without re-running the (already-run, not-to-be-re-run) ablation.
+ABLATION_CHAMPION_WINS = 11
+
 
 def run_ablation(seeds=SEEDS):  # pragma: no cover
     """Recommendation 1: an unconditional-COW ablation of the contender.
@@ -193,6 +251,75 @@ def run_ablation(seeds=SEEDS):  # pragma: no cover
     return head_to_head_rate(ABLATION_NAME, CHAMPION, seeds, agents=agents)
 
 
+def first_fire_days(seeds=SEEDS, episode_steps=720):  # pragma: no cover
+    """The day rival_aware's rule first fires (rival sheep >= SHEEP_THRESHOLD)
+    in each seeded game against the champion -- when the signal shows up,
+    not whether it wins. Drives the game step by step like `action_stream`,
+    but records the rival-sheep series for seat 0's observation each turn
+    instead of the action stream. Seat alternation is not needed here."""
+    from kaggle_environments import make
+    from kaggisim.strategy import make_agent
+    from strategies import field_rival as fr
+    from strategies import load
+    from strategies.rival_aware import SHEEP_THRESHOLD
+
+    results = {}
+    for seed in seeds:
+        env = make("kaggriculture", configuration={"episodeSteps": episode_steps, "seed": seed})
+        env.reset(2)
+        ours = make_agent(load(CONTENDER)())
+        theirs = make_agent(load(CHAMPION)())
+        series = []
+        for _ in range(episode_steps - 1):
+            obs0 = env.state[0].observation
+            series.append((obs0.get("day", 0), fr.rival_sheep(obs0)))
+            act0 = ours(obs0)
+            act1 = theirs(env.state[1].observation)
+            env.step([act0, act1])
+        results[seed] = first_day_at_or_above(series, SHEEP_THRESHOLD)
+    return results
+
+
+def run_timing_arm(days=TIMING_DAYS, seeds=SEEDS):  # pragma: no cover
+    """The cows-from-day-N ablation: a `dense_farm`-shaped variant whose
+    `herd_preference` returns COW from day N on -- never reading the rival --
+    played against the champion on the same seeds as the contender and the
+    unconditional-COW ablation. Answers whether a plain clock reproduces
+    rival_aware's edge, i.e. whether the win is *timing* rather than the
+    rival-reading itself. Built in-process per N and never registered, so it
+    cannot be promoted or packaged by accident."""
+    os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
+    from harness.triage import _default_agents, head_to_head_rate
+    from kaggisim.strategy import make_agent
+    from strategies import load
+
+    def make_agents(day_cow_cls, day_name):
+        default_agents = None
+
+        def agents(name):
+            if name == day_name:
+                return make_agent(day_cow_cls())
+            nonlocal default_agents
+            if default_agents is None:
+                default_agents = _default_agents()
+            return default_agents(name)
+        return agents
+
+    rows = []
+    for n in days:
+        # `_n=n` binds the loop variable at definition time -- without it
+        # every DayNCow's herd_preference would close over the same final
+        # `n` and every arm would fire on the same day.
+        DayNCow = type(f"CowsFromDay{n}", (load(CONTENDER),),
+                       {"herd_preference": lambda self, obs, _n=n:
+                        "COW" if int(obs.get("day", 0)) >= _n else None})
+        name = f"{TIMING_NAME}_{n}"
+        row = head_to_head_rate(name, CHAMPION, seeds, agents=make_agents(DayNCow, name))
+        row["day"] = n
+        rows.append(row)
+    return rows
+
+
 def main(argv=None):  # pragma: no cover
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
     ap = argparse.ArgumentParser(description="#219 rival-aware herd: controls and criterion")
@@ -200,7 +327,22 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--criterion", action="store_true")
     ap.add_argument("--ablation", action="store_true",
                     help="unconditional-COW ablation vs the champion (recorded, not gated)")
+    ap.add_argument("--timing", action="store_true",
+                    help="cows-from-day-N timing arm vs the champion (recorded, not gated)")
     args = ap.parse_args(argv)
+    if args.timing:
+        import statistics
+        fire_days = first_fire_days()
+        print("first-fire day per seed (rival_aware vs dense_farm, rival sheep >= threshold):")
+        for seed, day in fire_days.items():
+            print(f"  {seed}: {day if day is not None else 'never'}")
+        finite = [d for d in fire_days.values() if d is not None]
+        median = statistics.median(finite) if finite else None
+        print(f"median first-fire day: {median if median is not None else 'n/a'}")
+        rows = run_timing_arm()
+        print(format_timing(rows, CONTENDER_CHAMPION_WINS, ABLATION_CHAMPION_WINS))
+        print(timing_reading(rows, CONTENDER_CHAMPION_WINS, ABLATION_CHAMPION_WINS))
+        return 0
     if args.ablation:
         row = run_ablation()
         print(format_rows([row]))
