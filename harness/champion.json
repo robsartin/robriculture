@@ -1,7 +1,7 @@
 {
   "criterion": "pool_share",
-  "gate_opponent": "dense_farm",
-  "submit_default": "dense_farm",
+  "gate_opponent": "rival_aware",
+  "submit_default": "rival_aware",
   "games": 2,
   "pool": [
     "meta_bot",
@@ -12,6 +12,11 @@
     "field_rival"
   ],
   "ranking": [
+    {
+      "name": "rival_aware",
+      "share": 0.6553215578862533,
+      "benchmark": false
+    },
     {
       "name": "dense_farm",
       "share": 0.6390557002140586,
