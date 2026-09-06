@@ -9,10 +9,15 @@ then hand the board to an agent that keeps livestock.
 
 Two decisions are load-bearing and both are #207's, not this module's:
 
-* **The hand-over target is `dense_farm`.** The drafted idea handed to
-  `neuropilot`, whose evolved genome sets ``herd_target_scale`` to a median
-  0.0098 -- which ``_herd_targets`` rounds to **zero animals** (#187). It would
-  have abandoned the herd on the turn it took control.
+* **The hand-over target is the champion**, which #207 re-declared on
+  2026-09-06 as `rival_aware` (#222): otherwise "opening + `dense_farm`" against
+  `rival_aware` confounds the opening with the herd rule, and the comparison
+  stops being "the field's opening, then our best agent" against "our best agent
+  alone". `harness.opening_bench.contender` supplies it. This module's own
+  default stays `dense_farm` -- a standalone default has to name something, and
+  the drafted idea's `neuropilot` is disqualified: its evolved genome sets
+  ``herd_target_scale`` to a median 0.0098, which ``_herd_targets`` rounds to
+  **zero animals** (#187), abandoning the herd on the turn it took control.
 * **The opening is days 0-2**, i.e. the first ``OPENING_TURNS`` turns, and the
   hand-over is the very next turn. `strategies.field_rival.FieldRivalStrategy`
   (which `dense_farm` inherits) reads the whole board every turn and carries no
@@ -55,8 +60,14 @@ def shift_script(script, by: int = 1):
 
     The **negative arm of #207's positive control**, and nothing else. A control
     that cannot fail proves nothing, so the same probe is run against a book
-    deliberately holding the exact #157 off-by-one; if that arm reconstructs the
-    source's day-3 money too, the probe is not discriminating and the run is void.
+    deliberately holding a shift; if that arm reconstructs the source's day-3
+    state too, the probe is not discriminating and the run is void.
+
+    `by` is load-bearing and is the bench's call, not this function's:
+    `harness.opening_bench.NEGATIVE_SHIFT` is **6**, because at a 72-turn
+    horizon with an idle turn padding each end of the book a one-index shift
+    lands the 70 working turns unchanged -- which is exactly how the first run
+    of #207 voided.
 
     Returns a new list: the shifted arm must not corrupt the book the positive
     arm replays.

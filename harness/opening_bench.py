@@ -13,19 +13,27 @@ This module does, in the order #207 declared, stopping at the first failure:
    revenue share in [0.40, 0.60), and of those the richest -- ties broken by
    episode name so the choice can never depend on iteration order.
 2. **The positive control**, which is #207's necessary condition: replaying that
-   opening must reproduce **the source opponent's own day-3 money** to within
-   #157's 7.3% residual. Both seats are scripted, because #204 established that
-   the two farms sell into one shared market and a book whose counterparty plays
-   something else is not replaying its episode. **And a control that cannot fail
-   proves nothing**, so the same probe is run against a book holding the exact
-   #157 off-by-one (`shift_script`), which must MISS, and against the starting
-   3,000, which the recorded day-3 money must not equal. Fail any arm and the
-   run is void: the tolerance is not weakened.
+   opening must reproduce **the source opponent's own day-3 board**, tile for
+   tile, and its day-3 money to within #157's 7.3% residual. Both seats are
+   scripted, because #204 established that the two farms sell into one shared
+   market and a book whose counterparty plays something else is not replaying
+   its episode. **And a control that cannot fail proves nothing**, so the same
+   probe is run against a book shifted by `NEGATIVE_SHIFT`, whose board must
+   DIFFER, and against the starting 3,000, which the recorded day-3 money must
+   not equal. Fail any arm and the run is void: the tolerance is not weakened.
+   *(Re-declared 2026-09-06. The first run declared a one-index shift scored on
+   cash; both arms landed the source's 158 to the cent and the run VOIDed on
+   its own negative control.)*
 3. **The day-16 necessary condition** -- #196's bar, over 6 fresh seeds: animals
    >= 8, livestock revenue >= 30%, planted >= 30, on *every* seed (the stricter
    reading of "over 6 fresh seeds", declared before the numbers existed).
 4. **The pass criterion**, verbatim: 16 fresh seeds, sides alternated, beat the
    champion in >= 60% of 16 and hold >= 90% against each anchor. Ties are losses.
+   The same row is recorded, never gated, against `dense_farm` (#206's champion).
+
+The contender is the book for the first three days and then **the champion** --
+so the comparison is "the field's opening, then our best agent" against "our
+best agent alone", and not a confound with whatever `dense_farm` does.
 
 Usage (replays are not in the repo -- they are downloaded, see #157):
 
@@ -66,6 +74,15 @@ RESIDUAL_TOLERANCE = 0.073
 #: The control's probe: the first turn of day 3, i.e. one turn past the opening.
 CONTROL_STEP = OPENING_TURNS
 
+#: How far the negative arm's book is shifted. **Re-declared 2026-09-06 after
+#: the first run VOIDed on this exact line.** The declared arm was the #157
+#: off-by-one, and it reproduced the source's day-3 money *and* board: this book
+#: is padded by one idle turn at each end (index 1 and index 72 are both a bare
+#: PASS), so shifting by one consumes the head PASS and pushes the tail PASS off
+#: the window, landing the 70 working turns on exactly the same 70 turns. The
+#: insult has to be bigger than the opening's slack, so it is six.
+NEGATIVE_SHIFT = 6
+
 #: The second necessary condition's probe, on the same clock.
 DAY16_STEP = 16 * economy.CONFIG_DEFAULTS["turnsPerDay"]
 MIN_ANIMALS = 8
@@ -100,8 +117,19 @@ def _gate_opponent(path=os.path.join(os.path.dirname(__file__), "champion.json")
 
 
 #: The current champion for #207's purposes, pinned to the copy of
-#: `harness/champion.json` committed on this branch.
+#: `harness/champion.json` committed on this branch. Re-declared 2026-09-06:
+#: #222 designated `rival_aware`, so this is no longer one of the anchors.
 CHAMPION = _gate_opponent()
+
+#: Every opponent the criterion is scored on: the champion first, then the six
+#: frozen anchors. The champion needs its own row now that it is outside
+#: `DEFAULT_ANCHORS` -- the first run read its rate out of the anchor rows.
+GATED_OPPONENTS = (CHAMPION,) + ANCHORS
+
+#: Measured and printed, never gated: the re-declaration records the same
+#: criterion row against `dense_farm`, the champion #206 was measured on, so
+#: the two experiments can be read on one page. It moves no bar.
+RECORDED_ONLY = ("dense_farm",)
 
 
 # --- Selecting the book ---
@@ -201,18 +229,30 @@ def board_fingerprint(steps, index, player):
 
 # --- The verdicts ---
 
-def control_verdict(positive, negative, recorded):
-    """Did the control pass on all three arms?
+def control_verdict(positive_residual, positive_board, negative_board,
+                    recorded_board, recorded_money):
+    """Did the re-declared control pass on all four clauses?
 
-    `positive` is the residual of the faithful replay, `negative` that of the
-    same book holding the #157 off-by-one, and `recorded` the source's own
-    day-3 money. All three matter: a faithful match is only evidence if the
-    wrong book misses, and only meaningful if day 3 had moved off the starting
-    cash at all.
+    Re-declared on #207 on 2026-09-06, before the re-run: the arms are scored
+    on the **day-3 board**, not on day-3 cash, because cash at day 3 is a
+    many-to-one residue of an opening that spends itself down to near zero --
+    the first run's off-by-one *and* off-by-24 books both landed the source's
+    158 to the cent, the latter with four animals where the source had five.
+
+    * `positive_residual` -- the faithful replay's money residual, still held
+      to #157's 7.3%: the board says the same actions ran, the money says the
+      same market cleared.
+    * `positive_board` must equal `recorded_board` tile-for-tile.
+    * `negative_board` -- the same book shifted by `NEGATIVE_SHIFT` -- must
+      **differ**. If a six-turn insult still lands the recorded state the probe
+      does not discriminate and the run is void, exactly as the first one was.
+    * `recorded_money` must have moved off the 3,000 start, or a match is
+      vacuous.
     """
-    return (positive <= RESIDUAL_TOLERANCE
-            and negative > RESIDUAL_TOLERANCE
-            and recorded != START_MONEY)
+    return (positive_residual <= RESIDUAL_TOLERANCE
+            and positive_board == recorded_board
+            and negative_board != recorded_board
+            and recorded_money != START_MONEY)
 
 
 def day16_passed(row):
@@ -242,14 +282,45 @@ def win_rate(rows):
     return sum(1 for row in rows if won(row)) / len(rows) if rows else 0.0
 
 
-def criterion_passed(champion_rate, anchor_rates):
+def anchor_rates(rates):
+    """Just the anchor rows out of `rates`, for the printed summary line.
+
+    The champion has its own row now that it is outside `DEFAULT_ANCHORS`, and
+    minning over the whole dict reported the champion's rate as the worst
+    anchor. Display only -- `criterion_passed` never read that number.
+    """
+    return {name: rates[name] for name in ANCHORS if name in rates}
+
+
+def criterion_passed(champion_rate, rates):
     """#207 verbatim: >= 60% of 16 vs the champion AND >= 90% vs each anchor.
 
-    An anchor missing from `anchor_rates` fails: absence of a measurement is
-    not a pass.
+    An anchor missing from `rates` fails: absence of a measurement is not a
+    pass. Extra rows in `rates` -- the champion's own, `RECORDED_ONLY` -- are
+    ignored; only the six anchors are gated here.
     """
     return (champion_rate >= CHAMPION_BAR
-            and all(anchor_rates.get(name, -1.0) >= ANCHOR_BAR for name in ANCHORS))
+            and all(rates.get(name, -1.0) >= ANCHOR_BAR for name in ANCHORS))
+
+
+def contender(book):
+    """A fresh `opening_book` for one game: the book, then the champion.
+
+    **The hand-over target is the champion**, re-declared on #207 on
+    2026-09-06. `OpeningBookStrategy`'s own default is still `dense_farm` --
+    that is the module's standalone default and #207 does not own it -- but the
+    bench overrides it here, because gating against `rival_aware` while handing
+    the board to `dense_farm` would confound the opening under test with the
+    herd rule #219 promoted. With the override the comparison is exactly "the
+    field's opening, then our best agent" against "our best agent alone".
+
+    Fresh every call: a strategy carries a turn counter and herd state, and one
+    instance shared across 16 seeded games starts the second game mid-book.
+    """
+    from strategies import load
+
+    return OpeningBookStrategy(script=book["scripts"][book["seat"]],
+                               handover=load(CHAMPION)())
 
 
 # --- Full-game entrypoints: whole seasons a call, integration by nature ---
@@ -326,7 +397,7 @@ def bench_game(book, opponent, seed, index):  # pragma: no cover
 
     us = our_seat(index)
     players = [None, None]
-    players[us] = _agent(OpeningBookStrategy(script=book["scripts"][book["seat"]]))
+    players[us] = _agent(contender(book))
     players[1 - us] = _agent(load(opponent)())
     env = _make_env(seed)
     env.run(players)
@@ -342,7 +413,7 @@ def day16_game(book, seed, index):  # pragma: no cover
 
     us = our_seat(index)
     players = [None, None]
-    players[us] = _agent(OpeningBookStrategy(script=book["scripts"][book["seat"]]))
+    players[us] = _agent(contender(book))
     players[1 - us] = _agent(load(CHAMPION)())
     env = _make_env(seed)
     env.run(players)
@@ -378,31 +449,39 @@ def main(argv=None):  # pragma: no cover
     if args.stage == "cohort":
         return _write(args.json, out)
 
-    print("=== positive control: the replayed opening vs its own day-3 money ===")
+    print("=== positive control: the replayed opening vs its own day-3 board ===")
+    print(f"    (re-declared 2026-09-06: negative arm = the book shifted by "
+          f"{NEGATIVE_SHIFT}, both arms scored on the day-3 board)")
     script = book["scripts"][book["seat"]]
     recorded = book["day3_money"]
     good = control_run(book, script)
-    bad = control_run(book, shift_script(script))
+    bad = control_run(book, shift_script(script, NEGATIVE_SHIFT))
     pos = residual_fraction(good["money"], recorded)
     neg = residual_fraction(bad["money"], recorded)
     recorded_board = book["day3_board"]
-    print(f"  recorded day-3 money      {recorded:,.0f}  (start {START_MONEY:,})")
+    board_ok = good["board"] == recorded_board
+    shifted_differs = bad["board"] != recorded_board
+    tiles_differ = len(set(recorded_board) ^ set(bad["board"]))
+    print(f"  recorded day-3 money      {recorded:,.0f}  (start {START_MONEY:,}; "
+          f"must differ)")
+    print(f"  recorded day-3 board      {len(recorded_board)} tiles")
     print(f"  faithful replay           {good['money']:,.0f}  residual {pos:.3%}  "
           f"(need <= {RESIDUAL_TOLERANCE:.1%})")
-    print(f"  off-by-one arm            {bad['money']:,.0f}  residual {neg:.3%}  "
-          f"(must MISS)")
-    # Reported, never scored: the declared bar is the money residual above.
-    # See `board_fingerprint` for why a re-run should probe the state instead.
-    print(f"  [not scored] day-3 board reproduced exactly: "
-          f"{good['board'] == recorded_board}; off-by-one board differs: "
-          f"{bad['board'] != recorded_board}")
-    passed = control_verdict(pos, neg, recorded)
+    print(f"                            board reproduced tile-for-tile: "
+          f"{board_ok}  (must be True)")
+    print(f"  shift-by-{NEGATIVE_SHIFT} arm             {bad['money']:,.0f}  "
+          f"residual {neg:.3%}")
+    print(f"                            board differs: {shifted_differs}  "
+          f"(must be True; {tiles_differ} tile entries differ)")
+    passed = control_verdict(pos, good["board"], bad["board"], recorded_board,
+                             recorded)
     print(f"  CONTROL: {'PASS' if passed else 'FAIL'}\n")
     out["control"] = {"recorded": recorded, "faithful": good["money"],
-                      "shifted": bad["money"],
+                      "shifted": bad["money"], "negative_shift": NEGATIVE_SHIFT,
                       "positive_residual": pos, "negative_residual": neg,
-                      "board_matches": good["board"] == recorded_board,
-                      "shifted_board_matches": bad["board"] == recorded_board,
+                      "board_matches": board_ok,
+                      "shifted_board_matches": not shifted_differs,
+                      "shifted_board_tiles_differing": tiles_differ,
                       "passed": passed}
     if not passed:
         print("Control failed -- the claim is not measured (#207 necessary condition).")
@@ -410,7 +489,8 @@ def main(argv=None):  # pragma: no cover
     if args.stage == "control":
         return _write(args.json, out)
 
-    print(f"=== day-16 necessary condition vs {CHAMPION} ===")
+    print(f"=== day-16 necessary condition vs the champion {CHAMPION} ===")
+    print(f"    (the book hands over to {CHAMPION} at the first turn of day 3)")
     d16 = [day16_game(book, seed, i) for i, seed in enumerate(DAY16_SEEDS)]
     for row in d16:
         print(f"  seed {row['seed']}  planted {row['planted']:>3d} "
@@ -425,20 +505,27 @@ def main(argv=None):  # pragma: no cover
         return _write(args.json, out)
 
     print("=== pass criterion: 16 fresh seeds, sides alternated ===")
-    games, rates = [], {}
-    for opponent in ANCHORS:
+    print(f"    (contender = the book, then {CHAMPION}; ties count as losses)")
+    games, rates, extra = [], {}, {}
+    for opponent in GATED_OPPONENTS + RECORDED_ONLY:
         rows_o = [bench_game(book, opponent, seed, i)
                   for i, seed in enumerate(CRITERION_SEEDS)]
         games.extend(rows_o)
-        rates[opponent] = win_rate(rows_o)
+        rate = win_rate(rows_o)
+        (extra if opponent in RECORDED_ONLY else rates)[opponent] = rate
         wins = sum(1 for r in rows_o if won(r))
-        print(f"  vs {opponent:15s} {wins:>2d}/{len(rows_o)} = {rates[opponent]:6.1%}")
+        tag = "  (recorded, not gated)" if opponent in RECORDED_ONLY else ""
+        role = " [champion]" if opponent == CHAMPION else ""
+        print(f"  vs {opponent:15s} {wins:>2d}/{len(rows_o)} = {rate:6.1%}{role}{tag}")
     champion_rate = rates[CHAMPION]
     print(f"\n  champion ({CHAMPION}) {champion_rate:.1%}  (need >= {CHAMPION_BAR:.0%})")
-    print(f"  anchors      min {min(rates.values()):.1%}  (need >= {ANCHOR_BAR:.0%} each)")
+    only_anchors = anchor_rates(rates)
+    print(f"  anchors      min {min(only_anchors.values()):.1%}  "
+          f"(need >= {ANCHOR_BAR:.0%} each, over {len(only_anchors)})")
     verdict = criterion_passed(champion_rate, rates)
     print(f"  VERDICT: {'PROMOTE' if verdict else 'REJECTED'}")
-    out["criterion"] = {"games": games, "rates": rates, "passed": verdict}
+    out["criterion"] = {"games": games, "rates": rates,
+                        "recorded_not_gated": extra, "passed": verdict}
     return _write(args.json, out)
 
 
