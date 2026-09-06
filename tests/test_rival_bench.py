@@ -68,3 +68,59 @@ def test_format_rows_one_line_per_opponent_with_rate():
     text = rb.format_rows([_row("dense_farm", 10), _row("meta_bot", 15)])
     lines = [ln for ln in text.splitlines() if ln.strip()]
     assert len(lines) == 3 and "dense_farm" in lines[1] and "10/16" in lines[1]
+
+
+# --- the cows-from-day-N timing arm (#219, recorded not gated) --------------
+
+def test_the_timing_constants():
+    assert rb.TIMING_DAYS == (4, 6, 8, 10, 12)
+    assert rb.TIMING_NAME == "cows_from_day"
+    assert rb.ABLATION_CHAMPION_WINS == 11
+
+
+def test_first_day_at_or_above_returns_first_qualifying_day():
+    series = [(4, 0), (6, 1), (8, 2), (10, 2)]
+    assert rb.first_day_at_or_above(series, 2) == 8
+
+
+def test_first_day_at_or_above_is_none_when_never_reached():
+    series = [(4, 0), (6, 1)]
+    assert rb.first_day_at_or_above(series, 2) is None
+
+
+def test_first_day_at_or_above_reports_first_day_even_after_a_later_drop():
+    # A series that reaches the threshold and then falls back below it must
+    # still report the FIRST day it qualified, not the last.
+    series = [(4, 0), (6, 2), (8, 1), (10, 3)]
+    assert rb.first_day_at_or_above(series, 2) == 6
+
+
+def _timing_row(day, wins, games=16):
+    return {"name": rb.TIMING_NAME, "opponent": "dense_farm", "wins": wins,
+            "ties": 0, "games": games, "seeds": "400-415", "day": day}
+
+
+def test_format_timing_has_one_line_per_day_plus_two_reference_lines():
+    rows = [_timing_row(4, 8), _timing_row(6, 10), _timing_row(8, 12),
+            _timing_row(10, 9), _timing_row(12, 7)]
+    text = rb.format_timing(rows, 15, 11)
+    assert "8/16" in text
+    assert "rival_aware 15/16" in text
+    assert "unconditional cows 11/16" in text
+
+
+def test_timing_reading_says_timing_explains_the_gap_when_a_clock_matches_contender():
+    rows = [_timing_row(8, 14)]  # >= contender_wins(15) - 1
+    assert rb.timing_reading(rows, 15, 11) == \
+        "a clock reproduces the contender: timing explains the gap"
+
+
+def test_timing_reading_says_rival_signal_does_something_a_clock_cannot_when_no_clock_beats_ablation():
+    rows = [_timing_row(n, 11) for n in rb.TIMING_DAYS]  # all == ablation_wins(11)
+    assert rb.timing_reading(rows, 15, 11) == \
+        "no clock gets past unconditional cows: the rival signal does something a clock cannot"
+
+
+def test_timing_reading_reports_partial_with_best_clock_when_neither_bound_hits():
+    rows = [_timing_row(4, 12), _timing_row(6, 13)]  # neither >=14 nor all <=12
+    assert rb.timing_reading(rows, 15, 11) == "partial: the best clock is N=6 at 13/16"
