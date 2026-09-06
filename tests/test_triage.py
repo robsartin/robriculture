@@ -63,6 +63,19 @@ def test_format_ranking_has_a_header_and_one_line_per_strategy_with_seeds():
     assert "1.5" in lines[2] and "0.5" in lines[2]
 
 
+def test_format_ranking_aligns_the_name_column_at_ten_or_more_rows():
+    # Single-digit and double-digit ranks must put the name in the same
+    # column as the header's "strategy" label -- otherwise a 10+-row table
+    # visibly staggers between rank 9 and rank 10.
+    rows = [{"name": f"strat{i:02d}", "score": float(i), "per_seed": [float(i)], "seconds": 0.1}
+            for i in range(10, 0, -1)]
+    text = triage.format_ranking(rows)
+    lines = text.splitlines()
+    header_name_col = lines[0].index("strategy")
+    for i, r in enumerate(rows, 1):
+        assert lines[i].index(r["name"]) == header_name_col, lines[i]
+
+
 def test_calibrate_reports_rho_and_the_two_tops():
     scores = {"a": 300.0, "b": 200.0, "c": 100.0, "d": 50.0, "e": 10.0}
     verdicts = {"a": 1.0, "b": 0.9, "c": 0.7, "d": 0.5, "e": 0.1}
@@ -142,6 +155,61 @@ def test_measure_verdicts_shapes_rows_for_the_file():
         assert r["games"] == 2 and r["issue"] == 172 and r["source"] == "fresh"
         assert r["seeds"] == "0-1" and "opponent" in r
         assert r["ties"] == 0          # carried through from head_to_head_rate unchanged
+
+
+def test_load_verdicts_ties_half_scores_fresh_rows_and_leaves_others_unchanged(tmp_path):
+    import json
+    path = tmp_path / "v.json"
+    path.write_text(json.dumps({"protocol": "p", "members": [
+        {"name": "a", "wins": 0, "ties": 16, "games": 16, "seeds": "100-115",
+         "issue": 172, "source": "fresh"},
+        {"name": "b", "wins": 14, "games": 16, "seeds": "100-115", "issue": 202,
+         "source": "recorded"}]}))
+    assert triage.load_verdicts(str(path)) == {"a": 0.0, "b": 14 / 16}
+    got = triage.load_verdicts(str(path), ties_half=True)
+    assert got["a"] == 0.5
+    assert got["b"] == 14 / 16          # no "ties" key -> unchanged
+
+
+def test_run_calibration_adds_result_ties_half_from_the_injected_verdicts_unchanged_when_injected():
+    # Documented: when verdicts is injected (as in every other test here),
+    # result_ties_half is computed from that SAME dict, not from the real
+    # calibration_verdicts.json file -- tests stay simple.
+    table = {}
+    for seed in (0, 1):
+        for name, val in (("a", 5.0), ("b", 4.0), ("c", 3.0), ("d", 2.0), ("e", 1.0), ("lean", 0.0)):
+            table[(name, seed)] = (val, val)
+    verdicts = {"a": 1.0, "b": 0.8, "c": 0.6, "d": 0.4, "e": 0.2}
+    got = triage.run_calibration(seeds=(0, 1), play=_fake_play(table), agents=_names,
+                                 verdicts=verdicts)
+    assert got["result_ties_half"] == got["result"]
+
+
+def test_run_calibration_computes_result_ties_half_via_load_verdicts_when_not_injected(monkeypatch):
+    # verdicts=None (the default) means "not injected" -> result uses
+    # load_verdicts() and result_ties_half uses load_verdicts(ties_half=True),
+    # which can genuinely differ from each other.
+    table = {}
+    for seed in (0, 1):
+        for name, val in (("a", 5.0), ("b", 4.0), ("c", 3.0), ("d", 2.0), ("e", 1.0), ("lean", 0.0)):
+            table[(name, seed)] = (val, val)
+    plain_verdicts = {"a": 1.0, "b": 0.8, "c": 0.6, "d": 0.4, "e": 0.2}
+    # e now outranks d -- a genuinely different rank order from plain_verdicts,
+    # so calibrate() over it must give a different rho, not just a different dict.
+    ties_half_verdicts = {"a": 1.0, "b": 0.8, "c": 0.6, "d": 0.4, "e": 0.5}
+    calls = []
+
+    def fake_load_verdicts(path=triage.VERDICTS_PATH, ties_half=False):
+        calls.append(ties_half)
+        return ties_half_verdicts if ties_half else plain_verdicts
+
+    monkeypatch.setattr(triage, "load_verdicts", fake_load_verdicts)
+
+    got = triage.run_calibration(seeds=(0, 1), play=_fake_play(table), agents=_names, verdicts=None)
+    assert calls == [False, True]
+    assert got["result"] == triage.calibrate(got["scores"], plain_verdicts)
+    assert got["result_ties_half"] == triage.calibrate(got["scores"], ties_half_verdicts)
+    assert got["result_ties_half"] != got["result"]
 
 
 def test_append_verdicts_adds_rows_and_refuses_duplicates(tmp_path):

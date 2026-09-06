@@ -76,7 +76,7 @@ def format_ranking(rows):
     lines = [f"{'#':>2} {'strategy':<18} {'score':>10}  per-seed  (s)"]
     for i, r in enumerate(rows, 1):
         seeds = " ".join(f"{v:.1f}" for v in r["per_seed"])
-        lines.append(f"{i} {r['name']:<18} {r['score']:>10.1f}  {seeds}  ({r['seconds']:.1f})")
+        lines.append(f"{i:<2} {r['name']:<18} {r['score']:>10.1f}  {seeds}  ({r['seconds']:.1f})")
     return "\n".join(lines)
 
 
@@ -85,11 +85,21 @@ VERDICTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "calibration_verdicts.json")
 
 
-def load_verdicts(path=VERDICTS_PATH):
-    """name -> recorded win-rate (wins / games) against meta_bot."""
+def load_verdicts(path=VERDICTS_PATH, ties_half=False):
+    """name -> recorded win-rate (wins / games) against meta_bot.
+
+    With `ties_half=True`, a row that carries a `ties` count (a "fresh" row,
+    see `head_to_head_rate`) scores `(wins + 0.5 * ties) / games` instead --
+    a sensitivity on whether a tie is worth half a win. Rows without a
+    `ties` key (every "recorded" row) are unchanged either way: no historical
+    tie count exists for them to reweight."""
     with open(path) as f:
         members = json.load(f)["members"]
-    return {m["name"]: m["wins"] / m["games"] for m in members}
+    def rate(m):
+        if ties_half and "ties" in m:
+            return (m["wins"] + 0.5 * m["ties"]) / m["games"]
+        return m["wins"] / m["games"]
+    return {m["name"]: rate(m) for m in members}
 
 
 def calibrate(scores, verdicts, bar=BAR, minimum=MIN_MEMBERS):
@@ -117,6 +127,9 @@ def floor_holds(scores, floor_score):
 
 #: The seed set dense_farm's recorded row used (#202), so fresh rows sit on it.
 FRESH_SEEDS = tuple(range(100, 116))
+#: The historical common opponent of every recorded verdict -- deliberately
+#: NOT `promotion.gate_opponent()` (now `dense_farm`, #215): changing it
+#: would orphan every recorded row. Compare only against `meta_bot` records.
 GATE = "meta_bot"
 
 
@@ -173,10 +186,21 @@ def append_verdicts(rows, path=VERDICTS_PATH):
 
 
 def run_calibration(seeds=SEEDS, play=None, agents=None, verdicts=None):
-    """Controls first, then the calibration. The floor strategy is scored
-    once; determinism re-scores the first member and demands equality to the
-    value; then `calibrate` over the members."""
-    verdicts = verdicts if verdicts is not None else load_verdicts()
+    """The members are scored, then the floor and determinism controls are
+    checked, then the calibration; a failed control voids the result in
+    `main`.
+
+    Also reports `result_ties_half`, the same calibration recomputed against
+    ties-as-half-a-win verdicts (recorded, not gated -- see spec amendment
+    2026-09-06). When `verdicts` is injected (as every other caller of this
+    function does, for a fake `play`), `result_ties_half` is computed from
+    that SAME injected dict, unchanged -- it does not re-derive a ties-half
+    version of a hand-built test fixture. Only when `verdicts` is left at
+    its default (None) does this call `load_verdicts(ties_half=True)` to
+    read the real, ties-aware calibration file."""
+    injected = verdicts is not None
+    verdicts = verdicts if injected else load_verdicts()
+    verdicts_ties_half = verdicts if injected else load_verdicts(ties_half=True)
     names = sorted(verdicts)
     rows = rank(names, seeds, play, agents)
     scores = {r["name"]: r["score"] for r in rows}
@@ -189,15 +213,15 @@ def run_calibration(seeds=SEEDS, play=None, agents=None, verdicts=None):
         "floor_ok": floor_holds(scores, floor_score),
         "determinism_ok": again == scores[names[0]],
         "result": calibrate(scores, verdicts),
+        "result_ties_half": calibrate(scores, verdicts_ties_half),
     }
 
 
 def main(argv=None):  # pragma: no cover
     import argparse
-    import os as _os
     # An instrument inverts ADR-0006's default: a crash must surface, not
     # become a PASS bot whose score gets ranked.
-    _os.environ.setdefault("ROBRICULTURE_STRICT", "1")
+    os.environ.setdefault("ROBRICULTURE_STRICT", "1")
 
     ap = argparse.ArgumentParser(description="offline triage: rank strategies by self-play (#172)")
     ap.add_argument("names", nargs="*", help="registered strategy names to rank")
@@ -218,6 +242,9 @@ def main(argv=None):  # pragma: no cover
         r = cal["result"]
         rho = "undefined" if r["rho"] is None else f"{r['rho']:.2f}"
         print(f"top predicted: {r['top_predicted']}  top recorded: {r['top_recorded']}")
+        r2 = cal["result_ties_half"]
+        rho2 = "undefined" if r2["rho"] is None else f"{r2['rho']:.2f}"
+        print(f"rho (ties as half, recorded not gated)={rho2} n={r2['n']}")
         if not (cal["floor_ok"] and cal["determinism_ok"]) or r["void"]:
             print(f"rho={rho} n={r['n']} -> VOID")
             return 2
@@ -228,7 +255,7 @@ def main(argv=None):  # pragma: no cover
         ap.error("give strategy names to rank, or --calibrate")
     rows = rank(args.names, seeds)
     print(format_ranking(rows))
-    if args.top:
+    if args.top is not None:
         print("proceed to the gate: " + ", ".join(r["name"] for r in rows[:args.top]))
     return 0
 
