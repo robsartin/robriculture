@@ -462,6 +462,28 @@ def test_checkpoint_genome_carries_the_run_settings(tmp_path):
     assert meta["checkpoint"] is True
 
 
+# --- run_pool_names: what a checkpoint's run_settings records as the pool
+# actually used (#153) ---
+
+
+def test_run_pool_names_returns_sorted_anchors_when_external_not_included():
+    """Without --include-external the pool is exactly the anchors -- no
+    external resolution ever happens, so resolved_external is irrelevant."""
+    names = ev.run_pool_names(["b_anchor", "a_anchor"], include_external=False,
+                              resolved_external={"unrelated": object()})
+    assert names == ["a_anchor", "b_anchor"]
+
+
+def test_run_pool_names_returns_sorted_resolved_external_names_when_included():
+    """With --include-external, the checkpoint must record the pool that was
+    actually resolved (anchors + externals, or a partial subset under
+    --allow-partial-pool) -- not just the anchor names -- so a checkpoint says
+    which pool it was measured against (#153)."""
+    resolved = {"meta_bot": object(), "pilkwang_structured_economic_policy": object()}
+    names = ev.run_pool_names(["meta_bot"], include_external=True, resolved_external=resolved)
+    assert names == ["meta_bot", "pilkwang_structured_economic_policy"]
+
+
 def test_checkpoint_genome_survives_a_write_failure(tmp_path):
     """A disk hiccup must not kill an 8-hour run — warn and carry on."""
     blocker = tmp_path / "not_a_dir"
