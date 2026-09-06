@@ -9,6 +9,7 @@ suite behaves identically in CI, a clean clone, and any other machine.
 
 from __future__ import annotations
 
+import json
 import sys
 import textwrap
 
@@ -150,11 +151,14 @@ def test_resolve_opponents_default_is_named_anchors_and_never_discovers():
     assert called == []
 
 
-def test_resolve_opponents_merges_discovered_agents_when_included():
+def test_resolve_opponents_merges_discovered_agents_when_included(tmp_path):
+    manifest_path = _write_manifest(tmp_path, ["pilkwang"])
+
     agents = external_pool.resolve_opponents(
         ["meta_bot"], include_external=True,
         discover_fn=lambda: {"pilkwang": _stub("pilkwang")},
-        build=lambda names: {n: _stub(n) for n in names})
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest_path)
 
     assert set(agents) == {"meta_bot", "pilkwang"}
 
@@ -171,3 +175,32 @@ def test_resolve_opponents_raises_when_external_requested_but_none_found():
             ["meta_bot"], include_external=True,
             discover_fn=lambda: {},
             build=lambda names: {n: _stub(n) for n in names})
+
+
+# --- resolve_opponents: shortfall guard against a manifest that silently
+# shrunk (#153) ---
+
+
+def _write_manifest(tmp_path, stems):
+    """A fixture manifest with the same shape as harness/external_agents.json,
+    naming just the given filename stems -- never the real pool."""
+    manifest = tmp_path / "fixture_manifest.json"
+    entries = [{"name": stem, "dest_filename": f"{stem}.py"} for stem in stems]
+    manifest.write_text(json.dumps({"agents": entries}))
+    return str(manifest)
+
+
+def test_resolve_opponents_raises_naming_missing_agents_when_pool_is_short_by_one(tmp_path):
+    """The #133/#151 failure mode: a manifest entry silently fails to download
+    and resolve_opponents must say exactly which one is missing, not just that
+    the pool is nonempty."""
+    import pytest
+
+    manifest_path = _write_manifest(tmp_path, ["agent_a", "agent_b"])
+
+    with pytest.raises(RuntimeError, match="agent_b"):
+        external_pool.resolve_opponents(
+            ["meta_bot"], include_external=True,
+            discover_fn=lambda: {"agent_a": _stub("agent_a")},
+            build=lambda names: {n: _stub(n) for n in names},
+            manifest_path=manifest_path)

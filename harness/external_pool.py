@@ -24,6 +24,7 @@ never take down a benchmark.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 
@@ -32,6 +33,26 @@ import sys
 DEFAULT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "external_agents"
 )
+
+#: The single source of truth for which agents the pool is supposed to
+#: contain (scripts/fetch_external_agents.py reads the same file).
+MANIFEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "external_agents.json")
+
+
+def _manifest_stems(manifest_path=MANIFEST_PATH):
+    """Return the sorted filename stems the manifest expects to be fetched.
+
+    Derived from each entry's ``dest_filename`` -- the same filename-stem key
+    ``discover_external_agents`` returns agents under -- so the two can be
+    compared directly (#153).
+    """
+    with open(manifest_path) as fh:
+        data = json.load(fh)
+    stems = []
+    for entry in data["agents"]:
+        dest = entry["dest_filename"]
+        stems.append(dest[: -len(".py")] if dest.endswith(".py") else dest)
+    return sorted(stems)
 
 
 def _default_warn(message):
@@ -82,7 +103,8 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
     return agents
 
 
-def resolve_opponents(anchor_names, include_external=False, discover_fn=None, build=None):
+def resolve_opponents(anchor_names, include_external=False, discover_fn=None, build=None,
+                       allow_partial=False, manifest_path=MANIFEST_PATH, warn=None):
     """Return ``{name: agent}`` for the opponents a genome should be scored against.
 
     One place decides this, so the evolution fitness pool (`harness.evolve`) and
@@ -95,11 +117,21 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
     (CLAUDE.md).
 
     ``include_external=True`` merges in the locally-fetched real competitors
-    (#78). It raises when none are found rather than quietly returning the
-    internal-only set: a run that asked for external opponents and silently got
-    none reports a confident number measured against the wrong pool, which is
-    indistinguishable from a clean result -- the failure mode that wasted a whole
-    session in #133 and returned "every candidate is unlicensed" in #67.
+    (#78), and cross-checks the discovered filename stems against every entry
+    in the manifest (``harness/external_agents.json`` by default). Any
+    manifest entry absent from the discovered set -- including the case where
+    nothing was discovered at all -- raises a ``RuntimeError`` naming the
+    missing agent(s), rather than quietly returning a shrunken pool: a pool
+    that silently changed invalidates every comparison made against it, the
+    failure mode behind #133, #67 and #151 (see this module's docstring and
+    #153). ``allow_partial=True`` downgrades that raise to a loud warning
+    (printed via `warn`, default stderr) and returns whatever was actually
+    found -- an explicit opt-in for a run the operator knowingly accepts as
+    partial, never the default.
+
+    An agent discovered on disk but absent from the manifest is not a
+    shortfall -- it is merged in same as any other discovered agent, matching
+    what `discover_external_agents` already returns.
 
     Externals are opponents and gate opponents only, never submission
     candidates: `scripts/submit.py` must not package a competitor's agent
@@ -110,13 +142,19 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
     agents = build(list(anchor_names))
     if include_external:
         discover_fn = discover_fn or discover_external_agents
+        warn = warn or _default_warn
         external = discover_fn()
-        if not external:
-            raise RuntimeError(
-                "include_external was requested but no external agents were found in "
-                f"{DEFAULT_DIR!r}. That directory is gitignored and empty until you run "
-                "scripts/fetch_external_agents.py. Refusing to score against the "
-                "internal-only pool while reporting an external result."
+        expected = _manifest_stems(manifest_path)
+        missing = [name for name in expected if name not in external]
+        if missing:
+            message = (
+                f"include_external was requested but the external pool is missing "
+                f"{len(missing)} of {len(expected)} manifest agent(s): "
+                f"{', '.join(missing)}. external_agents/ is gitignored -- re-run "
+                "scripts/fetch_external_agents.py to repair it."
             )
+            if not allow_partial:
+                raise RuntimeError(message)
+            warn(message)
         agents.update(external)
     return agents

@@ -77,12 +77,17 @@ def test_build_bench_agents_default_excludes_external_and_never_calls_discover()
     assert calls == []  # discovery is never even attempted on the default path
 
 
-def test_build_bench_agents_include_external_merges_discovered_agents():
+def test_build_bench_agents_include_external_merges_discovered_agents(capsys):
     def fake_discover():
         return {"external_x": _tagged("x")}
 
+    # external_x isn't a manifest entry, so against the real manifest this is
+    # a total shortfall (#153) -- allow_partial=True accepts that and warns
+    # instead of raising, which is all this test is exercising: the merge.
     agents = gb.build_bench_agents(
         ["meta_bot"], include_external=True, discover_fn=fake_discover,
         build=lambda names: {n: _tagged(n) for n in names},
+        allow_partial=True,
     )
     assert set(agents) == {"meta_bot", "external_x"}
+    assert "external_agents" in capsys.readouterr().err

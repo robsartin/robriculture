@@ -62,7 +62,8 @@ def benchmark_genome(genome, anchor_names=DEFAULT_ANCHORS, games=4, seed_base=0,
     }
 
 
-def build_bench_agents(anchor_names, include_external=False, discover_fn=None, build=build_agents):
+def build_bench_agents(anchor_names, include_external=False, discover_fn=None, build=build_agents,
+                       allow_partial=False):
     """Resolve the opponent set for a genome_bench run.
 
     Default (``include_external=False``) is exactly the named anchors, built
@@ -75,8 +76,10 @@ def build_bench_agents(anchor_names, include_external=False, discover_fn=None, b
     ``include_external=True`` additionally folds in whatever real competitor
     agents ``harness.external_pool.discover_external_agents`` finds locally
     (#78) -- opt-in only; never wired into ``DEFAULT_ANCHORS`` or
-    ``harness.promotion.designate``. It raises when the directory is empty
-    rather than quietly falling back to the internal-only pool.
+    ``harness.promotion.designate``. It raises when the pool is short of the
+    manifest (including the fully-empty case) rather than quietly falling
+    back to a shrunken or internal-only pool; ``allow_partial=True`` accepts
+    that shortfall with a loud warning instead (#153).
 
     The composition itself lives in ``harness.external_pool.resolve_opponents``
     so the evolution fitness pool and this frozen bar cannot drift apart on who
@@ -84,7 +87,7 @@ def build_bench_agents(anchor_names, include_external=False, discover_fn=None, b
     """
     return external_pool.resolve_opponents(
         anchor_names, include_external=include_external,
-        discover_fn=discover_fn, build=build)
+        discover_fn=discover_fn, build=build, allow_partial=allow_partial)
 
 
 def main(argv=None):  # pragma: no cover
