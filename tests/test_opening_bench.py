@@ -218,3 +218,37 @@ def test_farm_shape_counts_plant_tiles_and_animal_tiles_separately():
              [{"kind": "WEED"}, None]]
     steps = [[{"observation": {"player": 0, "farms": [{"tiles": tiles}]}}]]
     assert ob.farm_shape(steps, 0, 0) == {"planted": 1, "animals": 1}
+
+
+# --- the board fingerprint: salvage, NOT this experiment's declared control ---
+
+def _board(tiles):
+    return [[{"observation": {"player": 0, "farms": [{"tiles": tiles}]}}]]
+
+
+def test_board_fingerprint_is_equal_for_two_identical_boards():
+    """It has to be stable before it can be discriminating."""
+    tiles = [[{"kind": "PLANT", "crop": "MELON"}, {"kind": "PASTURE", "animal": "COW"}]]
+    assert (ob.board_fingerprint(_board(tiles), 0, 0)
+            == ob.board_fingerprint(_board([list(tiles[0])]), 0, 0))
+
+
+def test_board_fingerprint_separates_two_boards_holding_the_same_cash():
+    """The #207 control's actual defect: day-3 money is a many-to-one residue.
+    An off-by-24 book landed on the source's exact 158 with four animals where
+    the source had five, so cash alone cannot fingerprint a day-3 state."""
+    five = [[{"kind": "PASTURE", "animal": "COW"}] * 5]
+    four = [[{"kind": "PASTURE", "animal": "COW"}] * 4 + [None]]
+    assert ob.board_fingerprint(_board(five), 0, 0) != ob.board_fingerprint(_board(four), 0, 0)
+
+
+def test_board_fingerprint_ignores_the_locked_tiles_of_unbought_quadrants():
+    """A real replay's board is 75 `"LOCKED"` strings and 25 dicts; a string
+    tile must not crash the probe or count as a feature."""
+    assert (ob.board_fingerprint(_board([["LOCKED", {"kind": "PLANT"}]]), 0, 0)
+            == ob.board_fingerprint(_board([[None, {"kind": "PLANT"}]]), 0, 0))
+
+
+def test_board_fingerprint_is_empty_past_the_end_of_a_short_episode():
+    """A crashed game has no day-3 board; that is empty, not a raise."""
+    assert ob.board_fingerprint([], 0, 0) == ()

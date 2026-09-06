@@ -176,6 +176,29 @@ def farm_shape(steps, index, player):
     }
 
 
+def board_fingerprint(steps, index, player):
+    """A hashable, order-independent description of `player`'s board.
+
+    **Salvage, not #207's declared control** -- that control was declared on
+    day-3 *money* before any code was written, it was run, and it is closed.
+    This exists because of what running it found: money at day 3 is a
+    many-to-one residue of an opening that spends itself down to near zero, so
+    a book holding the exact #157 off-by-one landed on the source's 158 to the
+    cent, and so did an off-by-a-whole-day book -- the latter with four animals
+    where the source had five. A future re-run of this experiment should probe
+    the state, which separates those; this one may not, because its bar was set
+    before the numbers existed (ADR-0007).
+
+    `"LOCKED"` strings fill the 75 tiles of quadrants a farm has not bought, so
+    only dict tiles are features.
+    """
+    farm = _farm(steps, index, player) or {}
+    return tuple(sorted(
+        (x, y, tile.get("kind"), tile.get("animal"), tile.get("crop"))
+        for y, row in enumerate(farm.get("tiles") or [])
+        for x, tile in enumerate(row) if isinstance(tile, dict)))
+
+
 # --- The verdicts ---
 
 def control_verdict(positive, negative, recorded):
@@ -244,6 +267,7 @@ def _digest(name, replay):  # pragma: no cover
         "final_money": float((replay.get("rewards") or [0.0, 0.0])[rival] or 0.0),
         "revenue": decompose(replay["steps"], rival)["revenue"],
         "day3_money": money_at(replay["steps"], CONTROL_STEP, rival),
+        "day3_board": board_fingerprint(replay["steps"], CONTROL_STEP, rival),
         "scripts": [Ghost.from_replay(replay, 0).script,
                     Ghost.from_replay(replay, 1).script],
     }
@@ -292,7 +316,8 @@ def control_run(row, script):  # pragma: no cover
     players[1 - seat] = _agent(Ghost(row["scripts"][1 - seat]))
     env = _make_env(row["seed"])
     env.run(players)
-    return money_at(env.steps, CONTROL_STEP, seat)
+    return {"money": money_at(env.steps, CONTROL_STEP, seat),
+            "board": board_fingerprint(env.steps, CONTROL_STEP, seat)}
 
 
 def bench_game(book, opponent, seed, index):  # pragma: no cover
@@ -358,17 +383,26 @@ def main(argv=None):  # pragma: no cover
     recorded = book["day3_money"]
     good = control_run(book, script)
     bad = control_run(book, shift_script(script))
-    pos = residual_fraction(good, recorded)
-    neg = residual_fraction(bad, recorded)
+    pos = residual_fraction(good["money"], recorded)
+    neg = residual_fraction(bad["money"], recorded)
+    recorded_board = book["day3_board"]
     print(f"  recorded day-3 money      {recorded:,.0f}  (start {START_MONEY:,})")
-    print(f"  faithful replay           {good:,.0f}  residual {pos:.3%}  "
+    print(f"  faithful replay           {good['money']:,.0f}  residual {pos:.3%}  "
           f"(need <= {RESIDUAL_TOLERANCE:.1%})")
-    print(f"  off-by-one arm            {bad:,.0f}  residual {neg:.3%}  "
+    print(f"  off-by-one arm            {bad['money']:,.0f}  residual {neg:.3%}  "
           f"(must MISS)")
+    # Reported, never scored: the declared bar is the money residual above.
+    # See `board_fingerprint` for why a re-run should probe the state instead.
+    print(f"  [not scored] day-3 board reproduced exactly: "
+          f"{good['board'] == recorded_board}; off-by-one board differs: "
+          f"{bad['board'] != recorded_board}")
     passed = control_verdict(pos, neg, recorded)
     print(f"  CONTROL: {'PASS' if passed else 'FAIL'}\n")
-    out["control"] = {"recorded": recorded, "faithful": good, "shifted": bad,
+    out["control"] = {"recorded": recorded, "faithful": good["money"],
+                      "shifted": bad["money"],
                       "positive_residual": pos, "negative_residual": neg,
+                      "board_matches": good["board"] == recorded_board,
+                      "shifted_board_matches": bad["board"] == recorded_board,
                       "passed": passed}
     if not passed:
         print("Control failed -- the claim is not measured (#207 necessary condition).")
