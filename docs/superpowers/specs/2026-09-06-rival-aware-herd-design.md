@@ -34,6 +34,13 @@ Public state only; no market-delta reading in this version.
 be a stray placement, two is a herd), buy `COW` regardless of budget; otherwise the existing rule.
 Nothing else changes: crop caps, ramps, sells, land, feed are `dense_farm`'s.
 
+> **Amendment 2026-09-06, from the whole-branch review:** forcing the cheaper animal also buys
+> MORE head on a budget-bound turn (cow 400 vs sheep 500 against CAPITAL_RESERVE 1200), up to the
+> ramp target — measured at money 1600/2100/3600/5000 as 0→1, 1→2, 4→6, 7→8 head. So the
+> contender changes two coupled things: which animal, and how fast the ramp fills. The declared
+> criterion and the PROMOTE stand; the attribution needs the ablation in item D, recorded not
+> gated.
+
 **Where it lives.** `strategies/rival_aware.py`, `RivalAwareStrategy(DenseFarmStrategy)`,
 registered as `rival_aware`, a contender (not a benchmark). The frozen benchmark gains one
 behaviour-preserving seam in the #202 shape: `market_orders(..., prefer=None)` and a
