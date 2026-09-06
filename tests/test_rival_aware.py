@@ -37,6 +37,15 @@ def test_rival_sheep_ignores_weeds_locked_and_empty_tiles():
     assert fr.rival_sheep(_obs(0, _board({}), theirs)) == 0
 
 
+def test_rival_sheep_is_fail_safe_on_a_malformed_observation():
+    # ADR-0006: rival_sheep is called from inside herd_preference, on the same
+    # act() path the no-crash gate covers -- it must degrade to 0 rather than
+    # raise. Before this fix: {"farms": [{}]} raised IndexError (only one
+    # farm) and {"farms": [{}, None]} raised AttributeError (a non-dict farm).
+    assert fr.rival_sheep({"player": 0, "farms": [{}]}) == 0
+    assert fr.rival_sheep({"player": 0, "farms": [{}, None]}) == 0
+
+
 def _orders(prefer):
     # A rich farm on a herd-buying turn: the budget rule alone would pick SHEEP.
     return fr.market_orders(day=9, hour=0, money=50_000, hands=8, quadrants=2, animals=0,

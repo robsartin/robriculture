@@ -29,6 +29,13 @@ def _row(name, wins, games=16):
             "seeds": "400-415"}
 
 
+def test_rate_is_zero_on_zero_games_rather_than_dividing_by_it():
+    # Whole-branch review minor: a row with games=0 (never expected from a real
+    # run, but format_rows/criterion should not blow up on one) must not raise.
+    assert rb._rate({"wins": 0, "games": 0}) == 0.0
+    assert rb._rate({"wins": 3, "games": 6}) == 0.5
+
+
 def test_criterion_passes_only_at_both_bars():
     anchors = [_row(n, 15) for n in ("meta_bot", "ranch_hands", "market_farmer",
                                      "ranch_adaptive", "wheat_hands", "field_rival")]

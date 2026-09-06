@@ -24,7 +24,7 @@ SEEDS = tuple(range(400, 416))
 CHAMPION_BAR = 0.60
 ANCHOR_BAR = 0.90
 CONTROL_SEED = 400
-QUIET_RIVAL = "wheat_hands"        # places no animals
+QUIET_RIVAL = "wheat_hands"        # places no SHEEP (it does buy cows)
 
 
 def animal_buys(actions):
@@ -44,7 +44,8 @@ def mechanism_fired(contender_counts, baseline_counts):
 
 
 def _rate(row):
-    return row["wins"] / row["games"]
+    games = row["games"]
+    return row["wins"] / games if games else 0.0
 
 
 def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR, anchor_bar=ANCHOR_BAR):
@@ -92,6 +93,7 @@ def action_stream(strategy_name, opponent_name, seed, episode_steps=720):  # pra
 
 
 def run_controls(seed=CONTROL_SEED):  # pragma: no cover
+    os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
     from harness.tournament import play_rewards
     from kaggisim.strategy import make_agent
     from strategies import load
@@ -100,7 +102,11 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
     off = type("Off", (load(CONTENDER),), {"THRESHOLD": 10 ** 9})
     base = play_rewards(make_agent(load(CHAMPION)()), make_agent(load(CHAMPION)()), seed)
     got = play_rewards(make_agent(off()), make_agent(load(CHAMPION)()), seed)
-    out["identity"] = {"ok": got == base, "base": base, "got": got}
+    # Positive control: base[0] > 0 is the identity control's own precondition
+    # -- if no money moved, "got == base" is a vacuous match, not evidence.
+    precondition_ok = base[0] > 0
+    out["identity"] = {"ok": got == base and precondition_ok, "base": base, "got": got,
+                       "precondition_ok": precondition_ok}
     # 2. mechanism fires against the champion (which runs sheep when rich)
     c_actions, rival_placed = action_stream(CONTENDER, CHAMPION, seed)
     b_actions, _ = action_stream(CHAMPION, CHAMPION, seed)
@@ -117,6 +123,7 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
 
 
 def run_criterion(seeds=SEEDS):  # pragma: no cover
+    os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
     from harness.triage import head_to_head_rate
     champion_row = head_to_head_rate(CONTENDER, CHAMPION, seeds)
     anchor_rows = [head_to_head_rate(CONTENDER, a, seeds) for a in DEFAULT_ANCHORS]

@@ -525,10 +525,21 @@ def rival_sheep(obs) -> int:
     they are about to flood, and wool (one shop) is the knife-edge one (#146).
     A weed is a dict with no "animal" key and a locked tile is a string; both
     count zero.
+
+    Fail-safe (ADR-0006, whole-branch review): this runs on the same act()
+    path the no-crash gate covers, so a malformed observation -- fewer than
+    two farms, a non-dict farm, missing tiles -- degrades to 0 rather than
+    raising IndexError/TypeError/AttributeError.
     """
-    them = obs["farms"][1 - int(obs.get("player", 0))]
-    return sum(1 for row in (them.get("tiles") or []) for t in row
-               if isinstance(t, dict) and t.get("animal") == "SHEEP")
+    from kaggisim.state import opponent_farm
+    try:
+        them = opponent_farm(obs)
+        if not isinstance(them, dict):
+            return 0
+        return sum(1 for row in (them.get("tiles") or []) for t in row
+                   if isinstance(t, dict) and t.get("animal") == "SHEEP")
+    except (LookupError, TypeError):
+        return 0
 
 
 class FieldRivalStrategy(Strategy):
