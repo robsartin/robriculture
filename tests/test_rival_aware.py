@@ -54,12 +54,32 @@ def test_prefer_cow_overrides_the_budget_rule():
     assert kinds and set(kinds) == {"COW"}
 
 
-def test_prefer_changes_nothing_but_the_kind():
+def test_prefer_changes_only_the_kind_when_the_budget_is_not_binding():
+    # money=50_000 is the non-binding regime: the reserve floor is never
+    # reached, so forcing the kind changes which animal is bought but not how
+    # many. On a budget-bound turn the count itself changes too -- see
+    # test_a_cheaper_animal_buys_more_head_on_a_budget_bound_turn below.
     without = [o for o in _orders(None) if o[0] != "BUY_ANIMAL"]
     with_cow = [o for o in _orders("COW") if o[0] != "BUY_ANIMAL"]
     assert without == with_cow
     assert len([o for o in _orders(None) if o[0] == "BUY_ANIMAL"]) == \
            len([o for o in _orders("COW") if o[0] == "BUY_ANIMAL"])
+
+
+def test_a_cheaper_animal_buys_more_head_on_a_budget_bound_turn():
+    # #219 whole-branch review, Important 1: forcing the cheaper animal also
+    # buys MORE head once the reserve floor binds -- a second, coupled effect
+    # of the seam that the identity/mechanism/quiet controls never exercise
+    # (none of them is budget-bound at this ramp target). Verified by hand as
+    # a pure market_orders call: at money=2100 the baseline (budget rule) buys
+    # one sheep before the reserve stops it; forcing COW buys two, because
+    # each head costs less against the same CAPITAL_RESERVE floor.
+    kwargs = dict(day=12, hour=3, money=2100, hands=8, quadrants=3, animals=0,
+                  shed={}, seeds={}, empty_plots=0, standing={}, caps=None)
+    baseline = [o[1] for o in fr.market_orders(prefer=None, **kwargs) if o[0] == "BUY_ANIMAL"]
+    forced = [o[1] for o in fr.market_orders(prefer="COW", **kwargs) if o[0] == "BUY_ANIMAL"]
+    assert baseline == ["SHEEP"]
+    assert forced == ["COW", "COW"]
 
 
 def test_the_benchmarks_hook_prefers_nothing():
