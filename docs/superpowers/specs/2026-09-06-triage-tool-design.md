@@ -62,7 +62,7 @@ or a failed control. The bar is Stage 1's bar and is not moved after numbers exi
 
 **Controls, run first:**
 
-1. **Floor.** `lean` (the weakest registered agent by pool share in `champion.json`) must
+1. **Floor.** `lean` (a deliberately minimal registered agent; pool share under 0.1 in `champion.json`) must
    rank below every calibration member. A ranker that cannot separate the floor from the
    field ranks nothing.
 2. **Determinism.** Two runs on the same seeds produce identical scores to the value; a score
