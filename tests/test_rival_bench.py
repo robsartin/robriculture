@@ -53,6 +53,17 @@ def test_criterion_counts_a_tie_as_not_a_win():
     assert rb.criterion(tied, [_row("meta_bot", 16)])["champion_rate"] == 9 / 16
 
 
+def test_ablation_verdict_reads_the_gap_between_contender_and_ablation():
+    # #219 whole-branch review, recommendation 1: an unconditional-COW ablation
+    # isolates whether the rival-reading part of the mechanism does anything,
+    # separate from the "cheaper animal buys more head" effect item A records.
+    assert rb.ablation_verdict(15, 10, 16) == "rival signal does work"    # gap 5 >= 2
+    assert rb.ablation_verdict(15, 13, 16) == "rival signal does work"    # gap 2 >= 2
+    assert rb.ablation_verdict(15, 14, 16) == "cannot tell"               # gap 1
+    assert rb.ablation_verdict(15, 15, 16) == "rival signal does no work"  # gap 0
+    assert rb.ablation_verdict(10, 15, 16) == "rival signal does no work"  # ablation ahead
+
+
 def test_format_rows_one_line_per_opponent_with_rate():
     text = rb.format_rows([_row("dense_farm", 10), _row("meta_bot", 15)])
     lines = [ln for ln in text.splitlines() if ln.strip()]

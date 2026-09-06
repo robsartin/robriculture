@@ -58,6 +58,26 @@ def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR, anchor_bar=A
             "anchor_rates": anchor_rates, "failing": failing}
 
 
+def ablation_verdict(contender_wins, ablation_wins, games):
+    """Does the rival-reading part of the mechanism do any work?
+
+    `games` is unused in the comparison itself (both arms share the same seed
+    count) but kept in the signature so a caller cannot pass mismatched win
+    counts from differently-sized runs without the mismatch being visible at
+    the call site. A gap of >= 2 wins is "does work"; within 1 is noise at
+    this sample size ("cannot tell"); the ablation matching or beating the
+    contender is "does no work" -- the rival signal added nothing beyond
+    the cheaper-animal-buys-more-head effect (item A) that the ablation still
+    carries.
+    """
+    gap = contender_wins - ablation_wins
+    if gap >= 2:
+        return "rival signal does work"
+    if gap <= 0:
+        return "rival signal does no work"
+    return "cannot tell"
+
+
 def format_rows(rows):
     lines = [f"{'opponent':<16} {'wins':>7} {'ties':>4} {'rate':>6}"]
     for r in rows:
@@ -130,12 +150,67 @@ def run_criterion(seeds=SEEDS):  # pragma: no cover
     return champion_row, anchor_rows
 
 
+#: The rival-reading contender's recorded rate against the champion (#219
+#: PROMOTE run, issue comment) -- cited here, not re-measured, so the
+#: ablation's printed line can compare against it without re-running the
+#: (already-run, not-to-be-re-run) criterion.
+CONTENDER_CHAMPION_WINS = 15
+
+#: Ablation name, used only as the key `agents()` recognises below -- never
+#: registered in strategies/, so it cannot be promoted or submitted by accident.
+ABLATION_NAME = "always_cow"
+
+
+def run_ablation(seeds=SEEDS):  # pragma: no cover
+    """Recommendation 1: an unconditional-COW ablation of the contender.
+
+    `AlwaysCow` is `rival_aware` with `herd_preference` forced to always
+    return "COW" -- it carries every other decision (crop caps, ramps, the
+    cheaper-animal-buys-more-head effect from item A) but never reads
+    `rival_sheep`. If it does about as well as the contender against the
+    champion, the rival-reading part of the mechanism is doing no work; the
+    win is coming from buying cows unconditionally. Built in-process and
+    never registered, so it cannot be promoted or packaged by accident.
+    """
+    os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
+    from harness.triage import head_to_head_rate
+    from kaggisim.strategy import make_agent
+    from strategies import load
+
+    AlwaysCow = type("AlwaysCow", (load(CONTENDER),),
+                     {"herd_preference": lambda self, obs: "COW"})
+    default_agents = None  # triage's own default, resolved lazily per call
+
+    def agents(name):
+        if name == ABLATION_NAME:
+            return make_agent(AlwaysCow())
+        nonlocal default_agents
+        if default_agents is None:
+            from harness.triage import _default_agents
+            default_agents = _default_agents()
+        return default_agents(name)
+
+    return head_to_head_rate(ABLATION_NAME, CHAMPION, seeds, agents=agents)
+
+
 def main(argv=None):  # pragma: no cover
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
     ap = argparse.ArgumentParser(description="#219 rival-aware herd: controls and criterion")
     ap.add_argument("--controls", action="store_true")
     ap.add_argument("--criterion", action="store_true")
+    ap.add_argument("--ablation", action="store_true",
+                    help="unconditional-COW ablation vs the champion (recorded, not gated)")
     args = ap.parse_args(argv)
+    if args.ablation:
+        row = run_ablation()
+        print(format_rows([row]))
+        verdict = ablation_verdict(CONTENDER_CHAMPION_WINS, row["wins"], row["games"])
+        print(f"ablation (recorded, not gated): unconditional COW vs {CHAMPION} = "
+              f"{row['wins']}/{row['games']}; the rival-reading contender was "
+              f"{CONTENDER_CHAMPION_WINS}/{row['games']} — if these match, the rival "
+              f"signal does no work")
+        print(f"ablation_verdict: {verdict}")
+        return 0
     do_controls = args.controls or not args.criterion
     do_criterion = args.criterion or not args.controls
 
