@@ -61,3 +61,46 @@ def test_format_ranking_has_a_header_and_one_line_per_strategy_with_seeds():
     assert len(lines) == 3
     assert lines[1].startswith("1") and "high" in lines[1] and "9.0" in lines[1]
     assert "1.5" in lines[2] and "0.5" in lines[2]
+
+
+def test_calibrate_reports_rho_and_the_two_tops():
+    scores = {"a": 300.0, "b": 200.0, "c": 100.0, "d": 50.0, "e": 10.0}
+    verdicts = {"a": 1.0, "b": 0.9, "c": 0.7, "d": 0.5, "e": 0.1}
+    got = triage.calibrate(scores, verdicts)
+    assert got["n"] == 5 and got["rho"] == 1.0
+    assert got["passed"] is True and got["void"] is False
+    assert got["top_predicted"] == "a" and got["top_recorded"] == "a"
+
+
+def test_calibrate_passes_at_the_bar_and_not_just_under_it():
+    scores = {n: float(i) for i, n in enumerate("abcde")}
+    verdicts = {n: float(i) for i, n in enumerate("abcde")}          # rho exactly 1.0
+    assert triage.calibrate(scores, verdicts, bar=1.0)["passed"] is True
+    assert triage.calibrate(scores, verdicts, bar=1.01)["passed"] is False
+
+
+def test_calibrate_is_void_below_the_minimum_and_never_passes_void():
+    scores = {"a": 3.0, "b": 2.0, "c": 1.0, "d": 0.5}
+    verdicts = {"a": 1.0, "b": 0.9, "c": 0.7, "d": 0.5}
+    got = triage.calibrate(scores, verdicts)
+    assert got["void"] is True and got["passed"] is False and got["n"] == 4
+
+
+def test_calibrate_uses_only_the_names_present_in_both():
+    scores = {"a": 3.0, "b": 2.0, "c": 1.0, "d": 0.5, "e": 0.1, "unrecorded": 9.0}
+    verdicts = {"a": 1.0, "b": 0.9, "c": 0.7, "d": 0.5, "e": 0.1, "unscored": 0.3}
+    got = triage.calibrate(scores, verdicts)
+    assert got["n"] == 5 and got["top_predicted"] == "a"
+
+
+def test_calibrate_with_all_tied_verdicts_is_void_not_zero():
+    scores = {"a": 3.0, "b": 2.0, "c": 1.0, "d": 0.5, "e": 0.1}
+    verdicts = {n: 0.5 for n in scores}
+    got = triage.calibrate(scores, verdicts)
+    assert got["rho"] is None and got["void"] is True and got["passed"] is False
+
+
+def test_floor_holds_only_when_every_member_beats_the_floor():
+    assert triage.floor_holds({"a": 10.0, "b": 5.0}, 4.0) is True
+    assert triage.floor_holds({"a": 10.0, "b": 4.0}, 4.0) is False     # a tie fails
+    assert triage.floor_holds({"a": 10.0, "b": 3.0}, 4.0) is False

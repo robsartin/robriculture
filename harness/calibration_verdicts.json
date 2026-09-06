@@ -1,0 +1,9 @@
+{
+  "protocol": "16 seeds vs meta_bot, sides alternated (ADR-0007 / #181)",
+  "members": [
+    {"name": "neuropilot", "wins": 16, "games": 16, "seeds": "100-115", "issue": 193},
+    {"name": "dense_farm", "wins": 14, "games": 16, "seeds": "100-115", "issue": 202},
+    {"name": "dung_farm", "wins": 12, "games": 16, "seeds": "300-315", "issue": 206},
+    {"name": "balanced_farm", "wins": 9, "games": 16, "seeds": "100-115", "issue": 193}
+  ]
+}

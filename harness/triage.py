@@ -23,7 +23,11 @@ ROBRICULTURE_STRICT=1: an instrument must surface a crash, not score a PASS bot.
 
 from __future__ import annotations
 
+import json
+import os
 import time
+
+from harness.ladder_correlation import spearman
 
 #: Declared in the spec before any number existed; not moved afterwards.
 SEEDS = (0, 1, 2, 3)
@@ -74,3 +78,38 @@ def format_ranking(rows):
         seeds = " ".join(f"{v:.1f}" for v in r["per_seed"])
         lines.append(f"{i} {r['name']:<18} {r['score']:>10.1f}  {seeds}  ({r['seconds']:.1f})")
     return "\n".join(lines)
+
+
+#: The recorded verdicts the tool is calibrated against (wins/games + issue).
+VERDICTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "calibration_verdicts.json")
+
+
+def load_verdicts(path=VERDICTS_PATH):
+    """name -> recorded win-rate (wins / games) against meta_bot."""
+    with open(path) as f:
+        members = json.load(f)["members"]
+    return {m["name"]: m["wins"] / m["games"] for m in members}
+
+
+def calibrate(scores, verdicts, bar=BAR, minimum=MIN_MEMBERS):
+    """Spearman rho between self-play scores and recorded rates over the names
+    present in both. `void` when fewer than `minimum` names or rho is undefined
+    (all-tied), and a void never passes: no evidence is not no relationship."""
+    names = sorted(set(scores) & set(verdicts))
+    n = len(names)
+    rho = spearman([scores[k] for k in names], [verdicts[k] for k in names]) if n else None
+    void = n < minimum or rho is None
+    return {
+        "n": n,
+        "rho": rho,
+        "void": void,
+        "passed": (not void) and rho >= bar,
+        "top_predicted": max(names, key=lambda k: scores[k]) if names else None,
+        "top_recorded": max(names, key=lambda k: verdicts[k]) if names else None,
+    }
+
+
+def floor_holds(scores, floor_score):
+    """Every member strictly beats the floor strategy's score; a tie fails."""
+    return all(v > floor_score for v in scores.values())
