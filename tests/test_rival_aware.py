@@ -82,3 +82,49 @@ def test_a_full_game_still_buys_animals_with_the_seam_in_place():
         bought += sum(1 for o in act0["market"] if o[0] == "BUY_ANIMAL")
         env.step([act0, b(env.state[1].observation)])
     assert bought > 0, "POSITIVE CONTROL: the benchmark bought no animals in ten days"
+
+
+from strategies import rival_aware as ra
+
+
+def test_the_threshold_is_declared():
+    assert ra.SHEEP_THRESHOLD == 2 and ra.RivalAwareStrategy.THRESHOLD == 2
+
+
+def test_prefers_cows_once_the_rival_shows_two_sheep():
+    s = ra.RivalAwareStrategy()
+    one = _obs(0, _board({}), _board({(0, 5): "SHEEP"}))
+    two = _obs(0, _board({}), _board({(0, 5): "SHEEP", (1, 5): "SHEEP"}))
+    cows = _obs(0, _board({}), _board({(0, 5): "COW", (1, 5): "COW", (2, 5): "COW"}))
+    assert s.herd_preference(one) is None
+    assert s.herd_preference(two) == "COW"
+    assert s.herd_preference(cows) is None
+
+
+def test_it_is_a_registered_contender_built_on_dense_farm():
+    from strategies import REGISTRY, load
+    from strategies.dense_farm import DenseFarmStrategy
+    assert "rival_aware" in REGISTRY and load("rival_aware") is ra.RivalAwareStrategy
+    assert issubclass(ra.RivalAwareStrategy, DenseFarmStrategy)
+    assert ra.RivalAwareStrategy.benchmark is False
+    assert ra.RivalAwareStrategy.CAPS == DenseFarmStrategy.CAPS
+
+
+def test_identity_control_threshold_off_is_dense_farm_to_the_value():
+    # Spec control 1: with the threshold unreachable the contender IS dense_farm
+    # on a full seeded game, both seats' rewards equal to the value.
+    from kaggle_environments import make
+    from kaggisim.strategy import make_agent
+    from strategies import load
+
+    class Off(ra.RivalAwareStrategy):
+        THRESHOLD = 10 ** 9
+
+    def rewards(ours):
+        env = make("kaggriculture", configuration={"episodeSteps": 720, "seed": 21})
+        env.run([make_agent(ours), make_agent(load("dense_farm")())])
+        return [s.reward or 0 for s in env.steps[-1]]
+
+    base = rewards(load("dense_farm")())
+    assert base[0] > 0, "POSITIVE CONTROL: no money moved"
+    assert rewards(Off()) == base
