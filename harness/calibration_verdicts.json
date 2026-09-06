@@ -1,0 +1,88 @@
+{
+  "protocol": "16 seeds vs meta_bot, sides alternated (ADR-0007 / #181)",
+  "members": [
+    {
+      "name": "neuropilot",
+      "wins": 16,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 193,
+      "source": "recorded"
+    },
+    {
+      "name": "dense_farm",
+      "wins": 14,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 202,
+      "source": "recorded"
+    },
+    {
+      "name": "dung_farm",
+      "wins": 12,
+      "games": 16,
+      "seeds": "300-315",
+      "issue": 206,
+      "source": "recorded"
+    },
+    {
+      "name": "balanced_farm",
+      "wins": 9,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 193,
+      "source": "recorded"
+    },
+    {
+      "name": "splitbrain",
+      "opponent": "meta_bot",
+      "wins": 0,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 172,
+      "source": "fresh",
+      "ties": 0
+    },
+    {
+      "name": "field_rival",
+      "opponent": "meta_bot",
+      "wins": 10,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 172,
+      "source": "fresh",
+      "ties": 0
+    },
+    {
+      "name": "meta_rancher",
+      "opponent": "meta_bot",
+      "wins": 0,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 172,
+      "source": "fresh",
+      "note": "ties meta_bot every game (behaviourally identical since 5130174); 0 wins are ties, not losses",
+      "ties": 16
+    },
+    {
+      "name": "ranch_hands",
+      "opponent": "meta_bot",
+      "wins": 0,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 172,
+      "source": "fresh",
+      "ties": 0
+    },
+    {
+      "name": "wheat_hands",
+      "opponent": "meta_bot",
+      "wins": 0,
+      "games": 16,
+      "seeds": "100-115",
+      "issue": 172,
+      "source": "fresh",
+      "ties": 0
+    }
+  ]
+}
