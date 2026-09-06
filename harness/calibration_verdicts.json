@@ -40,7 +40,8 @@
       "games": 16,
       "seeds": "100-115",
       "issue": 172,
-      "source": "fresh"
+      "source": "fresh",
+      "ties": 0
     },
     {
       "name": "field_rival",
@@ -49,7 +50,8 @@
       "games": 16,
       "seeds": "100-115",
       "issue": 172,
-      "source": "fresh"
+      "source": "fresh",
+      "ties": 0
     },
     {
       "name": "meta_rancher",
@@ -59,7 +61,8 @@
       "seeds": "100-115",
       "issue": 172,
       "source": "fresh",
-      "note": "ties meta_bot every game (behaviourally identical since 5130174); 0 wins are ties, not losses"
+      "note": "ties meta_bot every game (behaviourally identical since 5130174); 0 wins are ties, not losses",
+      "ties": 16
     },
     {
       "name": "ranch_hands",
@@ -68,7 +71,8 @@
       "games": 16,
       "seeds": "100-115",
       "issue": 172,
-      "source": "fresh"
+      "source": "fresh",
+      "ties": 0
     },
     {
       "name": "wheat_hands",
@@ -77,7 +81,8 @@
       "games": 16,
       "seeds": "100-115",
       "issue": 172,
-      "source": "fresh"
+      "source": "fresh",
+      "ties": 0
     }
   ]
 }
