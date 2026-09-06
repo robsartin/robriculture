@@ -66,10 +66,11 @@ def test_the_benchmarks_hook_prefers_nothing():
     assert fr.FieldRivalStrategy().herd_preference(_obs(0, _board({}), _board({(0, 5): "SHEEP"}))) is None
 
 
-def test_the_benchmark_acts_exactly_as_before_the_seam():
-    # Byte-identical decisions with the defaults: the same observation, the
-    # same action, whether or not the hook exists -- pinned by comparing
-    # act() against market_orders called with prefer=None on a real game turn.
+def test_a_full_game_still_buys_animals_with_the_seam_in_place():
+    # Positive control: the benchmark still buys animals over a full game
+    # once the herd_preference seam exists. Not an identity pin -- identity
+    # is pinned by test_prefer_none_is_the_budget_rule_unchanged above and
+    # the frozen pins in tests/test_field_rival.py.
     from kaggle_environments import make
     from kaggisim.strategy import make_agent
     env = make("kaggriculture", configuration={"episodeSteps": 240, "seed": 5})
