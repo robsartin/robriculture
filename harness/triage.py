@@ -125,20 +125,26 @@ def _seed_range(seeds):
 
 
 def head_to_head_rate(name, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None):
-    """`name` vs `opponent` over `seeds`, sides alternated (seat 0 on even
-    seeds, seat 1 on odd -- the repo's convention, see opening_bench.our_seat).
-    A win is strictly more reward; a tie is not a win."""
+    """`name` vs `opponent` over `seeds`, sides alternated by LIST POSITION
+    (seat 0 on the 1st, 3rd, ... seed; seat 1 on the 2nd, 4th, ... -- the
+    repo's convention, see opening_bench.our_seat), so alternation holds for
+    any seed set, not just one whose parity happens to match its index.
+    A win is strictly more reward; a tie is not a win, and is counted."""
     play = play or _default_play()
     agents = agents or _default_agents()
     wins = 0
-    for seed in seeds:
-        if seed % 2 == 0:
+    ties = 0
+    for i, seed in enumerate(seeds):
+        if i % 2 == 0:
             ours, theirs = play(agents(name), agents(opponent), seed)
         else:
             theirs, ours = play(agents(opponent), agents(name), seed)
-        wins += int(ours > theirs)
-    return {"name": name, "opponent": opponent, "wins": wins, "games": len(seeds),
-            "seeds": _seed_range(seeds)}
+        if ours == theirs:
+            ties += 1
+        else:
+            wins += int(ours > theirs)
+    return {"name": name, "opponent": opponent, "wins": wins, "ties": ties,
+            "games": len(seeds), "seeds": _seed_range(seeds)}
 
 
 def measure_verdicts(names, opponent=GATE, seeds=FRESH_SEEDS, play=None, agents=None):

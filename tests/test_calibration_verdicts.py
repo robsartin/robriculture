@@ -43,6 +43,18 @@ def test_every_member_names_its_source():
             assert m["issue"] == 172 and m["opponent"] == "meta_bot" and m["games"] == 16, m
 
 
+def test_fresh_rows_carry_a_ties_count_recorded_rows_do_not():
+    # Ties are recorded per fresh row from this wave on (#172 fix wave); a
+    # recorded row from before this wave has no measured tie count and stays
+    # without the key rather than a fabricated 0.
+    for m in _members():
+        if m["source"] == "fresh":
+            assert isinstance(m.get("ties"), int), m
+            assert m["wins"] + m["ties"] <= m["games"], m
+        else:
+            assert "ties" not in m, m
+
+
 def test_meta_rancher_notes_its_zero_wins_are_ties_not_losses():
     # meta_rancher is behaviourally identical to meta_bot (every game a tie,
     # since 5130174), so its 0/16 fresh row would otherwise read as a clean

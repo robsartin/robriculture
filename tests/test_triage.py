@@ -117,7 +117,21 @@ def test_head_to_head_alternates_seats_and_counts_strict_wins():
     got = triage.head_to_head_rate("me", opponent="them", seeds=(0, 1, 2, 3), play=play, agents=_names)
     assert seen == [("me", "them", 0), ("them", "me", 1), ("me", "them", 2), ("them", "me", 3)]
     # seed 0: me in seat 0 wins; seed 1: me in seat 1 loses; seed 2: wins; seed 3: tie -> not a win
-    assert got == {"name": "me", "opponent": "them", "wins": 2, "games": 4, "seeds": "0-3"}
+    assert got == {"name": "me", "opponent": "them", "wins": 2, "ties": 1, "games": 4, "seeds": "0-3"}
+
+
+def test_head_to_head_alternates_by_list_position_not_seed_parity():
+    # opening_bench.our_seat's convention is "alternate by index", so it must
+    # hold for ANY seed set, not just one where index parity matches seed
+    # parity (as 0,1,2,3 and 100-115 both happen to).
+    seen = []
+
+    def play(agent_a, agent_b, seed):
+        seen.append((agent_a, agent_b, seed))
+        return (10.0, 5.0)
+
+    triage.head_to_head_rate("name", opponent="them", seeds=(2, 4), play=play, agents=_names)
+    assert seen == [("name", "them", 2), ("them", "name", 4)]
 
 
 def test_measure_verdicts_shapes_rows_for_the_file():
@@ -127,6 +141,7 @@ def test_measure_verdicts_shapes_rows_for_the_file():
     for r in rows:
         assert r["games"] == 2 and r["issue"] == 172 and r["source"] == "fresh"
         assert r["seeds"] == "0-1" and "opponent" in r
+        assert r["ties"] == 0          # carried through from head_to_head_rate unchanged
 
 
 def test_append_verdicts_adds_rows_and_refuses_duplicates(tmp_path):
