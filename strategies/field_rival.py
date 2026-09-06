@@ -321,13 +321,16 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
-                  empty_plots, standing=None, caps=None):
+                  empty_plots, standing=None, caps=None, prefer=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
     its 100-item cap silently discards the next harvest. Then the crew, the land
     ramp and seed for every empty tile -- the crop line is what earns -- and the
     herd last, out of whatever surplus is left above ``CAPITAL_RESERVE``.
+
+    `prefer`: an animal kind that overrides the budget rule for this turn's
+    BUY_ANIMALs (#219); `None` keeps the benchmark's rule.
     """
     sells: list = []
     buys: list = []
@@ -387,7 +390,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     # 100-item shed, which then silently discarded every harvest.
     pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
     for _ in range(max(0, animal_target(day) - animals - pending)):
-        kind = HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"] else HERD_MIX[0]
+        kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
+                          else HERD_MIX[0])
         cost = economy.ANIMALS[kind]["cost"]
         if budget - cost < CAPITAL_RESERVE:
             break
@@ -514,6 +518,30 @@ def count_animals(tiles) -> int:
                if isinstance(t, dict) and t.get("animal"))
 
 
+def rival_sheep(obs) -> int:
+    """How many sheep the OTHER farm has placed, read off its public tiles.
+
+    #219: the one thing worth knowing about the rival is which shallow market
+    they are about to flood, and wool (one shop) is the knife-edge one (#146).
+    A weed is a dict with no "animal" key and a locked tile is a string; both
+    count zero.
+
+    Fail-safe (ADR-0006, whole-branch review): this runs on the same act()
+    path the no-crash gate covers, so a malformed observation -- fewer than
+    two farms, a non-dict farm, missing tiles -- degrades to 0 rather than
+    raising IndexError/TypeError/AttributeError.
+    """
+    from kaggisim.state import opponent_farm
+    try:
+        them = opponent_farm(obs)
+        if not isinstance(them, dict):
+            return 0
+        return sum(1 for row in (them.get("tiles") or []) for t in row
+                   if isinstance(t, dict) and t.get("animal") == "SHEEP")
+    except (LookupError, TypeError):
+        return 0
+
+
 class FieldRivalStrategy(Strategy):
     name = "field_rival"
 
@@ -528,6 +556,12 @@ class FieldRivalStrategy(Strategy):
     #: helper above takes `caps` with the module default, so `field_rival`'s own
     #: decisions are unchanged -- pinned by tests/test_dense_farm.py.
     CAPS = CROP_CAP
+
+    def herd_preference(self, obs):
+        """The animal kind to buy this turn regardless of budget, or ``None``
+        for the benchmark's own rule. A seam for contenders (#219); the
+        benchmark itself never prefers, so its decisions stay frozen (#181)."""
+        return None
 
     def act(self, obs) -> dict:
         player = obs["player"]
@@ -579,7 +613,7 @@ class FieldRivalStrategy(Strategy):
         market = market_orders(day, hour, me["money"], len(hands),
                                len(me.get("unlocked_quadrants") or ["NW"]),
                                animals, shed, seeds, empty, standing,
-                               caps=self.CAPS)
+                               caps=self.CAPS, prefer=self.herd_preference(obs))
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
