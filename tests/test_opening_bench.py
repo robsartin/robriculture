@@ -173,8 +173,11 @@ def test_the_declared_bars_are_the_ones_the_issue_states():
 
 def test_the_champion_is_the_gate_opponent_recorded_in_champion_json():
     """ADR-0007 measures an experiment against `gate_opponent`, not the
-    submit default -- and it is pinned to the copy committed on this branch."""
-    assert ob.CHAMPION == "meta_bot"
+    submit default. Compared to the recorded value, not a literal: a literal
+    pin failed the moment #215 re-designated the champion (trial merge)."""
+    from harness.promotion import gate_opponent, submit_default
+    assert ob.CHAMPION == gate_opponent()
+    assert ob.CHAMPION != submit_default() or gate_opponent() == submit_default()
 
 
 def test_the_anchors_are_the_frozen_comparability_pool():
