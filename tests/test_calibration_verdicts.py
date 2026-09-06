@@ -41,3 +41,11 @@ def test_every_member_names_its_source():
         assert m["source"] in ("recorded", "fresh"), m
         if m["source"] == "fresh":
             assert m["issue"] == 172 and m["opponent"] == "meta_bot" and m["games"] == 16, m
+
+
+def test_meta_rancher_notes_its_zero_wins_are_ties_not_losses():
+    # meta_rancher is behaviourally identical to meta_bot (every game a tie,
+    # since 5130174), so its 0/16 fresh row would otherwise read as a clean
+    # loss. The row must say so.
+    members = {m["name"]: m for m in _members()}
+    assert members["meta_rancher"].get("note"), members["meta_rancher"]

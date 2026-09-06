@@ -164,3 +164,68 @@ def append_verdicts(rows, path=VERDICTS_PATH):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
+
+
+def run_calibration(seeds=SEEDS, play=None, agents=None, verdicts=None):
+    """Controls first, then the calibration. The floor strategy is scored
+    once; determinism re-scores the first member and demands equality to the
+    value; then `calibrate` over the members."""
+    verdicts = verdicts if verdicts is not None else load_verdicts()
+    names = sorted(verdicts)
+    rows = rank(names, seeds, play, agents)
+    scores = {r["name"]: r["score"] for r in rows}
+    floor_score = self_play_score(FLOOR, seeds, play, agents)["score"]
+    again = self_play_score(names[0], seeds, play, agents)["score"]
+    return {
+        "rows": rows,
+        "scores": scores,
+        "floor_score": floor_score,
+        "floor_ok": floor_holds(scores, floor_score),
+        "determinism_ok": again == scores[names[0]],
+        "result": calibrate(scores, verdicts),
+    }
+
+
+def main(argv=None):  # pragma: no cover
+    import argparse
+    import os as _os
+    # An instrument inverts ADR-0006's default: a crash must surface, not
+    # become a PASS bot whose score gets ranked.
+    _os.environ.setdefault("ROBRICULTURE_STRICT", "1")
+
+    ap = argparse.ArgumentParser(description="offline triage: rank strategies by self-play (#172)")
+    ap.add_argument("names", nargs="*", help="registered strategy names to rank")
+    ap.add_argument("--top", type=int, default=None, help="print the top K as the gate candidates")
+    ap.add_argument("--seeds", type=int, nargs="+", default=list(SEEDS))
+    ap.add_argument("--calibrate", action="store_true",
+                    help="run the controls and the calibration against calibration_verdicts.json")
+    args = ap.parse_args(argv)
+    seeds = tuple(args.seeds)
+
+    if args.calibrate:
+        cal = run_calibration(seeds=seeds)
+        print(f"seeds={seeds} bar={BAR} floor={FLOOR} members={cal['result']['n']}")
+        print(f"floor control: {FLOOR} scored {cal['floor_score']:.1f} -> "
+              f"{'OK' if cal['floor_ok'] else 'FAIL -- RUN VOID'}")
+        print(f"determinism control: {'OK' if cal['determinism_ok'] else 'FAIL -- RUN VOID'}")
+        print(format_ranking(cal["rows"]))
+        r = cal["result"]
+        rho = "undefined" if r["rho"] is None else f"{r['rho']:.2f}"
+        print(f"top predicted: {r['top_predicted']}  top recorded: {r['top_recorded']}")
+        if not (cal["floor_ok"] and cal["determinism_ok"]) or r["void"]:
+            print(f"rho={rho} n={r['n']} -> VOID")
+            return 2
+        print(f"rho={rho} n={r['n']} bar={BAR:.2f} -> {'PASS' if r['passed'] else 'FAIL'}")
+        return 0 if r["passed"] else 1
+
+    if not args.names:
+        ap.error("give strategy names to rank, or --calibrate")
+    rows = rank(args.names, seeds)
+    print(format_ranking(rows))
+    if args.top:
+        print("proceed to the gate: " + ", ".join(r["name"] for r in rows[:args.top]))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

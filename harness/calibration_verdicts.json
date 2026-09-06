@@ -58,7 +58,8 @@
       "games": 16,
       "seeds": "100-115",
       "issue": 172,
-      "source": "fresh"
+      "source": "fresh",
+      "note": "ties meta_bot every game (behaviourally identical since 5130174); 0 wins are ties, not losses"
     },
     {
       "name": "ranch_hands",

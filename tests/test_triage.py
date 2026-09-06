@@ -141,3 +141,63 @@ def test_append_verdicts_adds_rows_and_refuses_duplicates(tmp_path):
     with pytest.raises(ValueError):
         triage.append_verdicts([{"name": "a", "wins": 0, "games": 2, "seeds": "0-1", "issue": 172,
                                  "source": "fresh", "opponent": "meta_bot"}], path=str(path))
+
+
+def test_run_calibration_runs_both_controls_and_calibrates():
+    table = {}
+    for seed in (0, 1):
+        for name, val in (("a", 5.0), ("b", 4.0), ("c", 3.0), ("d", 2.0), ("e", 1.0), ("lean", 0.0)):
+            table[(name, seed)] = (val, val)
+    verdicts = {"a": 1.0, "b": 0.8, "c": 0.6, "d": 0.4, "e": 0.2}
+    got = triage.run_calibration(seeds=(0, 1), play=_fake_play(table), agents=_names,
+                                 verdicts=verdicts)
+    assert got["floor_score"] == 0.0 and got["floor_ok"] is True
+    assert got["determinism_ok"] is True
+    assert got["result"]["passed"] is True and got["result"]["n"] == 5
+    assert [r["name"] for r in got["rows"]] == ["a", "b", "c", "d", "e"]
+
+
+def test_run_calibration_reports_a_failed_floor():
+    table = {}
+    for name, val in (("a", 5.0), ("b", 4.0), ("c", 3.0), ("d", 2.0), ("e", 1.0), ("lean", 1.0)):
+        table[(name, 0)] = (val, val)                 # e ties the floor
+    verdicts = {"a": 1.0, "b": 0.8, "c": 0.6, "d": 0.4, "e": 0.2}
+    got = triage.run_calibration(seeds=(0,), play=_fake_play(table), agents=_names, verdicts=verdicts)
+    assert got["floor_ok"] is False
+
+
+def test_run_calibration_detects_a_nondeterministic_play():
+    calls = {"n": 0}
+
+    def drifting(agent_a, agent_b, seed):
+        calls["n"] += 1
+        return (float(calls["n"]), float(calls["n"]))   # never the same twice
+
+    verdicts = {n: 0.5 for n in "abcde"}
+    got = triage.run_calibration(seeds=(0,), play=drifting, agents=_names, verdicts=verdicts)
+    assert got["determinism_ok"] is False
+
+
+def test_a_real_short_self_play_game_ranks_dense_farm_above_lean():
+    # The floor control in miniature, through the real simulator: ~10 s.
+    # episodeSteps=360 (half the full 720-turn game), not the 240 the brief
+    # named: dense_farm's investment has not yet paid off by turn 240 (its
+    # self-play score there is 2308 vs lean's 3048 -- lean wins), and only
+    # overtakes lean from ~360 turns on (confirmed by direct measurement
+    # against this repo's current strategies/dense_farm.py and
+    # strategies/lean.py). 360 is the shortest length where the ordering the
+    # real simulator gives back matches this test's intent.
+    from kaggle_environments import make
+    from kaggisim.strategy import make_agent
+    from strategies import load
+
+    def short_play(agent_a, agent_b, seed):
+        env = make("kaggriculture", configuration={"episodeSteps": 360, "seed": seed})
+        env.run([agent_a, agent_b])
+        ra, rb = (s.reward or 0 for s in env.steps[-1])
+        return ra, rb
+
+    agents = lambda n: make_agent(load(n)())
+    rows = triage.rank(["lean", "dense_farm"], seeds=(0,), play=short_play, agents=agents)
+    assert all(r["score"] > 0 for r in rows), "POSITIVE CONTROL: no money moved, test proves nothing"
+    assert [r["name"] for r in rows] == ["dense_farm", "lean"]
