@@ -193,26 +193,24 @@ def test_run_calibration_detects_a_nondeterministic_play():
     assert got["determinism_ok"] is False
 
 
-def test_a_real_short_self_play_game_ranks_dense_farm_above_lean():
-    # The floor control in miniature, through the real simulator: ~10 s.
-    # episodeSteps=360 (half the full 720-turn game), not the 240 the brief
-    # named: dense_farm's investment has not yet paid off by turn 240 (its
-    # self-play score there is 2308 vs lean's 3048 -- lean wins), and only
-    # overtakes lean from ~360 turns on (confirmed by direct measurement
-    # against this repo's current strategies/dense_farm.py and
-    # strategies/lean.py). 360 is the shortest length where the ordering the
-    # real simulator gives back matches this test's intent.
-    from kaggle_environments import make
-    from kaggisim.strategy import make_agent
-    from strategies import load
+def test_default_agents_makes_a_fresh_callable_agent_each_call():
+    # "Fresh agent per seat and per game" (self_play_score's docstring) only
+    # holds if _default_agents() itself hands back a new agent object each
+    # time it is called for the same name, not a cached/shared one.
+    agents = triage._default_agents()
+    assert agents("lean") is not agents("lean")
 
-    def short_play(agent_a, agent_b, seed):
-        env = make("kaggriculture", configuration={"episodeSteps": 360, "seed": seed})
-        env.run([agent_a, agent_b])
-        ra, rb = (s.reward or 0 for s in env.steps[-1])
-        return ra, rb
 
-    agents = lambda n: make_agent(load(n)())
-    rows = triage.rank(["lean", "dense_farm"], seeds=(0,), play=short_play, agents=agents)
+def test_a_real_full_self_play_game_ranks_dense_farm_above_lean():
+    # The floor control at full length, through the REAL defaults
+    # (_default_play/_default_agents -- no play/agents injected), so this is
+    # the one test that exercises them: ~4 s for a full 720-turn game.
+    #
+    # At 240 steps (this test's length before this fix wave) dense_farm's
+    # investment has not yet paid off -- its self-play score there is 2308
+    # vs lean's 3048, so lean wins -- and dense_farm only overtakes lean from
+    # ~360 turns on. Recorded here as an observation, not re-verified by this
+    # test: the full 720-step game is what actually ships.
+    rows = triage.rank(["lean", "dense_farm"], seeds=(0,))
     assert all(r["score"] > 0 for r in rows), "POSITIVE CONTROL: no money moved, test proves nothing"
     assert [r["name"] for r in rows] == ["dense_farm", "lean"]
