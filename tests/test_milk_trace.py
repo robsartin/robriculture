@@ -174,3 +174,182 @@ def test_the_consumption_intervals_match_the_installed_sims_own_defaults():
                                          "kaggriculture.json")))["configuration"]
     assert mt.SHOP_SELL_INTERVAL == schema["townShopSellInterval"]["default"] == 4
     assert mt.TOWN_CENTER_INTERVAL == schema["townCenterSellInterval"]["default"] == 24
+
+
+# --- the counterfactual herd rules (pure seams; the subclasses only call these)
+
+def _obs(day=10, our_cows=0, shed_cows=0, rival_sheep=2):
+    tiles = [[{"animal": "COW"}] * our_cows or [None]]
+    theirs = [[{"animal": "SHEEP"}] * rival_sheep or [None]]
+    return {"player": 0, "day": day,
+            "farms": [{"tiles": tiles}, {"tiles": theirs}],
+            "private": {"shed": {"COW": shed_cows}}}
+
+
+def test_our_cows_should_count_the_shed_as_well_as_the_pasture():
+    # `field_rival.market_orders` counts a bought-but-unplaced animal as pending
+    # against the ramp; a cap that ignored the shed would buy the same cow 24
+    # times a day, which is how the ramp was measured buying 79 sheep.
+    assert mt.our_cows(_obs(our_cows=4, shed_cows=2)) == 6
+
+
+def test_capped_cow_preference_should_ask_for_cows_below_the_cap():
+    assert mt.capped_cow_preference(_obs(our_cows=5), 6) == "COW"
+
+
+def test_capped_cow_preference_should_fall_back_to_the_budget_rule_at_the_cap():
+    # `None` is not "buy nothing": it hands the decision back to the benchmark's
+    # own budget rule, which buys sheep when it can afford them.
+    assert mt.capped_cow_preference(_obs(our_cows=4, shed_cows=2), 6) is None
+
+
+def test_capped_cow_preference_should_stay_quiet_when_the_rival_runs_no_sheep():
+    # The cap is a variant of rival_aware, not of unconditional cows: with no
+    # rival herd there is nothing to steer away from.
+    assert mt.capped_cow_preference(_obs(our_cows=0, rival_sheep=0), 6) is None
+
+
+def test_dated_cow_preference_should_ask_for_cows_before_the_switch_day():
+    assert mt.dated_cow_preference(_obs(day=19), 20) == "COW"
+
+
+def test_dated_cow_preference_should_fall_back_on_and_after_the_switch_day():
+    assert mt.dated_cow_preference(_obs(day=20), 20) is None
+    assert mt.dated_cow_preference(_obs(day=25), 20) is None
+
+
+def test_dated_cow_preference_should_stay_quiet_when_the_rival_runs_no_sheep():
+    assert mt.dated_cow_preference(_obs(day=5, rival_sheep=0), 20) is None
+
+
+# --- the printed reading -----------------------------------------------------
+
+def test_at_days_should_hold_the_last_known_total_across_a_day_with_no_turns():
+    # The curve is cumulative: a day the trace has no row for did not sell zero,
+    # it sold nothing new, and the total standing at that point is the answer.
+    assert mt._at_days({0: 1, 8: 10, 20: 30}, (8, 12, 20)) == [10, 10, 30]
+
+
+def test_at_days_should_report_a_day_the_season_never_reached_as_missing():
+    assert mt._at_days({0: 1, 8: 10}, (8, 28)) == [10, None]
+
+
+def _record(**over):
+    r = {"seed": 601, "seat": 1, "our_name": "rival_aware", "their_name": "meta_bot",
+         "control": {"ok": True, "trace_units": 53, "trace_revenue": 2900.0,
+                     "season_units": 53, "season_revenue": 2900.0},
+         "shop_instances": 8, "milk_shops": 2, "milk_shop_days": [21, 24],
+         "season_demand": 246,
+         "first_day_band": 11, "first_day_half": 13,
+         "our_by_day": {8: 0, 12: 20, 16: 40, 20: 53, 24: 53, 28: 53},
+         "their_by_day": {8: 0, 12: 60, 16: 140, 20: 200, 24: 260, 28: 300},
+         "our_units": 53, "their_units": 300, "combined_units": 353,
+         "draw_ratio": 1.435, "revenue_here": 2900.0, "revenue_reference": 13100.0,
+         "reference_seed": 600}
+    r.update(over)
+    return r
+
+
+def test_format_seed_report_should_lead_with_the_control_and_name_the_seats():
+    out = mt.format_seed_report(_record()).splitlines()
+    assert "seat 1" in out[0] and "meta_bot in seat 0" in out[0]
+    assert "control" in out[1] and "OK" in out[1]
+
+
+def test_format_seed_report_should_say_the_trace_is_not_believed_on_a_mismatch():
+    bad = _record(control={"ok": False, "trace_units": 53, "trace_revenue": 2900.0,
+                           "season_units": 51, "season_revenue": 2800.0})
+    assert "not believed" in mt.format_seed_report(bad)
+
+
+def test_format_seed_report_should_carry_both_collapse_days_and_the_draw_ratio():
+    out = mt.format_seed_report(_record())
+    assert "base band on day 11" in out and "50% of base on day 13" in out
+    assert "1.44x the town" in out and "246-unit draw" in out
+
+
+def test_format_seed_report_should_say_when_the_towns_milk_shops_arrived():
+    # How many milk shops the town ended with says nothing on its own: a shop
+    # that unlocks on day 21 drained six days of a thirty-day season.
+    assert "arriving on days [21, 24]" in mt.format_seed_report(_record())
+
+
+def test_format_seed_report_should_say_never_for_a_band_the_price_kept():
+    out = mt.format_seed_report(_record(first_day_band=None, first_day_half=None))
+    assert "base band on day never" in out and "50% of base on day never" in out
+
+
+def test_format_seed_report_should_price_our_units_on_the_reference_path_too():
+    out = mt.format_seed_report(_record())
+    assert "2,900 here" in out and "13,100 on seed 600's price path" in out
+    assert "-10,200" in out
+
+
+def test_format_seed_report_should_omit_the_reference_line_on_the_reference_seed():
+    # Seed 600 priced against seed 600 is a tautology, not a counterfactual.
+    r = _record(seed=600, seat=0)
+    r.pop("reference_seed")
+    assert "price path" not in mt.format_seed_report(r)
+
+
+# --- the counterfactual table ------------------------------------------------
+
+def _cf(variant, seed, money, delta, cows, late):
+    return {"variant": variant, "seed": seed, "final_money": money,
+            "delta_money": delta, "max_cows": cows, "our_units": 53,
+            "realised_pct_of_base": 0.34, "late_pct_of_base": late,
+            "held": late >= 0.5}
+
+
+def test_format_counterfactuals_should_mark_a_late_window_at_or_above_half_as_held():
+    rows = [_cf("rival_aware", 601, 30000.0, 0.0, 11, 0.029),
+            _cf("cap_6_cows", 601, 31000.0, 1000.0, 6, 0.61)]
+    out = mt.format_counterfactuals(rows).splitlines()
+    assert "floored" in out[1] and "held" in out[2]
+
+
+def test_format_counterfactuals_should_carry_the_signed_money_delta_and_the_head():
+    rows = [_cf("cap_6_cows", 600, 33000.0, -1100.0, 6, 1.4)]
+    out = mt.format_counterfactuals(rows)
+    assert "-1,100" in out and "cap_6_cows" in out and " 6 " in out
+
+
+def test_format_counterfactuals_should_flag_a_variant_whose_head_never_changed():
+    # A cap that did not bind bought the same herd as the unmodified agent, so
+    # its money and its price are the champion's, not a counterfactual.
+    rows = [_cf("rival_aware", 601, 30000.0, 0.0, 11, 0.03),
+            _cf("cap_6_cows", 601, 30000.0, 0.0, 11, 0.03)]
+    assert "mechanism did not fire" in mt.format_counterfactuals(rows)
+
+
+def test_format_counterfactuals_should_not_flag_the_baseline_row_of_a_later_seed():
+    # Rows arrive variant-major, so the unmodified agent's seed-601 row is the
+    # second line of the table. It is a baseline, not a counterfactual that
+    # failed to fire, and flagging it would read as a broken variant.
+    rows = [_cf("rival_aware", 600, 34000.0, 0.0, 11, 1.5),
+            _cf("rival_aware", 601, 30000.0, 0.0, 11, 0.03),
+            _cf("cap_6_cows", 600, 33000.0, -1000.0, 6, 1.4),
+            _cf("cap_6_cows", 601, 31000.0, 1000.0, 6, 0.61)]
+    assert "mechanism did not fire" not in mt.format_counterfactuals(rows)
+
+
+# --- when the town's milk shops arrived --------------------------------------
+
+def _shop_row(day, milk_shops):
+    return {"day": day, "milk_shops": milk_shops}
+
+
+def test_shop_arrival_days_should_report_the_day_each_milk_shop_appeared():
+    trace = [_shop_row(0, 0), _shop_row(6, 1), _shop_row(12, 1), _shop_row(21, 2)]
+    assert mt.shop_arrival_days(trace) == [6, 21]
+
+
+def test_shop_arrival_days_should_report_a_town_that_never_drew_milk_as_empty():
+    assert mt.shop_arrival_days([_shop_row(0, 0), _shop_row(20, 0)]) == []
+
+
+def test_shop_arrival_days_should_count_two_shops_unlocking_on_the_same_day_twice():
+    # The count is what drives the draw; a day that added two instances added
+    # twice the appetite, and one arrival day would understate it.
+    trace = [_shop_row(0, 0), _shop_row(24, 2)]
+    assert mt.shop_arrival_days(trace) == [24, 24]
