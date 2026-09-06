@@ -100,8 +100,10 @@ def test_reset_survives_a_handover_agent_with_no_reset_hook():
 
 
 def test_defaults_to_dense_farm_because_neuropilot_abandons_the_herd():
-    """#207's reframe: neuropilot's genome rounds the herd target to zero
-    animals (#187), so the declared hand-over target is `dense_farm`."""
+    """The module's standalone default, unchanged. #207's own hand-over target
+    is the champion and the bench overrides it (`opening_bench.contender`);
+    what this pins is that a bookless default never lands on `neuropilot`,
+    whose genome rounds the herd target to zero animals (#187)."""
     from strategies.dense_farm import DenseFarmStrategy
     assert isinstance(OpeningBookStrategy(script=[None, A1]).handover,
                       DenseFarmStrategy)
@@ -119,6 +121,13 @@ def test_from_replay_scripts_the_named_seat_not_the_other_one():
 def test_shift_script_moves_every_action_one_index_later():
     """The control's negative arm: the exact #157 off-by-one, on purpose."""
     assert shift_script([None, A1, A2]) == [None, None, A1, A2]
+
+
+def test_shift_script_moves_every_action_by_an_arbitrary_number_of_indices():
+    """Pins the `by` parameter the re-declared negative arm now rests on: the
+    bench shifts by `NEGATIVE_SHIFT` = 6, not by the one that voided run 1."""
+    from harness.opening_bench import NEGATIVE_SHIFT
+    assert shift_script([A1, A2], NEGATIVE_SHIFT) == [None] * 6 + [A1, A2]
 
 
 def test_shift_script_leaves_the_original_untouched():

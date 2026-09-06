@@ -85,26 +85,52 @@ def test_select_book_raises_when_the_cohort_is_empty():
         ob.select_book([_row("a", 3000.0, {"MELON": 100.0})])
 
 
-# --- the positive control ---
+# --- the positive control, re-declared 2026-09-06 ---
 
-def test_control_passes_only_when_the_right_book_matches_and_the_shifted_one_misses():
-    """A control that cannot fail proves nothing: the off-by-one arm must miss."""
-    assert ob.control_verdict(0.0, 0.9, recorded=5000.0) is True
+RECORDED_BOARD = ((0, 0, "PLANT", None, "MELON"), (1, 0, "PASTURE", "COW", None))
+OTHER_BOARD = ((0, 0, "PLANT", None, "MELON"),)
+
+
+def _verdict(residual=0.0, positive_board=RECORDED_BOARD,
+             negative_board=OTHER_BOARD, recorded_board=RECORDED_BOARD,
+             recorded_money=5000.0):
+    return ob.control_verdict(residual, positive_board, negative_board,
+                              recorded_board, recorded_money)
+
+
+def test_the_negative_arm_shifts_by_six_not_by_one():
+    """The re-declaration's whole point. This book is padded by one idle turn
+    at each end, so the #157 off-by-one consumed the head PASS and pushed the
+    tail PASS off the window: the 70 working turns landed unchanged and the
+    first run VOIDed. Six is past that slack."""
+    assert ob.NEGATIVE_SHIFT == 6
+
+
+def test_control_passes_when_the_board_is_reproduced_and_the_shifted_one_differs():
+    """All four clauses of the re-declared control at once."""
+    assert _verdict() is True
 
 
 def test_control_fails_when_the_replayed_opening_misses_its_own_day_three_money():
     """#207 alternative 3: recorded actions insufficient to re-drive the sim."""
-    assert ob.control_verdict(0.5, 0.9, recorded=5000.0) is False
+    assert _verdict(residual=0.5) is False
 
 
-def test_control_fails_when_the_off_by_one_arm_also_reconstructs_the_money():
-    """Then the probe does not discriminate and the run is void, not a pass."""
-    assert ob.control_verdict(0.0, 0.0, recorded=5000.0) is False
+def test_control_fails_when_the_faithful_arm_does_not_reproduce_the_board():
+    """Money within 7.3% is no longer enough: day-3 cash is a many-to-one
+    residue, so the faithful arm must land the recorded board tile-for-tile."""
+    assert _verdict(positive_board=OTHER_BOARD) is False
+
+
+def test_control_fails_when_the_shifted_book_still_lands_the_recorded_board():
+    """The VOID the first run hit, now scored on the board: if a six-turn
+    insult reproduces the state anyway, the probe does not discriminate."""
+    assert _verdict(negative_board=RECORDED_BOARD) is False
 
 
 def test_control_fails_when_day_three_money_is_still_the_starting_cash():
     """3,000 vs 3,000 is a match that any agent alive would produce."""
-    assert ob.control_verdict(0.0, 0.9, recorded=3000.0) is False
+    assert _verdict(recorded_money=ob.START_MONEY) is False
 
 
 def test_the_control_tolerance_is_the_declared_seven_point_three_percent():
@@ -194,10 +220,53 @@ def test_criterion_passes_only_when_the_champion_and_every_anchor_clear_their_ba
     assert ob.criterion_passed(0.625, dict(rates, wheat_hands=0.875)) is False
 
 
+def test_the_gated_opponents_are_the_champion_and_every_anchor():
+    """Seven rows, because the champion is no longer one of the anchors: #222
+    designated `rival_aware`, which is not in `DEFAULT_ANCHORS`. Before this
+    the criterion read the champion's rate out of the anchor rows."""
+    assert ob.GATED_OPPONENTS == (ob.CHAMPION,) + ob.ANCHORS
+    assert ob.CHAMPION not in ob.ANCHORS
+
+
+def test_dense_farm_is_measured_but_not_gated():
+    """The re-declaration records the same criterion row against the previous
+    champion so #207 and #206 stay comparable -- recorded, never a bar."""
+    assert ob.RECORDED_ONLY == ("dense_farm",)
+    assert not set(ob.RECORDED_ONLY) & set(ob.GATED_OPPONENTS)
+
+
 def test_criterion_fails_when_an_anchor_was_never_measured():
     """A missing anchor must not read as a pass by absence."""
     rates = {a: 1.0 for a in ob.ANCHORS if a != "field_rival"}
     assert ob.criterion_passed(1.0, rates) is False
+
+
+# --- the contender: the book, then the champion ---
+
+BOOK = {"seat": 1, "scripts": [[None, {"farmer": ["NORTH"]}],
+                               [None, {"farmer": ["SOUTH"]}]]}
+
+
+def test_the_contender_hands_over_to_the_champion_not_to_dense_farm():
+    """Re-declared 2026-09-06: hand over to the champion, so the comparison is
+    "the field's opening, then our best agent" against "our best agent alone".
+    Handing to `dense_farm` while gating against `rival_aware` would confound
+    the opening with the herd rule."""
+    from strategies import load
+    assert isinstance(ob.contender(BOOK).handover, load(ob.CHAMPION))
+
+
+def test_the_contender_replays_the_books_own_seat():
+    """Booking our own seat instead of the source rival's is the null result."""
+    assert ob.contender(BOOK).book.script == BOOK["scripts"][1]
+
+
+def test_each_game_gets_a_fresh_contender_and_a_fresh_handover():
+    """A strategy carries turn counters and herd state; one instance shared
+    across 16 seeded games starts the second game mid-book."""
+    first, second = ob.contender(BOOK), ob.contender(BOOK)
+    assert first is not second
+    assert first.handover is not second.handover
 
 
 # --- reading a game ---
