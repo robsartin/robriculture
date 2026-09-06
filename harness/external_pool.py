@@ -19,6 +19,14 @@ machine that never ran the fetch script must all behave identically. A file
 that fails to import, or has no callable module-level ``agent``, is skipped
 with a warning rather than crashing the run -- one malformed download must
 never take down a benchmark.
+
+That per-file leniency, though, means a directory that quietly lost one
+download still "succeeds": ``discover_external_agents`` returns fewer agents
+with only a stderr warning, and nothing downstream notices the pool shrank.
+``resolve_opponents`` closes that gap by cross-checking what was discovered
+against the manifest and raising by default on any shortfall -- an operator
+can still opt into a known-partial pool, but never falls into one by accident
+(#153).
 """
 
 from __future__ import annotations
