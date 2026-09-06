@@ -63,6 +63,24 @@ the tool cites that file rather than repeating it.
 > recorded rows carry `"source": "recorded"`. The minimum of five, the bar of 0.40 and the
 > prediction are unchanged; only the truth source widened.
 
+> **Amendment 2026-09-06, after the fix-wave review.** (a) `meta_rancher` is a **behavioural
+> fork of `meta_bot`** (ties every game against it; pool share 0.579 vs `meta_bot`'s 0.596 in
+> `champion.json`), so its recorded 0/16 is **16 ties, not 16 losses** -- `head_to_head_rate`
+> and `calibration_verdicts.json` both say so (`"ties": 16` and a `"note"` field). (b) It stays
+> in the primary rho exactly as declared: a tie is not a win, so it scores 0/16 like a strategy
+> that lost every game, and the calibration is not re-run to special-case it. (c) Two
+> sensitivities are reported as **recorded, not gated** -- excluding `meta_rancher`, and
+> scoring its ties as half a win (`load_verdicts(ties_half=True)`, `run_calibration`'s
+> `result_ties_half`) -- and the worst case of simply *including* it (the tool ranks it first,
+> every other member perfectly ordered) works out to rho 0.566, still above the 0.40 bar: its
+> inclusion can only make the calibration harder to pass, never easier, so leaving it in is not
+> a hidden thumb on the scale. (d) **Forward-looking rule for any future calibration set:** a
+> member that is behaviourally identical to the opponent has no meaningful win-rate against it
+> and is excluded on validity grounds *before* measurement, not patched after the fact with a
+> note. (e) Ties are recorded per fresh row from this wave on (`"ties"` on every `"source":
+> "fresh"` row); recorded rows predate this convention and are not retrofitted with a
+> fabricated count.
+
 **Statistic.** Spearman rho (`harness.ladder_correlation.spearman`, tie-averaged) between the
 self-play score and the recorded rate over the calibration set.
 
