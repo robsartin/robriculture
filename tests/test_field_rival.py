@@ -632,3 +632,47 @@ def test_market_orders_with_a_target_buys_to_that_target():
 def test_the_benchmarks_herd_hook_asks_for_the_frozen_ramp():
     assert fr.FieldRivalStrategy().herd_target(0) is None
     assert fr.FieldRivalStrategy().herd_target(24) is None
+
+
+# --- the livestock_workers seam (#239) ---------------------------------------
+
+#: The frozen crop-slot layout, worker index -> slot, for the whole crew. A
+#: literal rather than a re-derivation: a pin computed from the code it pins
+#: cannot fail. Workers 1 and 2 herd (`LIVESTOCK_WORKERS`) and have no slot.
+FROZEN_SLOTS = (0, None, None, 1, 2, 3, 4, 5, 6, 7)
+
+
+def test_the_crop_slot_workers_parameter_is_behaviour_preserving_at_its_default():
+    # #239 threads "who herds this season" through the crop-slot layout. At the
+    # module default the answer must be the frozen benchmark's, worker by worker.
+    for worker, slot in enumerate(FROZEN_SLOTS):
+        assert fr._crop_slot(worker) == slot, worker
+        assert fr._crop_slot(worker, fr.LIVESTOCK_WORKERS) == slot, worker
+
+
+def test_the_crop_cluster_workers_parameter_is_behaviour_preserving_at_its_default():
+    for worker, slot in enumerate(FROZEN_SLOTS):
+        expected = () if slot is None else fr.CROP_TILES[slot * fr.CLUSTER:
+                                                         (slot + 1) * fr.CLUSTER]
+        assert fr.crop_cluster(worker) == expected, worker
+        assert fr.crop_cluster(worker, fr.LIVESTOCK_WORKERS) == expected, worker
+
+
+def test_an_extra_herder_loses_its_own_cluster_and_re_maps_nobody_elses():
+    # The declared design constraint (#239): a third herder gives up its own
+    # crop cluster and every other worker keeps the tiles it was already
+    # tending. Re-mapping mid-season would hand a worker standing plants it
+    # has never watered and orphan the ones it had.
+    workers = (1, 2, 6)
+    assert fr.crop_cluster(6, workers) == ()
+    for worker, slot in enumerate(FROZEN_SLOTS):
+        if worker in workers:
+            continue
+        assert fr.crop_cluster(worker, workers) == fr.crop_cluster(worker), worker
+
+
+def test_the_benchmark_never_names_its_own_livestock_workers():
+    # The seam returns None on the benchmark, so field_rival stays frozen
+    # (#181) -- the same shape as herd_preference / pasture_count / herd_target.
+    s = fr.FieldRivalStrategy()
+    assert all(s.livestock_workers(day) is None for day in range(fr.SEASON_DAYS))
