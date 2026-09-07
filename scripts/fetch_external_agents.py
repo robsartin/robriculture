@@ -84,8 +84,18 @@ def write_meta(entry, dest_dir=DEST_DIR):
     return meta_path(entry, dest_dir)
 
 
-def extract_agent_cell(notebook, cell_file=None):
+def extract_agent_cell(notebook, cell_file=None, cell_index=None):
     """Return the source of the notebook's tagged agent cell, magic line stripped.
+
+    ``cell_index`` selects a cell by its position in the raw ``cells`` list
+    directly, bypassing the ``%%agentfile``/``%%writefile`` tag search
+    entirely -- for notebooks that never use that convention at all (#229;
+    e.g. chaimaamatrag/kaggriculture-competition and the dianatofficial/
+    paiky1995 kernels, whose submittable agent sits in a plain code cell with
+    no cell magic). Given, it takes priority over ``cell_file`` and the whole
+    magic-tag search below. There is no magic line to strip, so the cell's
+    source is returned verbatim. Raises ``ValueError`` if the index is out of
+    range or does not name a code cell.
 
     ``cell_file`` names which tagged cell to take, matched against the basename
     of the magic's target (so ``main.py`` matches both ``%%writefile main.py``
@@ -108,6 +118,20 @@ def extract_agent_cell(notebook, cell_file=None):
     convention must fail loudly at fetch time rather than silently vendoring
     the wrong (narrative/plotting) cell.
     """
+    if cell_index is not None:
+        cells = notebook.get("cells", [])
+        if not 0 <= cell_index < len(cells):
+            raise ValueError(
+                f"cell_index {cell_index} out of range for notebook with {len(cells)} cell(s)"
+            )
+        cell = cells[cell_index]
+        if cell.get("cell_type") != "code":
+            raise ValueError(
+                f"cell_index {cell_index} is not a code cell (got {cell.get('cell_type')!r})"
+            )
+        raw = cell.get("source", [])
+        return raw if isinstance(raw, str) else "".join(raw)
+
     for cell in notebook.get("cells", []):
         if cell.get("cell_type") != "code":
             continue
@@ -202,13 +226,31 @@ def fetch_kaggle_kernel(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_di
             )
         with open(os.path.join(tmp, notebooks[0])) as fh:
             notebook = json.load(fh)
-        source = extract_agent_cell(notebook, entry.get("cell_file"))
+        source = extract_agent_cell(notebook, entry.get("cell_file"), entry.get("cell_index"))
 
     os.makedirs(dest_dir, exist_ok=True)
     path = dest_path(entry, dest_dir)
     with open(path, "w") as fh:
         fh.write(source)
     return path
+
+
+def append_entrypoint_alias(path, entrypoint):
+    """Append a module-level ``agent = <entrypoint>`` binding to a fetched file.
+
+    ``harness.external_pool`` only ever loads a callable module-level
+    ``agent`` -- that loader's fixed contract does not change for one
+    manifest entry (#229). Some vendorable notebooks/files define their
+    submittable callable under a non-standard name (``apex_agent``,
+    ``my_agent``) or only via a parameterised factory
+    (``make_farm_agent(sell_mode)``); the manifest's optional ``entrypoint``
+    field names the expression the loaded module should bind to ``agent``,
+    and this appends ``agent = <entrypoint>`` verbatim as the file's last
+    line -- Python re-evaluates it at import time, same as any other
+    module-level statement, so a factory call or a plain name both work.
+    """
+    with open(path, "a") as fh:
+        fh.write(f"\n\nagent = {entrypoint}\n")
 
 
 def fetch_one(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
@@ -220,6 +262,9 @@ def fetch_one(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
         path = fetch_kaggle_kernel(entry, dest_dir, runner=runner, work_dir=work_dir)
     else:
         raise ValueError(f"unknown source_type {source_type!r} for agent {entry.get('name')!r}")
+    entrypoint = entry.get("entrypoint")
+    if entrypoint:
+        append_entrypoint_alias(path, entrypoint)
     write_meta(entry, dest_dir)
     return path
 
