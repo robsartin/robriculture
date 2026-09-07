@@ -9,6 +9,7 @@ suite behaves identically in CI, a clean clone, and any other machine.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import textwrap
@@ -260,3 +261,60 @@ def test_resolve_opponents_includes_a_discovered_agent_absent_from_the_manifest(
         manifest_path=manifest_path)
 
     assert set(agents) == {"meta_bot", "agent_a", "bonus_agent"}
+
+
+# --- pins (#152): a hash in the committed manifest makes the un-committed pool verifiable ---
+
+
+def _write_pinned_manifest(tmp_path, pins):
+    """A fixture manifest whose entries carry the given {stem: sha256-or-None}."""
+    manifest = tmp_path / "pinned_manifest.json"
+    entries = []
+    for stem, pin in pins.items():
+        entry = {"name": stem, "dest_filename": f"{stem}.py"}
+        if pin is not None:
+            entry["sha256"] = pin
+        entries.append(entry)
+    manifest.write_text(json.dumps({"agents": entries}))
+    return str(manifest)
+
+
+def _sha(text):
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def test_external_anchors_are_the_five_declared_gate_anchors_in_order():
+    assert external_pool.EXTERNAL_ANCHORS == (
+        "pilkwang_structured_economic_policy",
+        "lonespear_kaggriculture_v21",
+        "premaananda108_ecobot_v7",
+        "shashankjangid_agent_v1000_sovereign_prime",
+        "madhur_sabherwal_hub_geometry_agent",
+    )
+
+
+def test_file_sha256_hashes_the_bytes_on_disk(tmp_path):
+    p = tmp_path / "a.py"
+    p.write_text("def agent(obs, config=None):\n    return {}\n")
+    assert external_pool.file_sha256(str(p)) == _sha("def agent(obs, config=None):\n    return {}\n")
+
+
+def test_manifest_pins_reads_a_pin_or_none_per_entry(tmp_path):
+    manifest = _write_pinned_manifest(tmp_path, {"a": "0" * 64, "b": None})
+    assert external_pool.manifest_pins(manifest) == {"a": "0" * 64, "b": None}
+
+
+def test_verify_pins_reports_each_of_the_four_states(tmp_path):
+    good = "def agent(obs, config=None):\n    return {}\n"
+    (tmp_path / "ok.py").write_text(good)
+    (tmp_path / "changed.py").write_text(good + "# edited\n")
+    (tmp_path / "loose.py").write_text(good)
+    manifest = _write_pinned_manifest(tmp_path, {
+        "ok": _sha(good), "changed": _sha(good), "loose": None, "gone": _sha(good)})
+    assert external_pool.verify_pins(str(tmp_path), manifest) == {
+        "ok": "ok", "changed": "mismatch", "loose": "unpinned", "gone": "missing"}
+
+
+def test_verify_pins_reports_missing_when_the_directory_is_absent(tmp_path):
+    manifest = _write_pinned_manifest(tmp_path, {"a": "0" * 64})
+    assert external_pool.verify_pins(str(tmp_path / "nope"), manifest) == {"a": "missing"}

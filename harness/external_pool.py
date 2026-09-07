@@ -31,6 +31,7 @@ can still opt into a known-partial pool, but never falls into one by accident
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -46,21 +47,66 @@ DEFAULT_DIR = os.path.join(
 #: contain (scripts/fetch_external_agents.py reads the same file).
 MANIFEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "external_agents.json")
 
+#: Gate anchors (#152): the externals the champion loses to, strongest first,
+#: measured 2026-09-07 (`third_herder`, seeds 700-701, sides alternated; our
+#: reward share 0.197 / 0.362 / 0.411 / 0.475 / 0.488). Changing this tuple is
+#: a dated ADR-0007 amendment, as adding `field_rival` to DEFAULT_ANCHORS was
+#: (#181). Every member must be pinned in the manifest before the gate will
+#: load it (`external_anchor_agents`).
+EXTERNAL_ANCHORS = (
+    "pilkwang_structured_economic_policy",
+    "lonespear_kaggriculture_v21",
+    "premaananda108_ecobot_v7",
+    "shashankjangid_agent_v1000_sovereign_prime",
+    "madhur_sabherwal_hub_geometry_agent",
+)
 
-def _manifest_stems(manifest_path=MANIFEST_PATH):
-    """Return the sorted filename stems the manifest expects to be fetched.
 
-    Derived from each entry's ``dest_filename`` -- the same filename-stem key
-    ``discover_external_agents`` returns agents under -- so the two can be
-    compared directly (#153).
-    """
+def file_sha256(path):
+    """Hex sha256 of the file's bytes -- the pin is over the file *as written*."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _stem(entry):
+    dest = entry["dest_filename"]
+    return dest[: -len(".py")] if dest.endswith(".py") else dest
+
+
+def manifest_pins(manifest_path=MANIFEST_PATH):
+    """{filename stem: sha256 or None} for every manifest entry (#152)."""
     with open(manifest_path) as fh:
         data = json.load(fh)
-    stems = []
-    for entry in data["agents"]:
-        dest = entry["dest_filename"]
-        stems.append(dest[: -len(".py")] if dest.endswith(".py") else dest)
-    return sorted(stems)
+    return {_stem(entry): entry.get("sha256") for entry in data["agents"]}
+
+
+def verify_pins(directory=DEFAULT_DIR, manifest_path=MANIFEST_PATH):
+    """One of "ok" / "unpinned" / "mismatch" / "missing" per manifest entry.
+
+    "missing" is the file not being on disk (the #153 shortfall); "unpinned"
+    is a file with no pin to check against; "mismatch" is the one that
+    matters -- bytes on disk that are not the bytes the manifest recorded.
+    """
+    states = {}
+    for stem, pin in manifest_pins(manifest_path).items():
+        path = os.path.join(directory, stem + ".py")
+        if not os.path.isfile(path):
+            states[stem] = "missing"
+        elif pin is None:
+            states[stem] = "unpinned"
+        elif file_sha256(path) == pin:
+            states[stem] = "ok"
+        else:
+            states[stem] = "mismatch"
+    return states
+
+
+def _manifest_stems(manifest_path=MANIFEST_PATH):
+    """The sorted filename stems the manifest expects to be fetched (#153)."""
+    return sorted(manifest_pins(manifest_path))
 
 
 def _default_warn(message):
