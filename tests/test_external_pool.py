@@ -318,3 +318,80 @@ def test_verify_pins_reports_each_of_the_four_states(tmp_path):
 def test_verify_pins_reports_missing_when_the_directory_is_absent(tmp_path):
     manifest = _write_pinned_manifest(tmp_path, {"a": "0" * 64})
     assert external_pool.verify_pins(str(tmp_path / "nope"), manifest) == {"a": "missing"}
+
+
+# --- resolve_opponents + external_anchor_agents honour the pins (#152) ---
+
+_GOOD = "def agent(obs, config=None):\n    return {'farmer': ['PASS'], 'hands': [], 'market': []}\n"
+
+
+def test_resolve_opponents_raises_on_a_pin_mismatch_even_when_partial_is_allowed(tmp_path):
+    """A short pool is a known-partial pool; a mismatched file is code nobody reviewed."""
+    import pytest
+
+    (tmp_path / "x.py").write_text(_GOOD + "# edited\n")
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    with pytest.raises(RuntimeError, match="do not match the manifest pin.*x"):
+        external_pool.resolve_opponents(
+            ["meta_bot"], include_external=True, allow_partial=True,
+            build=lambda names: {n: _stub(n) for n in names},
+            manifest_path=manifest, directory=str(tmp_path))
+
+
+def test_resolve_opponents_warns_and_merges_an_unpinned_agent(tmp_path):
+    (tmp_path / "x.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"x": None})
+    warnings = []
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest, directory=str(tmp_path), warn=warnings.append)
+    assert set(agents) == {"meta_bot", "x"}
+    assert any("unpinned" in w and "x" in w and "--pin" in w for w in warnings)
+
+
+def test_resolve_opponents_is_silent_when_every_pin_verifies(tmp_path):
+    (tmp_path / "x.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    warnings = []
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest, directory=str(tmp_path), warn=warnings.append)
+    assert set(agents) == {"meta_bot", "x"} and warnings == []
+
+
+def test_external_anchor_agents_returns_the_named_agents_in_order_when_all_verify(tmp_path):
+    for stem in ("b", "a"):
+        (tmp_path / f"{stem}.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"a": _sha(_GOOD), "b": _sha(_GOOD), "c": _sha(_GOOD)})
+    agents = external_pool.external_anchor_agents(
+        names=("b", "a"), directory=str(tmp_path), manifest_path=manifest)
+    assert list(agents) == ["b", "a"] and all(callable(v) for v in agents.values())
+
+
+def test_external_anchor_agents_raises_naming_each_unverified_anchor(tmp_path):
+    """The gate never runs against an unverified external: missing, unpinned and
+    mismatched are all refusals, named, with the command that repairs them."""
+    import pytest
+
+    (tmp_path / "loose.py").write_text(_GOOD)
+    (tmp_path / "changed.py").write_text(_GOOD + "# edited\n")
+    manifest = _write_pinned_manifest(tmp_path, {"loose": None, "changed": _sha(_GOOD)})
+    with pytest.raises(RuntimeError) as exc:
+        external_pool.external_anchor_agents(
+            names=("loose", "changed", "absent"), directory=str(tmp_path), manifest_path=manifest)
+    message = str(exc.value)
+    assert "loose (unpinned)" in message and "changed (mismatch)" in message and "absent (missing)" in message
+    assert "--pin" in message
+
+
+def test_external_anchor_agents_raises_when_a_verified_file_does_not_import(tmp_path):
+    import pytest
+
+    broken = "def agent(:\n    pass\n"
+    (tmp_path / "x.py").write_text(broken)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(broken)})
+    with pytest.raises(RuntimeError, match="failed to import.*x"):
+        external_pool.external_anchor_agents(
+            names=("x",), directory=str(tmp_path), manifest_path=manifest)

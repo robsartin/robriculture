@@ -158,7 +158,8 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
 
 
 def resolve_opponents(anchor_names, include_external=False, discover_fn=None, build=None,
-                       allow_partial=False, manifest_path=MANIFEST_PATH, warn=None):
+                       allow_partial=False, manifest_path=MANIFEST_PATH, warn=None,
+                       directory=DEFAULT_DIR):
     """Return ``{name: agent}`` for the opponents a genome should be scored against.
 
     One place decides this, so the evolution fitness pool (`harness.evolve`) and
@@ -195,7 +196,7 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
         from harness.tournament import build_agents as build
     agents = build(list(anchor_names))
     if include_external:
-        discover_fn = discover_fn or discover_external_agents
+        discover_fn = discover_fn or (lambda: discover_external_agents(directory))
         warn = warn or _default_warn
         external = discover_fn()
         expected = _manifest_stems(manifest_path)
@@ -210,5 +211,49 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
             if not allow_partial:
                 raise RuntimeError(message)
             warn(message)
+        states = verify_pins(directory, manifest_path)
+        mismatched = sorted(n for n, s in states.items() if s == "mismatch")
+        if mismatched:
+            # Never downgraded by allow_partial: a short pool is a known-partial
+            # pool, a mismatched file is code nobody reviewed (#152).
+            raise RuntimeError(
+                f"external agent(s) on disk do not match the manifest pin: "
+                f"{', '.join(mismatched)}. Re-run scripts/fetch_external_agents.py (it "
+                "refuses a mismatch); if the author published a new version you have "
+                "checked, re-pin with --pin and commit the manifest."
+            )
+        unpinned = sorted(n for n, s in states.items() if s == "unpinned" and n in external)
+        if unpinned:
+            warn(
+                f"external agent(s) unpinned in the manifest (measurement only; never a "
+                f"gate anchor): {', '.join(unpinned)}. Pin with: python -m "
+                "scripts.fetch_external_agents --pin"
+            )
         agents.update(external)
     return agents
+
+
+def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
+                           manifest_path=MANIFEST_PATH, discover_fn=None):
+    """The gate's loader for `EXTERNAL_ANCHORS` (#152): every name must verify.
+
+    Missing, unpinned and mismatched are all refusals -- an ADR-0007 verdict
+    is never measured against an external whose bytes the manifest does not
+    vouch for. No partial pool, no warning: raise, naming each anchor and the
+    command that repairs it.
+    """
+    states = verify_pins(directory, manifest_path)
+    problems = {n: states.get(n, "missing") for n in names if states.get(n) != "ok"}
+    if problems:
+        detail = ", ".join(f"{n} ({s})" for n, s in problems.items())
+        raise RuntimeError(
+            f"gate anchors are not verified: {detail}. Run scripts/fetch_external_agents.py "
+            "(--pin for an unpinned entry) and commit the manifest; the gate never runs "
+            "against an unverified external."
+        )
+    discover_fn = discover_fn or (lambda: discover_external_agents(directory))
+    found = discover_fn()
+    absent = [n for n in names if n not in found]
+    if absent:
+        raise RuntimeError(f"gate anchor(s) failed to import: {', '.join(absent)}")
+    return {n: found[n] for n in names}
