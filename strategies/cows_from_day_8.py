@@ -4,8 +4,9 @@
 `dense_farm` with one decision changed, through the same `herd_preference`
 seam `rival_aware` uses (#181, #202, #219). Before day 8 the budget rule
 stands -- sheep, whose wool is on the shelf by day 6 at base 200. From day 8
-the herd goes to milk, which has three shops and 570 season demand against
-wool's one shop and a floor past ~300 units (#146).
+the herd goes to milk, whose three shops open on seeded days, so the town's
+draw is per-seed (#228 measured 66-354 over eight seeds) -- against wool's
+one shop and a floor past ~300 units (#146).
 
 Why day 8 and why no tile-reading: #219's three recorded-not-gated arms.
 The ablation, the cows-from-day-N timing arm and the 63-rival ghost bench are

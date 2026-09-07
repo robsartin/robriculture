@@ -13,10 +13,14 @@ maps below are the single place that translation is spelled out.
 
 from __future__ import annotations
 
+import json
+import os
+
+import kaggle_environments
 import pytest
 from kaggle_environments.envs.kaggriculture import kaggriculture as sim
 
-from kaggisim.economy import ANIMALS, CROPS, MARKET_PARAMS
+from kaggisim.economy import ANIMALS, CONFIG_DEFAULTS, CROPS, MARKET_PARAMS
 
 # economy field -> sim field, for the quantities both tables carry.
 _CROP_FIELD_MAP = {
@@ -116,3 +120,59 @@ def test_market_price_matches_the_sim_across_the_curve():
             assert economy.market_price(item, inv) == sim.market_price(item, inv), (item, inv)
             checked += 1
     assert checked >= 80, f"POSITIVE CONTROL: only {checked} points compared"
+
+
+# --- CONFIG_DEFAULTS must match the sim's declared schema defaults (#231) ---
+
+# economy.CONFIG_DEFAULTS key -> sim's `configuration.<key>` schema key. None of
+# our keys are renamed from the sim's today, but the map is spelled out (rather
+# than compared by shared name) so a future rename is a one-line edit here, not
+# a silent gap — and the completeness assertion below still holds it honest.
+_CONFIG_KEY_MAP = {
+    "episodeSteps": "episodeSteps",
+    "boardSize": "boardSize",
+    "startingMoney": "startingMoney",
+    "maxMarketOrdersPerTurn": "maxMarketOrdersPerTurn",
+    "turnsPerDay": "turnsPerDay",
+    "shedCapacity": "shedCapacity",
+    "weedSpawnChance": "weedSpawnChance",
+    "townShopUnlockInterval": "townShopUnlockInterval",
+    "townShopSellInterval": "townShopSellInterval",
+    "townCenterSellInterval": "townCenterSellInterval",
+}
+
+
+def _sim_config_schema():
+    """The sim's declared configuration schema, straight from its own spec file.
+
+    Most entries are ``{"description": ..., "default": ..., ...}`` objects, but
+    a couple (``episodeSteps``, ``actTimeout``) are bare literal values in this
+    version of the schema -- both shapes are handled below.
+    """
+    sim_dir = os.path.dirname(kaggle_environments.__file__)
+    schema_path = os.path.join(sim_dir, "envs", "kaggriculture", "kaggriculture.json")
+    with open(schema_path) as f:
+        return json.load(f)["configuration"]
+
+
+def _sim_config_default(schema, key):
+    entry = schema[key]
+    return entry["default"] if isinstance(entry, dict) else entry
+
+
+def test_config_defaults_key_map_is_complete():
+    """Every CONFIG_DEFAULTS key must have an explicit entry in the rename map,
+    per the no-restating rule (CLAUDE.md): the map is the one place a rename
+    gets spelled out, so it must never silently fall behind CONFIG_DEFAULTS."""
+    assert set(_CONFIG_KEY_MAP) == set(CONFIG_DEFAULTS)
+
+
+@pytest.mark.parametrize("key", sorted(CONFIG_DEFAULTS))
+def test_config_defaults_match_sim(key):
+    schema = _sim_config_schema()
+    sim_key = _CONFIG_KEY_MAP[key]
+    sim_default = _sim_config_default(schema, sim_key)
+    assert CONFIG_DEFAULTS[key] == sim_default, (
+        f"CONFIG_DEFAULTS[{key!r}] is {CONFIG_DEFAULTS[key]!r}, "
+        f"sim's declared default for {sim_key!r} is {sim_default!r}"
+    )

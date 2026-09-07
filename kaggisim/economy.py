@@ -21,7 +21,7 @@ CONFIG_DEFAULTS = {
     "weedSpawnChance": 0.005,
     "townShopUnlockInterval": 3,  # days between shop unlocks
     "townShopSellInterval": 4,    # turns between shop consumption ticks
-    "townCenterSellInterval": 12,
+    "townCenterSellInterval": 24,
 }
 
 LAND_COSTS = [1000, 2000, 4000]   # cost of each successive quadrant

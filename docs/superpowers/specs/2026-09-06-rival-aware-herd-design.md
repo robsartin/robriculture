@@ -98,3 +98,9 @@ to `field_rival`'s own decisions, any change to `champion.json`.
   demand, so the strongest crop signal has no market to route away from.
 - **Subclass `act` wholesale.** Duplicates 40 lines of the benchmark; the `prefer` seam is the
   #202 shape and keeps the frozen pin meaningful.
+
+## Amendment 2026-09-06 (#228, #231)
+
+The "570 season demand" figure above is wrong -- the draw is shop-driven and seeded (measured
+66-354); milk is deep on seeds whose milk shops open early and floors on seeds where they open
+late. The criterion and verdict of #219 are unaffected.
