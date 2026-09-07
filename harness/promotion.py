@@ -5,7 +5,14 @@ than the current champion. "Better" is not a green test; it's a statistical
 claim: over a fixed set of seeded games, the challenger must both clear a
 win-rate bar and beat a fair-coin null by a binomial test. This module provides
 the reproducible measurement (`run_match`), the decision (`PromotionResult`),
-and the tooling to designate a champion (`designate_champion`).
+and the tooling to designate a champion.
+
+Designation is by **gate succession** (#241, ADR-0007 amendment 2026-09-07):
+the champion is the most recent strategy to PROMOTE through the gate against
+the incumbent, recorded by `succeed`. Pool share (`designate`, #76) is still
+computed as a ranking, but it no longer writes `harness/champion.json` — once
+every contender swept the anchors it ranked a gate-REJECTED contender above
+one that beat the incumbent 16/16, and `save_champion` refuses that reversal.
 
 Ties are excluded from the win-rate and the binomial test (a paired-sign-test
 convention): they carry no information about which agent is stronger, but the
@@ -200,7 +207,10 @@ def pool_share_rank(candidates, pool, games=2, seed_base=0,
     return rows
 
 
-CRITERION = "pool_share"
+POOL_SHARE = "pool_share"
+GATE_SUCCESSION = "gate_succession"
+#: How `harness/champion.json` is designated (#241; ADR-0007 amendment 2026-09-07).
+CRITERION = GATE_SUCCESSION
 
 
 def designate(candidates, pool, games=2, seed_base=0,
@@ -229,7 +239,7 @@ def designate(candidates, pool, games=2, seed_base=0,
     ranking = pool_share_rank(candidates, pool, games=games, seed_base=seed_base,
                               rewards_fn=rewards_fn, benchmarks=benchmarks)
     return {
-        "criterion": CRITERION,
+        "criterion": POOL_SHARE,
         "gate_opponent": ranking[0]["name"],
         "submit_default": top_contender([r["name"] for r in ranking], benchmarks),
         "games": games,
@@ -268,8 +278,75 @@ def designate_champion(names, games=20, play_fn=play, build=build_agents, benchm
     return top_contender([row[0] for row in ranking], benchmarks)
 
 
+def succeed(challenger, incumbent, *, issue, pr, record, date, bar=None, benchmarks=None):
+    """The designation body for a challenger that PROMOTED against the incumbent.
+
+    Both roles go to the challenger: it beat the gate opponent, so it is the
+    new bar, and it is ours, so it is what `scripts/submit.py` packages. A
+    benchmark (vendored competitor) is refused outright — it can never be a
+    submit default (ADR-0005), and it cannot PROMOTE through our gate anyway.
+
+    `record` is the champion row of the gate run: `wins`, `ties`, `games` and
+    the `seeds` it was played on. The body is the gate's verdict restated, so
+    a record below the champion bar (`harness.rival_bench.CHAMPION_BAR`, ties
+    counted as not-wins) raises rather than designating. The one-sided binomial
+    p on the decisive games is recorded alongside so the artifact carries its
+    own evidence.
+    """
+    if bar is None:
+        from harness.rival_bench import CHAMPION_BAR
+        bar = CHAMPION_BAR
+    if benchmarks is None:
+        from harness.tournament import benchmark_names
+        benchmarks = benchmark_names()
+    if challenger in benchmarks:
+        raise ValueError(f"{challenger!r} is a benchmark: it can be a gate opponent, never a champion")
+    wins, games = record["wins"], record["games"]
+    rate = wins / games
+    if rate < bar:
+        raise ValueError(
+            f"{challenger!r} vs {incumbent!r}: {wins}/{games} = {rate:.1%} is below the "
+            f"gate bar {bar:.0%} (ties are not wins) — succession restates a PROMOTE, "
+            f"it cannot manufacture one"
+        )
+    decisive = games - record.get("ties", 0)
+    return {
+        "criterion": GATE_SUCCESSION,
+        "gate_opponent": challenger,
+        "submit_default": challenger,
+        "succession": {
+            "predecessor": incumbent,
+            "issue": issue,
+            "pr": pr,
+            "date": date,
+            "record": dict(record, p=binomial_p_value(wins, decisive)),
+        },
+    }
+
+
+def designation_criterion(path=CHAMPION_PATH):
+    """The `criterion` recorded in the artifact, or None if there is no artifact."""
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return json.load(fh).get("criterion")
+
+
 def save_champion(path, body):
-    """Write the designation artifact (a `designate()` body) as JSON."""
+    """Write a designation body as JSON.
+
+    A gate-succession artifact is never overwritten by a pool-share body: the
+    pool-share writers (`--designate`, `harness.rounds`) still run as rankings,
+    and letting one of them silently revert the criterion is exactly the
+    "fix undone invisibly" failure #76 was itself a fix for.
+    """
+    existing = designation_criterion(path)
+    if existing == GATE_SUCCESSION and body.get("criterion") != GATE_SUCCESSION:
+        raise ValueError(
+            f"{path!r} is designated by {GATE_SUCCESSION!r} (#241); a "
+            f"{body.get('criterion')!r} body would silently revert it. Read the ranking, "
+            f"and record a succession with: python -m harness.promotion --succeed <challenger> ..."
+        )
     with open(path, "w") as fh:
         json.dump(body, fh, indent=2)
         fh.write("\n")
@@ -331,7 +408,15 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--bar", type=float, default=0.55, help="win-rate bar (default 0.55)")
     ap.add_argument("--alpha", type=float, default=0.05, help="significance level (default 0.05)")
     ap.add_argument("--designate", action="store_true",
-                    help="rank all strategies by pool share against the fixed anchors and record both roles (gate_opponent, submit_default)")
+                    help="rank all strategies by pool share against the fixed anchors (informational since #241; written only if the artifact is not a gate succession)")
+    ap.add_argument("--succeed", metavar="CHALLENGER",
+                    help="record CHALLENGER as champion after it PROMOTED against the recorded gate_opponent (#241)")
+    ap.add_argument("--issue", type=int, help="--succeed: the experiment issue")
+    ap.add_argument("--pr", type=int, help="--succeed: the PR that carried it")
+    ap.add_argument("--wins", type=int, help="--succeed: champion-row wins")
+    ap.add_argument("--ties", type=int, default=0, help="--succeed: champion-row ties (default 0)")
+    ap.add_argument("--seeds", help="--succeed: the seed range played, e.g. 816-831")
+    ap.add_argument("--date", help="--succeed: the PROMOTE date, YYYY-MM-DD")
     ap.add_argument("names", nargs="*", help="agents to rank (for --designate; default: all + built-ins)")
     args = ap.parse_args(argv)
 
@@ -344,11 +429,31 @@ def main(argv=None):  # pragma: no cover
         pool = build_agents(list(DEFAULT_ANCHORS))
         candidates = build_agents(list(REGISTRY))
         body = designate(candidates, pool, games=args.games, benchmarks=bench)
-        save_champion(CHAMPION_PATH, body)
         for row in body["ranking"]:
             mark = " (benchmark)" if row["benchmark"] else ""
             print(f"  {row['name']:16s} share={row['share']:.4f}{mark}")
+        if designation_criterion(CHAMPION_PATH) == GATE_SUCCESSION:
+            print(f"\nranking only: {CHAMPION_PATH} is designated by gate succession (#241); "
+                  f"pool share leads with {body['gate_opponent']}, not written")
+            return 0
+        save_champion(CHAMPION_PATH, body)
         print(f"\ngate_opponent:  {body['gate_opponent']}")
+        print(f"submit_default: {body['submit_default']}")
+        return 0
+
+    if args.succeed:
+        missing = [k for k in ("issue", "pr", "wins", "seeds", "date") if getattr(args, k) is None]
+        if missing:
+            ap.error(f"--succeed needs --{' --'.join(missing)}")
+        incumbent = gate_opponent()
+        record = {"wins": args.wins, "ties": args.ties, "games": args.games, "seeds": args.seeds}
+        body = succeed(args.succeed, incumbent, issue=args.issue, pr=args.pr,
+                       record=record, date=args.date)
+        save_champion(CHAMPION_PATH, body)
+        r = body["succession"]["record"]
+        print(f"{args.succeed} succeeds {incumbent}: {r['wins']}/{r['games']} on seeds {r['seeds']}, "
+              f"p={r['p']:.3g} (#{args.issue}, PR #{args.pr}, {args.date})")
+        print(f"gate_opponent:  {body['gate_opponent']}")
         print(f"submit_default: {body['submit_default']}")
         return 0
 

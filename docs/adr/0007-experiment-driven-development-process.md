@@ -299,3 +299,62 @@ variance, not score.
 not be changed to make it stronger, weaker, or differently calibrated. Every
 such change is recorded here with its date and the issues whose numbers it
 invalidates.
+
+### 2026-09-07 — designation is by gate succession, not pool share (#241)
+
+**What this corrects.** The #76 finding above ("Designation is now by pool
+share") no longer decides the champion. The champion is now the **most recent
+strategy to PROMOTE through this ADR's gate against the incumbent**, and
+`harness/champion.json` records that succession — predecessor, issue, PR, date,
+and the champion-row record with its one-sided binomial p — under
+`"criterion": "gate_succession"`. `harness.promotion.succeed` builds the body
+and refuses a record below the champion bar, so the artifact is the gate's own
+verdict restated and can be rebuilt from its fields
+(`tests/test_succession.py`). Pool share is still computed by
+`python -m harness.promotion --designate` and `harness.rounds` as a *ranking*,
+but `save_champion` refuses to overwrite a succession with a pool-share body.
+The gate itself is unchanged.
+
+**Why.** After #239 PROMOTED `third_herder` (16/16 against the incumbent
+`rival_aware`, 16/16 against every anchor, seeds 816-831), the pool-share
+designation on `main` at 52e582f read:
+
+| rank | strategy | pool share | gate verdict |
+|---|---|---|---|
+| 1 | `cows_from_day_8` | 0.6907 | REJECTED (#225: 3/16, 12 ties vs `rival_aware`) |
+| 2 | `third_herder` | 0.6635 | PROMOTE (#239: 16/16 vs `rival_aware`) |
+| 3 | `rival_aware` | 0.6553 | incumbent |
+| 4 | `pasture_ahead` | 0.6516 | lost to `third_herder` 16/16 (#239 A vs C) |
+| 5 | `dense_farm` | 0.6391 | |
+
+Every one of the top five beats every anchor 16/16, so share no longer
+measures who wins: it measures how much money a contender banks against
+opponents that never win — reward margin against a saturated pool, the
+endpoint of the #77 caveat above. A designation that contradicts the gate it
+exists to serve is worse than none, and hand-editing the file against its own
+criterion would have been worse still.
+
+**Alternatives rejected.**
+
+- *Accept the pool-share pick* (`cows_from_day_8`): internally consistent, but
+  it designates a strategy the gate rejected over one that beat the incumbent
+  every game; the two have never played each other.
+- *Leave `rival_aware` designated*: the gate said it lost 16/16. Keeping a
+  beaten champion as the bar makes the next experiment easier, which is the
+  wrong direction.
+- *Fix the pool instead* (harder anchors: the vendored `lonespear`, #204's
+  ghost bench): the right longer-term move and the subject of #152, but a pool
+  decision in its own right, and the file had to say something true today. A
+  pool that resolves wins again may earn pool share back; the ranking stays
+  computable and is not deleted.
+
+**What this costs.** Designations before this date (`dense_farm`, #215,
+2026-09-05; `rival_aware`, #222, 2026-09-06) were by pool share; the artifact's
+`criterion` field says which rule produced it. `--designate` and
+`harness.rounds` are now read-only against a succession artifact.
+
+**Convention going forward.** A PROMOTE designates through
+`python -m harness.promotion --succeed <challenger> --issue N --pr N --wins W
+--games G --ties T --seeds A-B --date YYYY-MM-DD`, in its own issue (as #241
+was), so the decision is deliberate and not a side effect of the experiment's
+PR. Both roles go to the challenger; a benchmark is refused.
