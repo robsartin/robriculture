@@ -184,16 +184,27 @@ CROP_TILES = tuple(
 )
 
 
-def _crop_slot(worker: int):
-    """Crop-cluster slot for a worker index, or ``None`` for the herders."""
-    if worker in LIVESTOCK_WORKERS:
+def _crop_slot(worker: int, workers=LIVESTOCK_WORKERS):
+    """Crop-cluster slot for a worker index, or ``None`` when it is herding.
+
+    `workers` is who runs the livestock line this turn (#239); the module
+    default is the benchmark's own pair, so `field_rival` stays frozen (#181).
+
+    The slot LAYOUT is always the frozen one -- derived from
+    `LIVESTOCK_WORKERS`, never from `workers` -- so an extra herder gives up
+    only its own cluster and every other worker keeps the tiles it was already
+    tending. Re-mapping the clusters mid-season would hand a worker standing
+    plants it has never watered and orphan the ones it was watering, which is a
+    second, unmeasured change on top of the labour split.
+    """
+    if worker in workers or worker in LIVESTOCK_WORKERS:
         return None
     return worker if worker < LIVESTOCK_WORKERS[0] else worker - len(LIVESTOCK_WORKERS)
 
 
-def crop_cluster(worker: int):
+def crop_cluster(worker: int, workers=LIVESTOCK_WORKERS):
     """The tiles worker `worker` is responsible for -- ``()`` for a herder."""
-    slot = _crop_slot(worker)
+    slot = _crop_slot(worker, workers)
     if slot is None:
         return ()
     return CROP_TILES[slot * CLUSTER:(slot + 1) * CLUSTER]
@@ -592,6 +603,16 @@ class FieldRivalStrategy(Strategy):
         it never fires, so its herd schedule stays frozen (#181)."""
         return None
 
+    def livestock_workers(self, day):
+        """Worker indices running the livestock line on `day`, or ``None`` for
+        the frozen `LIVESTOCK_WORKERS` pair. A seam for contenders (#239).
+
+        A worker named here herds instead of tending its own crop cluster; no
+        other worker's cluster moves (see `_crop_slot`). On the benchmark it
+        never fires, so the labour split stays frozen (#181).
+        """
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -608,7 +629,8 @@ class FieldRivalStrategy(Strategy):
         animals = count_animals(tiles)
         pastures = active_pastures(day, animals,
                                    count=self.pasture_count(day, animals))
-        herders = {worker: slot for slot, worker in enumerate(LIVESTOCK_WORKERS)}
+        workers = self.livestock_workers(day) or LIVESTOCK_WORKERS
+        herders = {worker: slot for slot, worker in enumerate(workers)}
 
         positions = [me["farmer"], *hands]
         used: dict = {}
@@ -616,13 +638,14 @@ class FieldRivalStrategy(Strategy):
         for i, pos in enumerate(positions):
             inv = inventories[i] if i < len(inventories) else {}
             if i in herders:
-                mine = pastures[herders[i]::len(LIVESTOCK_WORKERS)]
+                mine = pastures[herders[i]::len(workers)]
                 actions.append(herd_worker_action(mine, tiles, pos, inv, shed, hour))
                 continue
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
             crop = crop_for_plot(day, standing, caps=self.CAPS)
-            action = crop_worker_action(crop_cluster(i), tiles, pos, inv, crop, day, hour)
+            action = crop_worker_action(crop_cluster(i, workers), tiles, pos, inv,
+                                        crop, day, hour)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
                 # cannot pay for -- so a worker past the seed count would just
@@ -636,7 +659,7 @@ class FieldRivalStrategy(Strategy):
 
         empty = 0
         for i in range(len(positions)):
-            for tile_xy in crop_cluster(i):
+            for tile_xy in crop_cluster(i, workers):
                 if _tile_at(tiles, tile_xy) is None:
                     empty += 1
 
