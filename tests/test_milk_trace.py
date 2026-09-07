@@ -353,3 +353,10 @@ def test_shop_arrival_days_should_count_two_shops_unlocking_on_the_same_day_twic
     # twice the appetite, and one arrival day would understate it.
     trace = [_shop_row(0, 0), _shop_row(24, 2)]
     assert mt.shop_arrival_days(trace) == [24, 24]
+
+
+def test_seat_for_should_alternate_sides_by_seed_parity():
+    # The repo alternates by list position; on the contiguous 600-607 range the
+    # two coincide, and every number in the #228 run depends on which side we
+    # were on -- seed 601's town is a different town on each seat.
+    assert [mt.seat_for(s) for s in range(600, 608)] == [0, 1, 0, 1, 0, 1, 0, 1]

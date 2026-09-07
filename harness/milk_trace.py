@@ -114,6 +114,24 @@ def first_day_below(trace, frac_of_base):
     return None
 
 
+def shop_arrival_days(trace, key="milk_shops"):
+    """The day each milk-carrying shop instance appeared in the town.
+
+    Not how many shops the town ended with -- *when* it got them. The town
+    unlocks eight instances over the season, one every three days, drawn from
+    the eight types with replacement, and a milk shop that arrives on day 21
+    has drained six days of a thirty-day season. Two instances unlocking on the
+    same day are two entries: the count is what drives the draw.
+    """
+    days, seen = [], 0
+    for row in trace:
+        count = row.get(key) or 0
+        while count > seen:
+            days.append(row["day"])
+            seen += 1
+    return days
+
+
 def revenue_at(units_by_turn, prices_by_turn):
     """What `{step: units}` fetches at `{step: quote}`, aligned by step.
 
@@ -356,6 +374,10 @@ def _drive(our_agent, their_agent, seed, seat, episode_steps=720):  # pragma: no
             "seat": seat,
             "milk_inventory": int(inventory[ITEM]), "milk_price": int(prices[ITEM]),
             "our_cows": count_cows(obs[seat]["farms"][seat]["tiles"]),
+            # Head we hold, not head we have standing: only five NW tiles ever
+            # become pasture, so most of the ramp's cows sit in the shed. A cap
+            # read off placed head alone could never bind.
+            "our_cows_held": our_cows(obs[seat]),
             "their_cows": count_cows(obs[seat]["farms"][1 - seat]["tiles"]),
             "our_milk_sold": len(us), "their_milk_sold": len(them),
             "our_milk_revenue": sum(us), "their_milk_revenue": sum(them),
@@ -537,7 +559,7 @@ def run_counterfactuals(seeds=COUNTERFACTUAL_SEEDS, our_name=US, their_name=THEM
             rows.append({
                 "variant": label, "seed": seed, "final_money": money,
                 "delta_money": money - baseline[seed],
-                "max_cows": max((row["our_cows"] for row in trace), default=0),
+                "max_cows": max((row["our_cows_held"] for row in trace), default=0),
                 "our_units": rec["our_units"],
                 "realised_pct_of_base": rec["realised_pct_of_base"],
                 "late_pct_of_base": rec["late_pct_of_base"],
@@ -592,21 +614,3 @@ def main(argv=None):  # pragma: no cover
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-def shop_arrival_days(trace, key="milk_shops"):
-    """The day each milk-carrying shop instance appeared in the town.
-
-    Not how many shops the town ended with -- *when* it got them. The town
-    unlocks eight instances over the season, one every three days, drawn from
-    the eight types with replacement, and a milk shop that arrives on day 21
-    has drained six days of a thirty-day season. Two instances unlocking on the
-    same day are two entries: the count is what drives the draw.
-    """
-    days, seen = [], 0
-    for row in trace:
-        count = row.get(key) or 0
-        while count > seen:
-            days.append(row["day"])
-            seen += 1
-    return days
