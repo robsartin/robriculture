@@ -321,7 +321,7 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
-                  empty_plots, standing=None, caps=None, prefer=None):
+                  empty_plots, standing=None, caps=None, prefer=None, target=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -331,6 +331,9 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
 
     `prefer`: an animal kind that overrides the budget rule for this turn's
     BUY_ANIMALs (#219); `None` keeps the benchmark's rule.
+
+    `target`: head to be running on `day`, overriding `animal_target` for this
+    turn (#237, used only by the placebo arm); `None` keeps the frozen ramp.
     """
     sells: list = []
     buys: list = []
@@ -389,7 +392,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     # ramp on every one of the day's 24 turns -- measured at 79 sheep filling a
     # 100-item shed, which then silently discarded every harvest.
     pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
-    for _ in range(max(0, animal_target(day) - animals - pending)):
+    want_head = animal_target(day) if target is None else target
+    for _ in range(max(0, want_head - animals - pending)):
         kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
                           else HERD_MIX[0])
         cost = economy.ANIMALS[kind]["cost"]
@@ -496,10 +500,18 @@ def herd_worker_action(pastures, tiles, pos, inv, shed, hour):
     return ["PASS"]
 
 
-def active_pastures(day: int, animals: int):
+def active_pastures(day: int, animals: int, count=None):
     """Pasture tiles in play today -- the ramp's target, never fewer than the
     head already on the board (an animal must keep being fed after the ramp
-    flattens)."""
+    flattens).
+
+    `count`: how many tiles a contender wants standing this turn (#237);
+    ``None`` keeps the benchmark's own rule, so field_rival stays frozen
+    (#181). The tile ORDER is not a seam -- it is always the shed-adjacent
+    prefix of PASTURE_TILES either way.
+    """
+    if count is not None:
+        return PASTURE_TILES[:count]
     return PASTURE_TILES[:max(animal_target(day), animals)]
 
 
@@ -563,6 +575,23 @@ class FieldRivalStrategy(Strategy):
         benchmark itself never prefers, so its decisions stay frozen (#181)."""
         return None
 
+    def pasture_count(self, day, animals):
+        """How many pasture tiles to keep in play this turn, or ``None`` for
+        the benchmark's own ramp-derived rule. A seam for contenders (#237).
+
+        `animals` is the head already standing on the board
+        (``count_animals(tiles)``) -- the *placed* count, which is the same
+        number `active_pastures` compares the ramp against, so it is passed
+        once rather than as two arguments that could disagree.
+        """
+        return None
+
+    def herd_target(self, day):
+        """Head to be running on `day`, or ``None`` for the frozen
+        `animal_target` ramp. A seam for contenders (#237); on the benchmark
+        it never fires, so its herd schedule stays frozen (#181)."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -577,7 +606,8 @@ class FieldRivalStrategy(Strategy):
 
         standing = standing_crops(tiles)
         animals = count_animals(tiles)
-        pastures = active_pastures(day, animals)
+        pastures = active_pastures(day, animals,
+                                   count=self.pasture_count(day, animals))
         herders = {worker: slot for slot, worker in enumerate(LIVESTOCK_WORKERS)}
 
         positions = [me["farmer"], *hands]
@@ -613,7 +643,8 @@ class FieldRivalStrategy(Strategy):
         market = market_orders(day, hour, me["money"], len(hands),
                                len(me.get("unlocked_quadrants") or ["NW"]),
                                animals, shed, seeds, empty, standing,
-                               caps=self.CAPS, prefer=self.herd_preference(obs))
+                               caps=self.CAPS, prefer=self.herd_preference(obs),
+                               target=self.herd_target(day))
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

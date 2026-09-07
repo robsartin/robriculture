@@ -587,3 +587,48 @@ def test_herder_walks_to_a_weeded_pasture_tile_to_dig_it():
     tiles[4][3] = {"kind": "WEED"}
     action = fr.herd_worker_action(((3, 4),), tiles, (4, 4), {"COW": 1}, {}, 0)
     assert action == fr.hh.step_toward((4, 4), (3, 4)), action
+
+
+# --- #237: the pasture / herd-target seams, and the frozen rule they default to ---
+
+def test_active_pastures_without_a_count_is_the_frozen_tile_count():
+    # A golden pin, not a restatement of the rule: the tile counts the ramp
+    # produces on an empty board at each breakpoint, written out. The #237
+    # seam adds a `count` argument; with none given these must not move.
+    assert [len(fr.active_pastures(d, 0)) for d in (0, 4, 8, 12, 16, 24)] == \
+        [1, 3, 4, 8, 10, 11]
+    # ... and never fewer than the head already standing on the board.
+    assert len(fr.active_pastures(0, 6)) == 6
+    assert fr.active_pastures(0, 6) == fr.PASTURE_TILES[:6]
+
+
+def test_active_pastures_with_a_count_takes_that_many_tiles():
+    # The seam: a contender's own count replaces the ramp-derived one, and the
+    # shed-adjacent tile ORDER is untouched -- it is still PASTURE_TILES' prefix.
+    assert fr.active_pastures(0, 0, count=3) == fr.PASTURE_TILES[:3]
+    assert fr.active_pastures(24, 11, count=1) == fr.PASTURE_TILES[:1]
+
+
+def test_the_benchmarks_pasture_hook_asks_for_the_frozen_rule():
+    # `None` means "the benchmark's own rule", so field_rival stays frozen (#181).
+    assert fr.FieldRivalStrategy().pasture_count(0, 0) is None
+    assert fr.FieldRivalStrategy().pasture_count(24, 11) is None
+
+
+def test_market_orders_without_a_target_buys_to_the_frozen_ramp():
+    # Golden pin on the other seam's default: the herd buy is the ramp's own.
+    orders = fr.market_orders(day=12, hour=1, money=50_000, hands=8, quadrants=2,
+                              animals=0, shed={}, seeds={}, empty_plots=0, standing={})
+    assert sum(1 for o in orders if o[0] == "BUY_ANIMAL") == 8
+
+
+def test_market_orders_with_a_target_buys_to_that_target():
+    orders = fr.market_orders(day=12, hour=1, money=50_000, hands=8, quadrants=2,
+                              animals=0, shed={}, seeds={}, empty_plots=0, standing={},
+                              target=10)
+    assert sum(1 for o in orders if o[0] == "BUY_ANIMAL") == 10
+
+
+def test_the_benchmarks_herd_hook_asks_for_the_frozen_ramp():
+    assert fr.FieldRivalStrategy().herd_target(0) is None
+    assert fr.FieldRivalStrategy().herd_target(24) is None
