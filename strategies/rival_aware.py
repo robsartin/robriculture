@@ -3,10 +3,11 @@
 
 `dense_farm` with one decision changed: once the other farm has placed
 SHEEP_THRESHOLD sheep, every animal we buy is a cow. Wool has one shop and
-floors past ~300 units between the two farms (#146); milk has three shops and
-570 season demand. Everything else -- crop caps, ramps, sells, land, feed --
-is `dense_farm`'s, through the `herd_preference` seam on the frozen benchmark
-(#181, #202).
+floors past ~300 units between the two farms (#146); milk has three shops
+whose opening days are seeded, so the town's draw is per-seed (#228 measured
+66-354 over eight seeds) and MILK floors 76 units above its anchor. Everything
+else -- crop caps, ramps, sells, land, feed -- is `dense_farm`'s, through the
+`herd_preference` seam on the frozen benchmark (#181, #202).
 
 Declared before measurement: the threshold, and the criterion in
 docs/superpowers/specs/2026-09-06-rival-aware-herd-design.md.
