@@ -5,7 +5,9 @@ Designation is by pool share (`harness/promotion.designate`), not round history 
 fixed anchor pool. This module keeps an append-only history of rounds as a
 committed record; `run_and_record` plays a round, appends it to that history,
 and then re-designates by delegating to `promotion.designate`. The history is no
-longer read for designation.
+longer read for designation. Since #241 the committed champion is a gate
+succession (`promotion.succeed`), and `save_champion` refuses to overwrite it
+with a pool-share body — this module's designation is then a ranking only.
 
 A round is:  {"round": int, "games": int, "results": {name: {"wins", "played"}}}
 Round ids are integer and increasing (no wall-clock — keeps the history
