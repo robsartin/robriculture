@@ -103,3 +103,53 @@ def census(farm, private):
         "weeds": sum(1 for t in _tiles(tiles) if t.get("kind") == "WEED"),
         "empty": sum(1 for row in tiles or [] for t in row if t is None),
     }
+
+
+def aggregate(turns):
+    """What a whole game's censuses say about placement (#237).
+
+    `turns` is ``[(day, census), ...]`` in order, one entry per turn the side
+    actually acted on -- the shape `census_series` below records. Two of these
+    readings are #237's declared mechanism-fired check: the first day pasture
+    reaches a threshold (read off `pasture_series` with
+    `harness.rival_bench.first_day_at_or_above`, which already answers exactly
+    that question) and how many turns head sat unplaced in the shed.
+
+    A turn counts as waiting when ANY head is held: one animal stuck in the
+    shed is a turn of waiting whether or not a second is stuck beside it.
+    """
+    series = [(day, c["structures"]["PASTURE"]["total"]) for day, c in turns]
+    return {
+        "turns": len(turns),
+        "turns_with_head_in_shed": sum(1 for _, c in turns if c["head_held"] > 0),
+        "pasture_series": series,
+        "max_pasture": max((n for _, n in series), default=0),
+        "max_head_placed": max((c["head_placed"] for _, c in turns), default=0),
+    }
+
+
+def census_series(agent_a, agent_b, seed, episode_steps=720):  # pragma: no cover
+    """Drive one seeded game and census BOTH farms every turn.
+
+    Each side is read off the observation it actually acted on, so each census
+    sees its own private shed -- an opponent's held head is not in our
+    observation at all, and reading both boards from one seat would report the
+    rival's waiting head as zero.
+
+    `episode_steps` configures the total state count, which is the reset state
+    plus ``episode_steps - 1`` `env.step()` calls (`harness.state_set`); calling
+    step() `episode_steps` times overruns an already-done env.
+
+    Returns ``(ours, theirs)``, each ``[(day, census), ...]``.
+    """
+    from kaggle_environments import make
+    env = make("kaggriculture", configuration={"episodeSteps": episode_steps, "seed": seed})
+    env.reset(2)
+    ours, theirs = [], []
+    for _ in range(episode_steps - 1):
+        obs0 = env.state[0].observation
+        obs1 = env.state[1].observation
+        ours.append((obs0.get("day", 0), census(obs0["farms"][obs0["player"]], obs0["private"])))
+        theirs.append((obs1.get("day", 0), census(obs1["farms"][obs1["player"]], obs1["private"])))
+        env.step([agent_a(obs0), agent_b(obs1)])
+    return ours, theirs

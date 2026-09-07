@@ -107,3 +107,51 @@ def test_census_should_survive_a_farm_with_no_private_state_at_all():
     out = fc.census(farm, None)
     assert out["animals_held"] == {} and out["head_held"] == 0
     assert out["hands"] == 0 and out["empty"] == 1
+
+
+# --- the per-turn aggregate (#237) -------------------------------------------
+
+def _turn(day, pasture_total=0, head_held=0, head_placed=0):
+    """One `(day, census)` pair, only the fields `aggregate` reads."""
+    return day, {"head_held": head_held, "head_placed": head_placed,
+                 "structures": {"PASTURE": {"total": pasture_total, "free": 0},
+                                "COOP": {"total": 0, "free": 0}}}
+
+
+def test_aggregate_should_count_the_turns_head_waited_in_the_shed():
+    # #234's headline reading: bought head sitting unplaced. A turn counts when
+    # ANY head is held, however many -- it is a turn of waiting either way.
+    turns = [_turn(0, head_held=0), _turn(0, head_held=1), _turn(1, head_held=3)]
+    assert fc.aggregate(turns)["turns_with_head_in_shed"] == 2
+
+
+def test_aggregate_should_count_no_waiting_turns_when_the_shed_is_always_empty():
+    # Zero must be reachable, or the count cannot distinguish a farm that
+    # places every head from a dead instrument.
+    turns = [_turn(0), _turn(1), _turn(2)]
+    assert fc.aggregate(turns)["turns_with_head_in_shed"] == 0
+    assert fc.aggregate(turns)["turns"] == 3
+
+
+def test_aggregate_should_report_the_pasture_tiles_per_turn_in_order():
+    # The series `first_day_at_or_above` reads to answer "when did the 5th
+    # pasture tile appear" -- (day, tiles), one entry per acted turn.
+    turns = [_turn(0, pasture_total=1), _turn(1, pasture_total=3),
+             _turn(2, pasture_total=5)]
+    assert fc.aggregate(turns)["pasture_series"] == [(0, 1), (1, 3), (2, 5)]
+
+
+def test_aggregate_should_report_the_peaks_of_pasture_and_placed_head():
+    turns = [_turn(0, pasture_total=1, head_placed=0),
+             _turn(4, pasture_total=8, head_placed=6),
+             _turn(9, pasture_total=5, head_placed=4)]
+    out = fc.aggregate(turns)
+    assert out["max_pasture"] == 8 and out["max_head_placed"] == 6
+
+
+def test_aggregate_should_read_an_empty_game_as_zeros_rather_than_crash():
+    # A driver that recorded nothing must report nothing, not raise -- an
+    # exception here would be indistinguishable from a failed game.
+    assert fc.aggregate([]) == {"turns": 0, "turns_with_head_in_shed": 0,
+                                "pasture_series": [], "max_pasture": 0,
+                                "max_head_placed": 0}
