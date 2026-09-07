@@ -47,9 +47,13 @@ def test_load_manifest_reads_the_committed_manifest():
 
 
 def test_manifest_excludes_the_rejected_candidate_v7_plus_variants():
-    """The v7_public_v18/v19/v20/v21 blob-replayers were explicitly rejected (#78)."""
+    """The Seyamalam candidate_v7_public_v18/v19/v20/v21 blob-replayers were
+    explicitly rejected (#78). Scoped to that repo, not a blanket substring
+    search over every entry's path -- lonespear/kaggriculture's legitimately
+    vendored `main_v21.py` (#229) coincidentally contains "v21" too, and a
+    repo-agnostic check would misfire on it."""
     entries = fea.load_manifest()
-    paths = [e.get("path", "") for e in entries]
+    paths = [e.get("path", "") for e in entries if e.get("repo") == "Seyamalam/Kaggriculture"]
     assert not any("v7" in p or "v18" in p or "v19" in p or "v20" in p or "v21" in p for p in paths)
 
 
@@ -61,14 +65,15 @@ def test_manifest_pins_the_premaananda_agent_cell():
     assert entry["cell_file"] == "main.py"
 
 
-def test_manifest_takes_only_the_two_measured_shashankjangid_rungs():
+def test_manifest_takes_only_the_three_measured_shashankjangid_rungs():
     # 57 agent files in that repo; v300 (~0.536 share) and v1000 (~0.677) were
     # chosen by measurement against DEFAULT_ANCHORS. v1500 measures within noise
-    # of v1000 and must not be added alongside it.
+    # of v1000 and must not be added alongside it. v9 (#229) is a third rung,
+    # explicitly recorded (#151) as beating v100_sota despite its low number.
     entries = fea.load_manifest()
     paths = {e.get("path") for e in entries
              if e.get("repo") == "ShashankJangid/kaggriculture-agent"}
-    assert paths == {"agent_v300_champion.py", "agent_v1000_sovereign_prime.py"}
+    assert paths == {"agent_v300_champion.py", "agent_v1000_sovereign_prime.py", "agent_v9.py"}
 
 
 # --- load_manifest: pure parsing ---
@@ -186,6 +191,45 @@ def test_extract_agent_cell_raises_when_cell_file_matches_nothing():
         fea.extract_agent_cell(notebook, "typo.py")
 
 
+# --- extract_agent_cell: cell_index, for notebooks that never tag a cell with
+# %%agentfile/%%writefile at all (#229). The 2026-09-06 survey found real
+# candidates -- chaimaamatrag/kaggriculture-competition, dianatofficial's and
+# paiky1995's notebooks -- whose submittable agent sits in a plain code cell
+# with no cell magic; cell_file's tag-matching has nothing to match. cell_index
+# selects a cell by its position in the raw `cells` list directly, bypassing
+# the tag search, and returns it verbatim (there is no magic line to strip).
+
+def test_extract_agent_cell_returns_the_cell_at_cell_index_with_no_tag_present():
+    notebook = {"cells": [
+        {"cell_type": "markdown", "source": ["# no tags anywhere\n"]},
+        {"cell_type": "code", "source": ["def agent(obs):\n", "    return {}\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook, cell_index=1) == "def agent(obs):\n    return {}\n"
+
+
+def test_extract_agent_cell_cell_index_ignores_untagged_first_lines():
+    """Unlike the tag-search path, cell_index never strips a first line --
+    there is no magic to strip when the notebook doesn't use the convention."""
+    notebook = {"cells": [
+        {"cell_type": "code", "source": ["x = 1\n", "def apex_agent(obs):\n", "    return x\n"]},
+    ]}
+    assert fea.extract_agent_cell(notebook, cell_index=0) == (
+        "x = 1\ndef apex_agent(obs):\n    return x\n"
+    )
+
+
+def test_extract_agent_cell_raises_when_cell_index_is_out_of_range():
+    notebook = {"cells": [{"cell_type": "code", "source": ["x = 1\n"]}]}
+    with pytest.raises(ValueError, match="out of range"):
+        fea.extract_agent_cell(notebook, cell_index=5)
+
+
+def test_extract_agent_cell_raises_when_cell_index_targets_a_non_code_cell():
+    notebook = {"cells": [{"cell_type": "markdown", "source": ["# hi\n"]}]}
+    with pytest.raises(ValueError, match="not a code cell"):
+        fea.extract_agent_cell(notebook, cell_index=0)
+
+
 # --- fetch_github_file: DI over `runner` ---
 
 def test_fetch_github_file_writes_the_raw_content(tmp_path):
@@ -230,6 +274,19 @@ def test_fetch_kaggle_kernel_extracts_the_agent_cell(tmp_path):
     path = fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=_fake_kaggle_pull(notebook))
     assert path == str(tmp_path / "foo.py")
     assert (tmp_path / "foo.py").read_text() == "def agent(obs):\n    pass\n"
+
+
+def test_fetch_kaggle_kernel_honours_cell_index_from_the_entry(tmp_path):
+    """chaimaamatrag's notebook (#229) never tags a cell -- cell_index must
+    reach extract_agent_cell so the agent cell can still be selected."""
+    notebook = {"cells": [
+        {"cell_type": "markdown", "source": ["# preamble\n"]},
+        {"cell_type": "code", "source": ["def agent(obs):\n", "    return {}\n"]},
+    ]}
+    entry = {"name": "foo", "kernel_ref": "someone/kernel",
+             "dest_filename": "foo.py", "cell_index": 1}
+    path = fea.fetch_kaggle_kernel(entry, str(tmp_path), runner=_fake_kaggle_pull(notebook))
+    assert (tmp_path / "foo.py").read_text() == "def agent(obs):\n    return {}\n"
 
 
 def test_fetch_kaggle_kernel_honours_cell_file_from_the_entry(tmp_path):
@@ -347,6 +404,30 @@ def test_fetch_kaggle_kernel_uses_resolved_command_not_bare_kaggle(tmp_path, mon
     assert seen["args"] != ["kaggle"]
 
 
+# --- append_entrypoint_alias: bind a non-standard entrypoint to `agent` (#229) ---
+#
+# harness.external_pool only ever loads a callable module-level `agent` --
+# that loader's contract does not change for one manifest entry. Some
+# vendorable notebooks/files define their submittable callable under a
+# different name (`apex_agent`) or only via a parameterised factory
+# (`make_farm_agent(sell_mode)`); an optional manifest `entrypoint` field
+# names the expression that should be bound to `agent`, appended as the last
+# line of the fetched file.
+
+def test_append_entrypoint_alias_appends_an_agent_binding(tmp_path):
+    p = tmp_path / "foo.py"
+    p.write_text("def apex_agent(obs):\n    return {}\n")
+    fea.append_entrypoint_alias(str(p), "apex_agent")
+    assert p.read_text() == "def apex_agent(obs):\n    return {}\n\n\nagent = apex_agent\n"
+
+
+def test_append_entrypoint_alias_supports_a_factory_call_expression(tmp_path):
+    p = tmp_path / "foo.py"
+    p.write_text("def make_farm_agent(sell_mode):\n    return sell_mode\n")
+    fea.append_entrypoint_alias(str(p), 'make_farm_agent("daily")')
+    assert p.read_text().endswith('\n\nagent = make_farm_agent("daily")\n')
+
+
 # --- fetch_one: dispatch + meta sidecar ---
 
 def test_fetch_one_dispatches_github_file_and_writes_meta(tmp_path):
@@ -374,6 +455,30 @@ def test_fetch_one_raises_on_an_unknown_source_type(tmp_path):
     entry = {"name": "foo", "source_type": "carrier_pigeon", "dest_filename": "foo.py"}
     with pytest.raises(ValueError, match="carrier_pigeon"):
         fea.fetch_one(entry, str(tmp_path))
+
+
+def test_fetch_one_applies_the_entrypoint_alias_when_the_entry_declares_one(tmp_path):
+    """naisha123's file (#229) defines its submittable callable as `my_agent`,
+    not `agent` -- fetch_one must append the alias so the downloaded file
+    resolves under harness.external_pool's fixed `agent` contract."""
+    entry = {
+        "name": "foo", "source_type": "github_file", "repo": "someone/repo", "path": "a.py",
+        "dest_filename": "foo.py", "license": "MIT", "attribution": "attr", "url": "https://x",
+        "entrypoint": "my_agent",
+    }
+    fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout="def my_agent(obs):\n    pass\n"))
+    assert (tmp_path / "foo.py").read_text() == (
+        "def my_agent(obs):\n    pass\n\n\nagent = my_agent\n"
+    )
+
+
+def test_fetch_one_does_not_append_anything_when_no_entrypoint_is_declared(tmp_path):
+    entry = {
+        "name": "foo", "source_type": "github_file", "repo": "someone/repo", "path": "a.py",
+        "dest_filename": "foo.py", "license": "MIT", "attribution": "attr", "url": "https://x",
+    }
+    fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout="def agent(obs):\n    pass\n"))
+    assert (tmp_path / "foo.py").read_text() == "def agent(obs):\n    pass\n"
 
 
 # --- failure_summary: names the missing agents, not just a count (#92) ---
