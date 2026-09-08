@@ -596,3 +596,14 @@ def test_fresh_refuses_a_file_that_changed_on_disk_since_discovery(tmp_path):
     (tmp_path / "x.py").write_text(_GOOD + "# edited\n")
     with pytest.raises(RuntimeError, match="changed on disk"):
         opp.fresh()
+
+
+def test_external_anchor_agents_returns_reloading_wrappers_for_the_designate_path(tmp_path):
+    """`promotion.designation_inputs` keeps these callables for a whole ranking run and
+    plays them as both candidate and opponent; they must reload per game like the
+    discovered pool does."""
+    (tmp_path / "x.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    agents = external_pool.external_anchor_agents(("x",), str(tmp_path), manifest)
+    assert agents["x"].fresh() is agents["x"]
+    assert external_pool._source_of(agents["x"]) == str(tmp_path / "x.py")

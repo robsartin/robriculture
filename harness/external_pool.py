@@ -392,13 +392,16 @@ def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
     for a caller that serves its own pool -- injected or loaded, the bytes the
     callable actually came from are re-checked against the pin below, so
     injection can never bypass verification.
+
+    Each is a `FreshPerGame` wrapper: `--designate` keeps them for the whole
+    ranking run and `opponent_record` reloads them between games (#247).
     """
     paths = external_anchor_paths(names, directory, manifest_path)
     if discover_fn is None:
         found = {}
         for name, path in paths.items():
             try:
-                found[name] = load_external_agent(path)
+                found[name] = FreshPerGame(path, load_external_agent(path))
             except Exception as exc:   # a stranger's code -- refuse, and say why
                 raise RuntimeError(
                     f"gate anchor(s) failed to import: {name} ({exc!r}). The file verified "
