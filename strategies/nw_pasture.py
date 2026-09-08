@@ -22,10 +22,14 @@ own, so the herders' shed walk is unchanged. A layout change alone is inert
 before day 12 -- the frozen ramp asks four head and five tiles hold it --
 which is why #244's `FRONT_RAMP` rides along, inherited.
 
-The visible cost: NW keeps thirteen crop tiles instead of the sixteen the
-champion works before day 12; crop slot 3 is `(0, 0)` plus three NE tiles,
-so its hand works one tile until NE opens. The crop-line control in
-`harness/layout_bench.py` measures exactly that.
+The visible cost: on days 0-7 the champion's five crop hands work all
+twenty NW crop tiles; this layout leaves thirteen -- crop slot 3 is `(0, 0)`
+plus three NE tiles and slot 4 is wholly NE, both locked until NE opens on
+day 12, so one crop hand idles for eight days. From day 8 the gap is three
+(the third herder takes a crop hand on both sides). The day-16 crop-line
+control in `harness/layout_bench.py` cannot see that deficit -- by then both
+layouts expose the same tiles -- so the bench records planted tiles at day 8
+beside the controls.
 
 Declared before measurement: `PASTURE_BLOCK`, and the controls and criterion
 in `harness/layout_bench.py` (posted to #246 before any code).
