@@ -607,3 +607,14 @@ def test_external_anchor_agents_returns_reloading_wrappers_for_the_designate_pat
     agents = external_pool.external_anchor_agents(("x",), str(tmp_path), manifest)
     assert agents["x"].fresh() is agents["x"]
     assert external_pool._source_of(agents["x"]) == str(tmp_path / "x.py")
+
+
+def test_load_external_agent_unregisters_its_module_once_the_agent_is_built(tmp_path):
+    """The uuid-named module is needed in sys.modules only while the file executes
+    (slotted dataclasses resolve annotations through it); left registered, a long
+    evolve run leaks one large module per game. The agent keeps its own globals."""
+    (tmp_path / "x.py").write_text(_GOOD)
+    before = {m for m in sys.modules if m.startswith("_external_agent_x_")}
+    agent = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    assert {m for m in sys.modules if m.startswith("_external_agent_x_")} == before
+    assert callable(agent) and external_pool._source_of(agent) == str(tmp_path / "x.py")

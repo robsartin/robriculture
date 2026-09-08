@@ -140,6 +140,10 @@ def load_external_agent(path):
         # The unique name is this function's own; nothing else can clean it up.
         sys.modules.pop(module_name, None)
         raise
+    # Registered only for the duration of exec (see above); the callable keeps
+    # its own module globals alive, and leaving the name behind leaks one module
+    # per game on the reloading paths (#247).
+    sys.modules.pop(module_name, None)
     return candidate
 
 
