@@ -202,12 +202,18 @@ def _crop_slot(worker: int, workers=LIVESTOCK_WORKERS):
     return worker if worker < LIVESTOCK_WORKERS[0] else worker - len(LIVESTOCK_WORKERS)
 
 
-def crop_cluster(worker: int, workers=LIVESTOCK_WORKERS):
-    """The tiles worker `worker` is responsible for -- ``()`` for a herder."""
+def crop_cluster(worker: int, workers=LIVESTOCK_WORKERS, crops=CROP_TILES):
+    """The tiles worker `worker` is responsible for -- ``()`` for a herder.
+
+    `crops` is the crop layout in slot order (#246); the module default is
+    the frozen `CROP_TILES`, so `field_rival` stays frozen (#181). The slot
+    LAYOUT still comes from `_crop_slot` -- a contender's layout changes which
+    tiles a slot holds, never which worker holds a slot.
+    """
     slot = _crop_slot(worker, workers)
     if slot is None:
         return ()
-    return CROP_TILES[slot * CLUSTER:(slot + 1) * CLUSTER]
+    return crops[slot * CLUSTER:(slot + 1) * CLUSTER]
 
 
 TURNS_PER_DAY = hh.TURNS_PER_DAY
@@ -332,7 +338,8 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
-                  empty_plots, standing=None, caps=None, prefer=None, target=None):
+                  empty_plots, standing=None, caps=None, prefer=None, target=None,
+                  land=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -345,6 +352,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
 
     `target`: head to be running on `day`, overriding `animal_target` for this
     turn (#237, used only by the placebo arm); `None` keeps the frozen ramp.
+
+    `land`: quadrants to own today, or ``None`` for the frozen `land_target` ramp (#246).
     """
     sells: list = []
     buys: list = []
@@ -372,7 +381,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             buys.append(["HIRE"])
             budget -= wage
 
-    if quadrants < land_target(day) and quadrants - 1 < len(economy.LAND_COSTS):
+    want_land = land_target(day) if land is None else land
+    if quadrants < want_land and quadrants - 1 < len(economy.LAND_COSTS):
         cost = economy.LAND_COSTS[quadrants - 1]
         if budget >= cost:
             buys.append(["BUY_LAND"])
@@ -511,7 +521,7 @@ def herd_worker_action(pastures, tiles, pos, inv, shed, hour):
     return ["PASS"]
 
 
-def active_pastures(day: int, animals: int, count=None):
+def active_pastures(day: int, animals: int, count=None, block=PASTURE_TILES):
     """Pasture tiles in play today -- the ramp's target, never fewer than the
     head already on the board (an animal must keep being fed after the ramp
     flattens).
@@ -519,11 +529,12 @@ def active_pastures(day: int, animals: int, count=None):
     `count`: how many tiles a contender wants standing this turn (#237);
     ``None`` keeps the benchmark's own rule, so field_rival stays frozen
     (#181). The tile ORDER is not a seam -- it is always the shed-adjacent
-    prefix of PASTURE_TILES either way.
+    prefix of the block either way. `block` is the pasture layout (#246); the
+    module default is the frozen `PASTURE_TILES`.
     """
     if count is not None:
-        return PASTURE_TILES[:count]
-    return PASTURE_TILES[:max(animal_target(day), animals)]
+        return block[:count]
+    return block[:max(animal_target(day), animals)]
 
 
 def standing_crops(tiles) -> dict:
@@ -613,6 +624,23 @@ class FieldRivalStrategy(Strategy):
         """
         return None
 
+    def layout(self):
+        """``(pasture_tiles, crop_tiles)`` for this farm, or ``None`` for the
+        frozen `(PASTURE_TILES, CROP_TILES)`. A seam for contenders (#246).
+
+        The pasture block is what `active_pastures` takes its prefix from and
+        the crop tiles are what `crop_cluster` slices by slot; the two must be
+        disjoint. On the benchmark it never fires, so its layout stays frozen
+        (#181).
+        """
+        return None
+
+    def land_target(self, day):
+        """Quadrants to own on `day`, or ``None`` for the frozen `land_target`
+        ramp. A seam for contenders (#246); on the benchmark it never fires,
+        so its land schedule stays frozen (#181)."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -627,8 +655,9 @@ class FieldRivalStrategy(Strategy):
 
         standing = standing_crops(tiles)
         animals = count_animals(tiles)
+        block, crops = self.layout() or (PASTURE_TILES, CROP_TILES)
         pastures = active_pastures(day, animals,
-                                   count=self.pasture_count(day, animals))
+                                   count=self.pasture_count(day, animals), block=block)
         workers = self.livestock_workers(day) or LIVESTOCK_WORKERS
         herders = {worker: slot for slot, worker in enumerate(workers)}
 
@@ -644,7 +673,7 @@ class FieldRivalStrategy(Strategy):
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
             crop = crop_for_plot(day, standing, caps=self.CAPS)
-            action = crop_worker_action(crop_cluster(i, workers), tiles, pos, inv,
+            action = crop_worker_action(crop_cluster(i, workers, crops=crops), tiles, pos, inv,
                                         crop, day, hour)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
@@ -659,7 +688,7 @@ class FieldRivalStrategy(Strategy):
 
         empty = 0
         for i in range(len(positions)):
-            for tile_xy in crop_cluster(i, workers):
+            for tile_xy in crop_cluster(i, workers, crops=crops):
                 if _tile_at(tiles, tile_xy) is None:
                     empty += 1
 
@@ -667,7 +696,7 @@ class FieldRivalStrategy(Strategy):
                                len(me.get("unlocked_quadrants") or ["NW"]),
                                animals, shed, seeds, empty, standing,
                                caps=self.CAPS, prefer=self.herd_preference(obs),
-                               target=self.herd_target(day))
+                               target=self.herd_target(day), land=self.land_target(day))
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
