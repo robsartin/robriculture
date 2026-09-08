@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 import sys
@@ -102,6 +103,27 @@ def verify_pins(directory=DEFAULT_DIR, manifest_path=MANIFEST_PATH):
         else:
             states[stem] = "mismatch"
     return states
+
+
+def _source_of(agent):
+    """The file an agent callable was imported from, or None if unknowable."""
+    module = inspect.getmodule(agent)
+    return getattr(module, "__file__", None)
+
+
+def mismatched_sources(agents, pins):
+    """Names in `agents` whose pin does not match the bytes of the file the
+    agent was imported from (#152 review). A name with no pin is skipped;
+    a pinned agent with no discoverable source counts as a mismatch."""
+    bad = []
+    for name, agent in agents.items():
+        pin = pins.get(name)
+        if not pin:
+            continue
+        source = _source_of(agent)
+        if source is None or not os.path.isfile(source) or file_sha256(source) != pin:
+            bad.append(name)
+    return sorted(bad)
 
 
 def _manifest_stems(manifest_path=MANIFEST_PATH):
@@ -212,7 +234,9 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
                 raise RuntimeError(message)
             warn(message)
         states = verify_pins(directory, manifest_path)
-        mismatched = sorted(n for n, s in states.items() if s == "mismatch")
+        mismatched = sorted(set(
+            n for n, s in states.items() if s == "mismatch"
+        ) | set(mismatched_sources(external, manifest_pins(manifest_path))))
         if mismatched:
             # Never downgraded by allow_partial: a short pool is a known-partial
             # pool, a mismatched file is code nobody reviewed (#152).
@@ -256,4 +280,12 @@ def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
     absent = [n for n in names if n not in found]
     if absent:
         raise RuntimeError(f"gate anchor(s) failed to import: {', '.join(absent)}")
+    mismatched = mismatched_sources({n: found[n] for n in names}, manifest_pins(manifest_path))
+    if mismatched:
+        raise RuntimeError(
+            f"external agent(s) on disk do not match the manifest pin: "
+            f"{', '.join(mismatched)}. Re-run scripts/fetch_external_agents.py (it "
+            "refuses a mismatch); if the author published a new version you have "
+            "checked, re-pin with --pin and commit the manifest."
+        )
     return {n: found[n] for n in names}

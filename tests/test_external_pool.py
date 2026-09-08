@@ -395,3 +395,34 @@ def test_external_anchor_agents_raises_when_a_verified_file_does_not_import(tmp_
     with pytest.raises(RuntimeError, match="failed to import.*x"):
         external_pool.external_anchor_agents(
             names=("x",), directory=str(tmp_path), manifest_path=manifest)
+
+
+def test_resolve_opponents_verifies_the_file_each_discovered_agent_came_from(tmp_path):
+    """The reviewer's scenario: discovery injected, `directory` left alone, a pinned
+    name served from a tampered file elsewhere. The pin is checked against the bytes
+    the agent was actually imported from, so it still raises."""
+    import pytest
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x.py").write_text(_GOOD + "# tampered\n")
+    served = external_pool.discover_external_agents(str(elsewhere))
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    with pytest.raises(RuntimeError, match="do not match the manifest pin.*x"):
+        external_pool.resolve_opponents(
+            ["meta_bot"], include_external=True, discover_fn=lambda: served,
+            build=lambda names: {n: _stub(n) for n in names}, manifest_path=manifest)
+
+
+def test_external_anchor_agents_verifies_the_file_each_anchor_was_imported_from(tmp_path):
+    import pytest
+
+    (tmp_path / "x.py").write_text(_GOOD)                      # verifies on disk ...
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x.py").write_text(_GOOD + "# tampered\n")    # ... but discovery serves this
+    served = external_pool.discover_external_agents(str(elsewhere))
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    with pytest.raises(RuntimeError, match="do not match the manifest pin.*x"):
+        external_pool.external_anchor_agents(
+            names=("x",), directory=str(tmp_path), manifest_path=manifest, discover_fn=lambda: served)
