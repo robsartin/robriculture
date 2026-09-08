@@ -338,7 +338,8 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
-                  empty_plots, standing=None, caps=None, prefer=None, target=None):
+                  empty_plots, standing=None, caps=None, prefer=None, target=None,
+                  land=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -351,6 +352,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
 
     `target`: head to be running on `day`, overriding `animal_target` for this
     turn (#237, used only by the placebo arm); `None` keeps the frozen ramp.
+
+    `land`: quadrants to own today, or ``None`` for the frozen `land_target` ramp (#246).
     """
     sells: list = []
     buys: list = []
@@ -378,7 +381,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             buys.append(["HIRE"])
             budget -= wage
 
-    if quadrants < land_target(day) and quadrants - 1 < len(economy.LAND_COSTS):
+    want_land = land_target(day) if land is None else land
+    if quadrants < want_land and quadrants - 1 < len(economy.LAND_COSTS):
         cost = economy.LAND_COSTS[quadrants - 1]
         if budget >= cost:
             buys.append(["BUY_LAND"])
@@ -631,6 +635,12 @@ class FieldRivalStrategy(Strategy):
         """
         return None
 
+    def land_target(self, day):
+        """Quadrants to own on `day`, or ``None`` for the frozen `land_target`
+        ramp. A seam for contenders (#246); on the benchmark it never fires,
+        so its land schedule stays frozen (#181)."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -686,7 +696,7 @@ class FieldRivalStrategy(Strategy):
                                len(me.get("unlocked_quadrants") or ["NW"]),
                                animals, shed, seeds, empty, standing,
                                caps=self.CAPS, prefer=self.herd_preference(obs),
-                               target=self.herd_target(day))
+                               target=self.herd_target(day), land=self.land_target(day))
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

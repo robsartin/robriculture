@@ -701,3 +701,28 @@ def test_crop_cluster_with_crops_slices_that_layout():
     assert fr.crop_cluster(0, crops=crops) == crops[0:4]
     assert fr.crop_cluster(1, crops=crops) == ()                     # a herder has no cluster
     assert fr.crop_cluster(5) == fr.CROP_TILES[12:16]                # default is the frozen layout
+
+# --- #246: the land seam, and the frozen ramp it defaults to ---
+
+def _land_orders(day, quadrants, **kw):
+    orders = fr.market_orders(day=day, hour=1, money=50_000, hands=8, quadrants=quadrants,
+                              animals=0, shed={}, seeds={}, empty_plots=0, standing={}, **kw)
+    return [o for o in orders if o[0] == "BUY_LAND"]
+
+
+def test_the_benchmarks_land_hook_asks_for_the_frozen_ramp():
+    # `None` means "the benchmark's own ramp", so field_rival stays frozen (#181).
+    assert fr.FieldRivalStrategy().land_target(0) is None
+    assert fr.FieldRivalStrategy().land_target(12) is None
+
+
+def test_market_orders_without_land_buys_on_the_frozen_ramp():
+    # Golden pin on the default: NE is bought on day 12 and not on day 6.
+    assert _land_orders(12, 1) == [["BUY_LAND"]]
+    assert _land_orders(6, 1) == []
+
+
+def test_market_orders_with_land_buys_to_that_target():
+    # The seam: a contender's own quadrant target replaces the ramp's.
+    assert _land_orders(6, 1, land=2) == [["BUY_LAND"]]
+    assert _land_orders(12, 1, land=1) == []
