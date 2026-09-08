@@ -191,17 +191,34 @@ def paired_external_rows(contender, champion, seeds, names=None, play=None, agen
             for name in names]
 
 
-def _gate_agents():  # pragma: no cover -- the registry plus the gitignored, pinned externals
+def _gate_agents(paths=None, registry=None):
     """`head_to_head_rate`'s agents hook: registry names from the registry,
-    anchor names from `external_anchor_agents()` (which refuses an unverified pool)."""
-    from harness.external_pool import external_anchor_agents
+    anchor names loaded **fresh from their verified file on every call**.
+
+    The pool is verified once (`external_anchor_paths`, which refuses a
+    missing/unpinned/mismatched anchor) and then re-imported per game. A
+    stranger's agent may keep module-level state across calls, and
+    `paired_external_rows` plays the contender's whole seed set before the
+    champion's -- one shared callable would hand the champion an opponent that
+    had already played 16 games and the contender a cold one, biasing exactly
+    the paired comparison this limb exists to make (#152 review). The registry
+    is fresh per game for the same reason (`triage._default_agents`).
+
+    `paths` and `registry` are injected by the tests; live, both are resolved
+    from the pinned pool and the strategy registry.
+    """
+    from harness.external_pool import external_anchor_paths, load_external_agent
     from harness.triage import _default_agents
 
-    registry = _default_agents()
-    externals = external_anchor_agents()
+    if paths is None:
+        paths = external_anchor_paths()
+    if registry is None:
+        registry = _default_agents()
 
     def agents(name):
-        return externals[name] if name in externals else registry(name)
+        if name in paths:
+            return load_external_agent(paths[name])
+        return registry(name)
     return agents
 
 

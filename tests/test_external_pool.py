@@ -426,3 +426,82 @@ def test_external_anchor_agents_verifies_the_file_each_anchor_was_imported_from(
     with pytest.raises(RuntimeError, match="do not match the manifest pin.*x"):
         external_pool.external_anchor_agents(
             names=("x",), directory=str(tmp_path), manifest_path=manifest, discover_fn=lambda: served)
+
+
+# --- a fresh callable per load, and a source read off the callable (#152 review) ---
+
+
+def test_load_external_agent_returns_a_fresh_callable_each_call(tmp_path):
+    """The gate serves a fresh callable per game, like the registry does, so
+    state a competitor keeps across calls cannot leak between games."""
+    (tmp_path / "x.py").write_text("calls = []\ndef agent(obs, config=None):\n    calls.append(1)\n    return len(calls)\n")
+    first = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    second = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    assert first({}) == 1 and first({}) == 2
+    assert second({}) == 1                        # its own module, its own state
+    assert external_pool._source_of(second) == str(tmp_path / "x.py")
+
+
+def test_source_of_reads_the_file_off_the_callable_not_the_module_registry(tmp_path):
+    import functools
+
+    (tmp_path / "x.py").write_text(_GOOD)
+    agent = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    (tmp_path / "y.py").write_text(_GOOD)
+    external_pool.load_external_agent(str(tmp_path / "y.py"))   # a later load must not redirect x
+    assert external_pool._source_of(agent) == str(tmp_path / "x.py")
+    assert external_pool._source_of(functools.partial(agent, config=None)) == str(tmp_path / "x.py")
+
+
+def test_source_of_handles_a_callable_instance(tmp_path):
+    (tmp_path / "x.py").write_text(
+        "class _A:\n    def __call__(self, obs, config=None):\n        return {}\nagent = _A()\n")
+    agent = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    assert external_pool._source_of(agent) == str(tmp_path / "x.py")
+
+
+def test_mismatched_sources_does_not_flag_a_partial_over_a_pinned_file(tmp_path):
+    import functools
+
+    (tmp_path / "x.py").write_text(_GOOD)
+    agent = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    pins = {"x": _sha(_GOOD)}
+    assert external_pool.mismatched_sources({"x": functools.partial(agent, config=None)}, pins) == []
+
+
+def test_external_anchor_paths_returns_the_verified_path_per_anchor_without_importing(tmp_path):
+    """The gate verifies once and loads per game, so the path lookup must not
+    import: a file that explodes on import still yields its path."""
+    boom = "raise RuntimeError('imported!')\n"
+    (tmp_path / "a.py").write_text(boom)
+    manifest = _write_pinned_manifest(tmp_path, {"a": _sha(boom)})
+    assert external_pool.external_anchor_paths(
+        names=("a",), directory=str(tmp_path), manifest_path=manifest) == {
+            "a": str(tmp_path / "a.py")}
+
+
+def test_external_anchor_paths_refuses_an_unverified_anchor(tmp_path):
+    import pytest
+
+    manifest = _write_pinned_manifest(tmp_path, {"a": _sha(_GOOD)})
+    with pytest.raises(RuntimeError, match="not verified.*a \\(missing\\)"):
+        external_pool.external_anchor_paths(
+            names=("a",), directory=str(tmp_path), manifest_path=manifest)
+
+
+def test_load_external_agent_leaves_no_module_registered_when_the_file_is_bad(tmp_path):
+    """The unique module name is registered before exec (slotted dataclasses);
+    a failed load must not leave that placeholder behind. The old fixed name
+    made this visible to `test_discover_skips_a_file_that_fails_to_import`;
+    with a uuid in the name, only a prefix scan can still see it."""
+    import pytest
+
+    before = {m for m in sys.modules if m.startswith("_external_agent_")}
+    (tmp_path / "broken.py").write_text("def agent(:\n    pass\n")   # syntax error
+    (tmp_path / "no_agent.py").write_text("x = 1\n")
+    with pytest.raises(SyntaxError):
+        external_pool.load_external_agent(str(tmp_path / "broken.py"))
+    with pytest.raises(ValueError, match="no callable module-level"):
+        external_pool.load_external_agent(str(tmp_path / "no_agent.py"))
+    leaked = {m for m in sys.modules if m.startswith("_external_agent_")} - before
+    assert leaked == set()

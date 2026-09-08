@@ -31,12 +31,13 @@ can still opt into a known-partial pool, but never falls into one by accident
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
-import inspect
 import json
 import os
 import sys
+import uuid
 
 #: Where scripts/fetch_external_agents.py downloads by default; kept in sync
 #: with the .gitignore entry and the fetch script's own default destination.
@@ -105,10 +106,63 @@ def verify_pins(directory=DEFAULT_DIR, manifest_path=MANIFEST_PATH):
     return states
 
 
+def load_external_agent(path):
+    """Import `path` under a unique module name; return its module-level `agent`.
+
+    A **fresh** callable per call: every load builds its own module object, so
+    whatever state a stranger's agent keeps across calls cannot leak from one
+    game into the next -- the registry already hands out a new strategy
+    instance per game (`harness.triage._default_agents`), and the paired
+    external limb (#152) is exactly the comparison such leakage would bias.
+
+    Import errors propagate; a file with no callable module-level `agent`
+    raises `ValueError`. `discover_external_agents` is the lenient caller that
+    turns both into a skip-with-warning.
+    """
+    fname = os.path.basename(path)
+    stem = fname[: -len(".py")] if fname.endswith(".py") else fname
+    module_name = f"_external_agent_{stem}_{uuid.uuid4().hex}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    # Register before exec: a module-level `@dataclass(slots=True)` under
+    # `from __future__ import annotations` resolves its (stringified)
+    # field annotations via `sys.modules[cls.__module__]` while the class
+    # body runs. Skipping this step makes that lookup return None and
+    # crashes the import with an unrelated AttributeError (#151) -- a
+    # failure a hand-written fake agent would never trigger.
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+        candidate = getattr(module, "agent", None)
+        if not callable(candidate):
+            raise ValueError(f"{path!r} has no callable module-level `agent`")
+    except BaseException:
+        # The unique name is this function's own; nothing else can clean it up.
+        sys.modules.pop(module_name, None)
+        raise
+    return candidate
+
+
 def _source_of(agent):
-    """The file an agent callable was imported from, or None if unknowable."""
-    module = inspect.getmodule(agent)
-    return getattr(module, "__file__", None)
+    """The file an agent callable was compiled in, or None if unknowable.
+
+    Read off the callable itself, never through `sys.modules` /
+    `inspect.getmodule`: those resolve by module *name*, so a later load of the
+    same filename stem rebinds that name and silently redirects an
+    already-captured agent to somebody else's file -- and a `functools.partial`
+    reports `functools.py`, the defining module of its *type*, which made the
+    gate refuse a legitimately pinned agent (#152 review).
+    """
+    while isinstance(agent, functools.partial):
+        agent = agent.func
+    namespace = getattr(agent, "__globals__", None)              # a plain function
+    if namespace is None:
+        bound = getattr(agent, "__func__", None)                 # a bound method
+        namespace = getattr(bound, "__globals__", None)
+    if namespace is None:
+        call = getattr(type(agent), "__call__", None)            # a callable instance
+        namespace = getattr(call, "__globals__", None)
+    return namespace.get("__file__") if isinstance(namespace, dict) else None
 
 
 def mismatched_sources(agents, pins):
@@ -153,28 +207,12 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
             continue
         name = fname[: -len(".py")]
         path = os.path.join(directory, fname)
-        module_name = f"_external_agent_{name}"
         try:
-            spec = importlib.util.spec_from_file_location(module_name, path)
-            module = importlib.util.module_from_spec(spec)
-            # Register before exec: a module-level `@dataclass(slots=True)` under
-            # `from __future__ import annotations` resolves its (stringified)
-            # field annotations via `sys.modules[cls.__module__]` while the class
-            # body runs. Skipping this step makes that lookup return None and
-            # crashes the import with an unrelated AttributeError (#151) -- a
-            # failure a hand-written fake agent would never trigger.
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
+            agents[name] = load_external_agent(path)
         except Exception as exc:  # a stranger's code -- anything can go wrong here
-            sys.modules.pop(module_name, None)
-            warn(f"external agent {fname!r} failed to import ({exc!r}); skipping")
-            continue
-
-        candidate = getattr(module, "agent", None)
-        if not callable(candidate):
-            warn(f"external agent {fname!r} has no callable module-level `agent`; skipping")
-            continue
-        agents[name] = candidate
+            # One malformed download never takes down a benchmark: the loader's
+            # own message (no callable `agent`, or the import error) rides along.
+            warn(f"external agent {fname!r} failed to load ({exc!r}); skipping")
 
     return agents
 
@@ -257,14 +295,17 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
     return agents
 
 
-def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
-                           manifest_path=MANIFEST_PATH, discover_fn=None):
-    """The gate's loader for `EXTERNAL_ANCHORS` (#152): every name must verify.
+def external_anchor_paths(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
+                          manifest_path=MANIFEST_PATH):
+    """`{name: path}` for the gate anchors (#152), verifying every one of them.
 
     Missing, unpinned and mismatched are all refusals -- an ADR-0007 verdict
     is never measured against an external whose bytes the manifest does not
     vouch for. No partial pool, no warning: raise, naming each anchor and the
     command that repairs it.
+
+    Nothing is imported here: the caller verifies once and then loads a file
+    as often as it likes (`load_external_agent` per game, in the gate's hook).
     """
     states = verify_pins(directory, manifest_path)
     problems = {n: states.get(n, "missing") for n in names if states.get(n) != "ok"}
@@ -275,8 +316,29 @@ def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
             "(--pin for an unpinned entry) and commit the manifest; the gate never runs "
             "against an unverified external."
         )
-    discover_fn = discover_fn or (lambda: discover_external_agents(directory))
-    found = discover_fn()
+    return {n: os.path.join(directory, n + ".py") for n in names}
+
+
+def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
+                           manifest_path=MANIFEST_PATH, discover_fn=None):
+    """One loaded agent per verified gate anchor, in `names` order (#152).
+
+    `external_anchor_paths` performs the refusal; each verified path is then
+    imported with `load_external_agent`. `discover_fn` is the injection seam
+    for a caller that serves its own pool -- injected or loaded, the bytes the
+    callable actually came from are re-checked against the pin below, so
+    injection can never bypass verification.
+    """
+    paths = external_anchor_paths(names, directory, manifest_path)
+    if discover_fn is None:
+        found = {}
+        for name, path in paths.items():
+            try:
+                found[name] = load_external_agent(path)
+            except Exception:   # a stranger's code -- named below, never swallowed
+                pass
+    else:
+        found = discover_fn()
     absent = [n for n in names if n not in found]
     if absent:
         raise RuntimeError(f"gate anchor(s) failed to import: {', '.join(absent)}")

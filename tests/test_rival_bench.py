@@ -219,3 +219,21 @@ def test_criterion_raises_when_a_pair_differs_in_game_count():
     pair["champion"]["games"] = 2
     with pytest.raises(ValueError, match="not paired"):
         rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=[pair])
+
+
+def test_paired_external_rows_defaults_names_to_the_external_anchors(monkeypatch):
+    """`names=None` reads `external_pool.EXTERNAL_ANCHORS` -- the live gate's
+    only source of opponents, and otherwise exercised for the first time
+    minutes into a real run."""
+    monkeypatch.setattr("harness.external_pool.EXTERNAL_ANCHORS", ("e1",))
+    pairs = rb.paired_external_rows("cont", "champ", [848, 849],
+                                    play=lambda a, b, seed: (1.0, 0.0),
+                                    agents=lambda name: name)
+    assert [p["opponent"] for p in pairs] == ["e1"]
+
+
+def test_gate_agents_serves_a_fresh_external_per_call_and_registry_names_from_the_registry(tmp_path):
+    (tmp_path / "ext.py").write_text("def agent(obs, config=None):\n    return {}\n")
+    hook = rb._gate_agents(paths={"ext": str(tmp_path / "ext.py")}, registry=lambda name: f"registry:{name}")
+    assert hook("ext") is not hook("ext")
+    assert callable(hook("ext")) and hook("third_herder") == "registry:third_herder"
