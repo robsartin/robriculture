@@ -23,6 +23,7 @@ def test_the_declared_constants():
     assert lb.CONTROL_SEED == 880
     assert lb.CHAMPION_BAR == 0.60 and lb.ANCHOR_BAR == 0.90
     assert lb.PLACED_DAY == 9 and lb.CROP_DAY == 16
+    assert lb.EARLY_CROP_DAY == 8
     assert lb.PLACED_DELTA_BAR == 4
     assert lb.PLANTED_GAP_BAR == 5
     assert lb.PASTURE_STANDING == 8
@@ -52,14 +53,23 @@ def _census(head_placed, head_held, planted, pasture):
 
 def _turns():
     # Two turns a day for days 0..16: eight pasture stand from day 3, head is
-    # placed on it from day 5, nothing waits in the shed after day 6.
+    # placed on it from day 5, nothing waits in the shed after day 6. Day 8
+    # plants 11 then 13 (closing board 13); every other day before 16 plants
+    # 20 -- so the day-8 reading can only be right if it takes day 8's
+    # closing board, not any other day's.
     turns = []
     for day in range(17):
         pasture = 5 if day < 3 else 8
         placed = 0 if day < 5 else 8
         held = 2 if day in (5, 6) else 0
-        turns.append((day, _census(placed, held, 13, pasture)))
-        turns.append((day, _census(placed, held, 13 if day < 16 else 30, pasture)))
+        if day == 8:
+            first, second = 11, 13
+        elif day < 16:
+            first, second = 20, 20
+        else:
+            first, second = 30, 30
+        turns.append((day, _census(placed, held, first, pasture)))
+        turns.append((day, _census(placed, held, second, pasture)))
     return turns
 
 
@@ -68,6 +78,7 @@ def test_reading_takes_the_closing_board_and_the_first_day_the_block_stood():
     assert r["head_placed_at_day"] == 8 and r["head_held_at_day"] == 0
     assert r["head_owned_at_day"] == 8
     assert r["planted_tiles_at_crop_day"] == 30
+    assert r["planted_tiles_at_early_day"] == 13
     assert r["turns_with_head_in_shed"] == 4     # days 5, 6 x 2 turns
     assert r["first_day_pasture_standing"] == 3
 
@@ -110,9 +121,11 @@ def test_arm_b_buys_ne_on_day_six_and_is_not_registered():
 
 def test_format_mechanism_prints_both_sides_with_the_first_day_column():
     r = {"head_owned_at_day": 10, "head_placed_at_day": 8, "head_held_at_day": 2,
-         "planted_tiles_at_crop_day": 30, "turns_with_head_in_shed": 90, "turns": 719,
+         "planted_tiles_at_crop_day": 30, "planted_tiles_at_early_day": 13,
+         "turns_with_head_in_shed": 90, "turns": 719,
          "max_head_placed": 12, "first_day_pasture_standing": 3}
     text = lb.format_mechanism([("nw_pasture", r), ("third_herder", dict(r, first_day_pasture_standing=None))])
     lines = text.splitlines()
     assert len(lines) == 3 and lines[1].startswith("nw_pasture") and "90/719" in lines[1]
+    assert "planted @8" in lines[0]
     assert lines[2].rstrip().endswith("never")

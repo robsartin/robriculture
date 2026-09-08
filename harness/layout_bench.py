@@ -27,7 +27,9 @@ until day 12; it passed (+6) and the arm lost, because the head it bought
 sat in the shed. With the block inside NW nothing caps it, so this control
 reads head PLACED at `PLACED_DAY` as a paired delta -- the number the arm
 exists to move -- and records owned head, shed-turns and the first day
-`PASTURE_STANDING` tiles stood beside it.
+`PASTURE_STANDING` tiles stood beside it. Planted tiles at `EARLY_CROP_DAY`
+are recorded beside it: the block costs the crop line seven of twenty NW
+tiles on days 0-7 and the day-16 control cannot see that.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from harness.evolve import DEFAULT_ANCHORS
 from harness.farm_census import aggregate
 from harness.front_bench import mechanism_deltas  # noqa: F401  -- re-exported on purpose
 from harness.front_bench import mechanism_reading as _front_reading
+from harness.herder_bench import last_census_on_day
 from harness.rival_bench import (  # noqa: F401  -- re-exported on purpose
     criterion,
     first_day_at_or_above,
@@ -75,6 +78,14 @@ PLACED_DAY = 9
 #: The day the crop line is read: the last step of `HAND_RAMP`, as #239 and #244.
 CROP_DAY = 16
 
+#: Recorded, not gated: planted tiles at the end of the opening crew's window.
+#: Days 0-7 the champion's five crop hands work all 20 NW crop tiles; the
+#: contender's layout leaves 13 workable until NE opens (slot 3 straddles,
+#: slot 4 is wholly NE). The day-16 control cannot see that deficit --
+#: by then both layouts expose the same tiles -- so it is read here, on the
+#: last day before the third herder and the day-8 hire change the crew.
+EARLY_CROP_DAY = 8
+
 #: Paired deltas against the champion on `CONTROL_SEED`. Placed head is the
 #: mechanism (#244's arm owned 10 by day 9 under the cap; the champion places
 #: 4); the crop gap is the cost the arm is allowed to pay before it stops
@@ -88,12 +99,19 @@ PLANTED_GAP_BAR = 5
 PASTURE_STANDING = 8
 
 
-def mechanism_reading(turns, placed_day=PLACED_DAY, crop_day=CROP_DAY):
+def mechanism_reading(turns, placed_day=PLACED_DAY, crop_day=CROP_DAY, early_day=EARLY_CROP_DAY):
     """One side's numbers off one game's census series ``[(day, census), ...]``:
     `front_bench`'s reading at `placed_day` plus the first day
-    `PASTURE_STANDING` tiles stood (``None`` if never). Raises, as
-    `front_bench` does, when a declared day was never reached."""
+    `PASTURE_STANDING` tiles stood (``None`` if never), plus planted tiles at
+    `early_day`. Raises, as `front_bench` does, when a declared day was
+    never reached."""
     reading = _front_reading(turns, placed_day, crop_day)
+    at_early = last_census_on_day(turns, early_day)
+    if at_early is None:
+        raise ValueError(f"no census recorded on day {early_day}: the game covers "
+                         f"days {turns[0][0]}-{turns[-1][0]}" if turns else
+                         f"no census recorded on day {early_day}: no turns at all")
+    reading["planted_tiles_at_early_day"] = at_early["planted_tiles"]
     series = aggregate(turns)["pasture_series"]
     reading["first_day_pasture_standing"] = first_day_at_or_above(series, PASTURE_STANDING)
     return reading
@@ -112,12 +130,14 @@ def crop_line_ok(deltas):
 def format_mechanism(rows):
     """One line per side, contender above champion."""
     lines = [f"{'side':<16} {'placed @9':>10} {'owned @9':>9} {'held @9':>8} "
-             f"{'shed turns':>12} {'planted @16':>12} {'max head':>9} {'8 past by':>10}"]
+             f"{'shed turns':>12} {'planted @8':>10} {'planted @16':>12} {'max head':>9} "
+             f"{'8 past by':>10}"]
     for label, r in rows:
         first = r["first_day_pasture_standing"]
         lines.append(f"{label:<16} {r['head_placed_at_day']:>10} {r['head_owned_at_day']:>9} "
                      f"{r['head_held_at_day']:>8} "
                      f"{r['turns_with_head_in_shed']:>5}/{r['turns']:<6} "
+                     f"{r['planted_tiles_at_early_day']:>10} "
                      f"{r['planted_tiles_at_crop_day']:>12} {r['max_head_placed']:>9} "
                      f"{'never' if first is None else f'day {first}':>10}")
     return "\n".join(lines)
@@ -221,10 +241,13 @@ def main(argv=None):  # pragma: no cover
         print(f"control identity: {'OK' if ctl['identity']['ok'] else 'FAIL -- RUN VOID'}"
               f"  {ctl['identity']}")
         d = ctl["mechanism"]["deltas"]
+        c = ctl["mechanism"]["contender"]["planted_tiles_at_early_day"]
+        k = ctl["mechanism"]["champion"]["planted_tiles_at_early_day"]
         print(f"control mechanism: {'OK' if ctl['mechanism']['ok'] else 'FAIL -- RUN VOID'}  "
               f"(declared: head placed at day {PLACED_DAY} minus the champion's >= "
               f"{PLACED_DELTA_BAR})  placed_delta={d['placed_delta']}  recorded: "
-              f"owned_delta={d['owned_delta']} shed_delta={d['shed_delta']}")
+              f"owned_delta={d['owned_delta']} shed_delta={d['shed_delta']} "
+              f"planted@8={c}/{k}")
         print(f"control crop line: {'OK' if ctl['crop_line']['ok'] else 'FAIL -- RUN VOID'}  "
               f"(declared: |planted tiles at day {CROP_DAY} - the champion's| <= "
               f"{PLANTED_GAP_BAR})  planted_gap={d['planted_gap']}")
