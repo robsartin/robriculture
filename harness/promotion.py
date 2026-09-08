@@ -248,6 +248,32 @@ def designate(candidates, pool, games=2, seed_base=0,
     }
 
 
+def designation_inputs(registry_names, anchor_names, include_external=False, build=build_agents,
+                       benchmarks=None, external_loader=None):
+    """What `--designate` ranks and against whom (#152).
+
+    Candidates are the registry; the pool is the anchors. With
+    `include_external` the pinned gate externals (`external_pool.EXTERNAL_ANCHORS`,
+    loaded by `external_anchor_agents`, which refuses an unverified pool) join
+    both -- and the benchmark set, so one can lead the ranking as
+    `gate_opponent` but never land as `submit_default` (ADR-0005).
+    """
+    if benchmarks is None:
+        from harness.tournament import benchmark_names
+        benchmarks = benchmark_names()
+    candidates = build(list(registry_names))
+    pool = build(list(anchor_names))
+    benchmarks = set(benchmarks)
+    if include_external:
+        if external_loader is None:
+            from harness.external_pool import external_anchor_agents as external_loader
+        externals = external_loader()
+        candidates.update(externals)
+        pool.update(externals)
+        benchmarks |= set(externals)
+    return candidates, pool, benchmarks
+
+
 def top_contender(names, benchmarks):
     """The first name that is not a benchmark opponent.
 
@@ -409,6 +435,8 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--alpha", type=float, default=0.05, help="significance level (default 0.05)")
     ap.add_argument("--designate", action="store_true",
                     help="rank all strategies by pool share against the fixed anchors (informational since #241; written only if the artifact is not a gate succession)")
+    ap.add_argument("--include-external", action="store_true",
+                    help="--designate: rank with the pinned gate externals (external_pool.EXTERNAL_ANCHORS) in the pool and the candidates (#152)")
     ap.add_argument("--succeed", metavar="CHALLENGER",
                     help="record CHALLENGER as champion after it PROMOTED against the recorded gate_opponent (#241)")
     ap.add_argument("--issue", type=int, help="--succeed: the experiment issue")
@@ -422,12 +450,10 @@ def main(argv=None):  # pragma: no cover
 
     if args.designate:
         from harness.evolve import DEFAULT_ANCHORS
-        from harness.tournament import benchmark_names
         from strategies import REGISTRY
 
-        bench = benchmark_names()
-        pool = build_agents(list(DEFAULT_ANCHORS))
-        candidates = build_agents(list(REGISTRY))
+        candidates, pool, bench = designation_inputs(
+            list(REGISTRY), list(DEFAULT_ANCHORS), include_external=args.include_external)
         body = designate(candidates, pool, games=args.games, benchmarks=bench)
         for row in body["ranking"]:
             mark = " (benchmark)" if row["benchmark"] else ""

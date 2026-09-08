@@ -386,3 +386,28 @@ def test_submit_default_raises_on_an_old_format_artifact(tmp_path):
     p.write_text(json.dumps({"champion": "market_farmer", "games": 20, "ranking": []}))
     with pytest.raises(ValueError, match="re-designate"):
         promotion.submit_default(str(p))
+
+
+# --- designation_inputs (#152): the ranking may include the pinned gate externals ---
+
+def _fake_build(names):
+    return {n: _named(n) for n in names}
+
+
+def test_designation_inputs_without_externals_is_the_registry_against_the_anchors():
+    cands, pool, bench = promotion.designation_inputs(
+        ["a", "bb"], ["bb"], include_external=False, build=_fake_build, benchmarks={"bb"},
+        external_loader=lambda: {"zzzz": _named("zzzz")})
+    assert set(cands) == {"a", "bb"} and set(pool) == {"bb"} and bench == {"bb"}
+
+
+def test_designation_inputs_with_externals_adds_them_to_pool_candidates_and_benchmarks():
+    cands, pool, bench = promotion.designation_inputs(
+        ["a", "bb"], ["bb"], include_external=True, build=_fake_build, benchmarks={"bb"},
+        external_loader=lambda: {"zzzz": _named("zzzz")})
+    assert set(cands) == {"a", "bb", "zzzz"} and set(pool) == {"bb", "zzzz"}
+    assert bench == {"bb", "zzzz"}
+    body = promotion.designate(cands, pool, games=2, rewards_fn=_stub_rewards, benchmarks=bench)
+    flags = {r["name"]: r["benchmark"] for r in body["ranking"]}
+    assert flags["zzzz"] is True and body["gate_opponent"] == "zzzz"
+    assert body["submit_default"] == "a"        # never an external
