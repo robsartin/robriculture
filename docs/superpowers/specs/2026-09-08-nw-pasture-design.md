@@ -168,3 +168,23 @@ PROMOTE → PR closes #246, then designation is a separate step on Rob's say-so
 REJECTED → record and root cause on #246, closed `not_planned`; the PR carries the seams and
 the bench as a rejection record, as #245 did. VOID → the control that failed, on #246; the
 criterion is not read.
+
+## Correction, 2026-09-08 (final whole-branch review, before the bench ran)
+
+The Context and Hypothesis sections understate the pre-day-12 crop cost. Measured off the
+code (`HAND_RAMP (0, 6)`, the farmer works too, `_crop_slot`, `land_target`):
+
+- Days 0-7: six hands plus the farmer, herders (1, 2), **five** crop slots — the champion works
+  all **20** NW crop tiles, not 16. Under the block NW holds 13: slots 0-2 all NW, slot 3
+  `(0, 0)` plus three locked NE tiles, slot 4 wholly NE and locked. The gap is **7 tiles**, and
+  crop hand 6 idles for eight days.
+- Days 8-11: the third herder takes worker 6 on both sides; slot 5 is NE for both layouts.
+  Champion 16, contender 13. Gap **3**.
+- "Slot 4 onward is NE then SW as before" is wrong: under the frozen layout slot 4 is four NW
+  tiles.
+
+The day-16 crop-line control is structurally blind to this deficit: by day 16 both layouts
+expose the same workable tiles. It stays as declared. The bench additionally **records**
+planted tiles at day 8 (`EARLY_CROP_DAY`) per side, not gated, so a REJECTED result can be
+root-caused against the crop line through the melon-funding window rather than against
+labour, walk or cash by default. No declared constant, bar or gate changes.
