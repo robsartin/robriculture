@@ -56,14 +56,30 @@ def _rate(row):
     return row["wins"] / games if games else 0.0
 
 
-def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR, anchor_bar=ANCHOR_BAR):
-    """The declared verdict: both bars, ties never wins."""
+def criterion(champion_row, anchor_rows, external_pairs=(), champion_bar=CHAMPION_BAR,
+              anchor_bar=ANCHOR_BAR):
+    """The declared verdict: the champion bar, each anchor's bar, and -- when
+    `external_pairs` are given (#152) -- paired non-regression against each
+    external anchor: the contender's wins on the seeds must be >= the
+    champion's wins on the *same* seeds in the same run. Ties never count as
+    wins on either side. With no pairs the verdict is exactly the pre-#152 one.
+    """
     champion_rate = _rate(champion_row)
     anchor_rates = {r["opponent"]: _rate(r) for r in anchor_rows}
+    external = {}
+    for pair in external_pairs:
+        contender, champion = pair["contender"], pair["champion"]
+        if contender["seeds"] != champion["seeds"]:
+            raise ValueError(
+                f"external pair {pair['opponent']!r} is not paired: contender on seeds "
+                f"{contender['seeds']}, champion on {champion['seeds']}"
+            )
+        external[pair["opponent"]] = (contender["wins"], champion["wins"])
     failing = ([champion_row["opponent"]] if champion_rate < champion_bar else []) + \
-              [n for n, rate in anchor_rates.items() if rate < anchor_bar]
+              [n for n, rate in anchor_rates.items() if rate < anchor_bar] + \
+              [f"external:{n}" for n, (ours, theirs) in external.items() if ours < theirs]
     return {"passed": not failing, "champion_rate": champion_rate,
-            "anchor_rates": anchor_rates, "failing": failing}
+            "anchor_rates": anchor_rates, "external": external, "failing": failing}
 
 
 def ablation_verdict(contender_wins, ablation_wins, games):
@@ -136,6 +152,48 @@ def format_rows(rows):
         lines.append(f"{r['opponent']:<16} {r['wins']:>3}/{r['games']:<3} {r.get('ties', 0):>4} "
                      f"{_rate(r):>6.1%}")
     return "\n".join(lines)
+
+
+def format_external(pairs):
+    """One line per external anchor: contender W/G, champion W/G, ok or REGRESSED."""
+    lines = [f"{'external':<44} {'contender':>10} {'champion':>10}  verdict"]
+    for p in pairs:
+        c, k = p["contender"], p["champion"]
+        verdict = "ok" if c["wins"] >= k["wins"] else "REGRESSED"
+        lines.append(f"{p['opponent']:<44} {c['wins']:>3}/{c['games']:<6} "
+                     f"{k['wins']:>3}/{k['games']:<6}  {verdict}")
+    return "\n".join(lines)
+
+
+def paired_external_rows(contender, champion, seeds, names=None, play=None, agents=None):
+    """Both strategies against each external anchor on the same `seeds`, sides
+    alternated by list position (`harness.triage.head_to_head_rate`), in the
+    shape `criterion`'s `external_pairs` reads. `names` defaults to
+    `external_pool.EXTERNAL_ANCHORS`; `agents` defaults to `_gate_agents()`."""
+    from harness.triage import head_to_head_rate
+
+    if names is None:
+        from harness.external_pool import EXTERNAL_ANCHORS as names
+    agents = agents or _gate_agents()
+    seeds = list(seeds)
+    return [{"opponent": name,
+             "contender": head_to_head_rate(contender, name, seeds, play, agents),
+             "champion": head_to_head_rate(champion, name, seeds, play, agents)}
+            for name in names]
+
+
+def _gate_agents():  # pragma: no cover -- the registry plus the gitignored, pinned externals
+    """`head_to_head_rate`'s agents hook: registry names from the registry,
+    anchor names from `external_anchor_agents()` (which refuses an unverified pool)."""
+    from harness.external_pool import external_anchor_agents
+    from harness.triage import _default_agents
+
+    registry = _default_agents()
+    externals = external_anchor_agents()
+
+    def agents(name):
+        return externals[name] if name in externals else registry(name)
+    return agents
 
 
 # --- live games -------------------------------------------------------------
