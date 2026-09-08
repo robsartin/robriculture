@@ -331,15 +331,9 @@ def append_entrypoint_alias(path, entrypoint):
     and this appends ``agent = <entrypoint>`` verbatim as the file's last
     line -- Python re-evaluates it at import time, same as any other
     module-level statement, so a factory call or a plain name both work.
-
-    The appended line is preceded by an explanatory comment (rather than a
-    blank line) so a reader of the fetched (gitignored) file can see why an
-    otherwise-unexplained ``agent = ...`` line is there; it is also the
-    bytes a `sha256` pin (#152) is taken over, so the comment's text is
-    stable across fetches of the same pinned commit/file.
     """
     with open(path, "a") as fh:
-        fh.write(f"\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = {entrypoint}\n")
+        fh.write(f"\n\nagent = {entrypoint}\n")
 
 
 def fetch_one(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):

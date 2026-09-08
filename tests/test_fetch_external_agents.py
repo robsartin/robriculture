@@ -418,19 +418,14 @@ def test_append_entrypoint_alias_appends_an_agent_binding(tmp_path):
     p = tmp_path / "foo.py"
     p.write_text("def apex_agent(obs):\n    return {}\n")
     fea.append_entrypoint_alias(str(p), "apex_agent")
-    assert p.read_text() == (
-        "def apex_agent(obs):\n    return {}\n"
-        "\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = apex_agent\n"
-    )
+    assert p.read_text() == "def apex_agent(obs):\n    return {}\n\n\nagent = apex_agent\n"
 
 
 def test_append_entrypoint_alias_supports_a_factory_call_expression(tmp_path):
     p = tmp_path / "foo.py"
     p.write_text("def make_farm_agent(sell_mode):\n    return sell_mode\n")
     fea.append_entrypoint_alias(str(p), 'make_farm_agent("daily")')
-    assert p.read_text().endswith(
-        '\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = make_farm_agent("daily")\n'
-    )
+    assert p.read_text().endswith('\n\nagent = make_farm_agent("daily")\n')
 
 
 # --- fetch_one: dispatch + meta sidecar ---
@@ -473,8 +468,7 @@ def test_fetch_one_applies_the_entrypoint_alias_when_the_entry_declares_one(tmp_
     }
     fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout="def my_agent(obs):\n    pass\n"))
     assert (tmp_path / "foo.py").read_text() == (
-        "def my_agent(obs):\n    pass\n"
-        "\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = my_agent\n"
+        "def my_agent(obs):\n    pass\n\n\nagent = my_agent\n"
     )
 
 
@@ -540,7 +534,7 @@ def test_fetch_one_pins_the_bytes_after_the_entrypoint_alias(tmp_path):
     """The pin is over the file as written -- alias line included -- so the
     bytes the loader imports are the bytes that were pinned."""
     body = "def my_agent(obs):\n    pass\n"
-    aliased = body + "\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = my_agent\n"
+    aliased = body + "\n\nagent = my_agent\n"
     entry = {"name": "foo", "source_type": "github_file", "repo": "r/r", "path": "a.py",
              "license": "MIT", "attribution": "x", "dest_filename": "foo.py",
              "entrypoint": "my_agent", "sha256": _sha(aliased)}
@@ -593,3 +587,16 @@ def test_resolve_commit_sha_raises_on_a_nonzero_exit_or_a_non_sha():
         fea.resolve_commit_sha({"name": "a", "repo": "r/r", "ref": "main"}, runner=_runner(returncode=1, stderr="no"))
     with pytest.raises(SystemExit, match="no commit sha"):
         fea.resolve_commit_sha({"name": "a", "repo": "r/r", "ref": "main"}, runner=_runner(stdout="not-a-sha\n"))
+
+
+def test_every_external_anchor_is_pinned_in_the_committed_manifest():
+    """The gate never loads an unpinned anchor (#152): each EXTERNAL_ANCHOR has a
+    64-hex sha256, and a github_file anchor's ref is the 40-hex commit fetched."""
+    from harness.external_pool import EXTERNAL_ANCHORS
+
+    entries = {e["dest_filename"][:-3]: e for e in fea.load_manifest()}
+    for name in EXTERNAL_ANCHORS:
+        entry = entries[name]
+        assert re.fullmatch(r"[0-9a-f]{64}", entry.get("sha256", "")), name
+        if entry["source_type"] == "github_file":
+            assert re.fullmatch(r"[0-9a-f]{40}", entry["ref"]), name
