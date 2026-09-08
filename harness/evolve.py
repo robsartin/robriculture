@@ -125,12 +125,19 @@ def genome_agent(genome):
     """Return the agent callable for a genome."""
     return make_agent(npilot.NeuroPilotStrategy(genome=genome))
 
+def _per_game(agent):
+    """A stranger's agent plays each game on a fresh module (#247): reloaded here,
+    between games and outside the sim's timer, where a failure stops the run."""
+    return agent.fresh() if isinstance(agent, external_pool.FreshPerGame) else agent
+
+
 def opponent_record(agent, opponent, games, seed_base, rewards_fn=_play_rewards):
     """Play `games` games against one opponent; report the record and the score share.
 
     Both statistics come from the same rewards in a single pass — playing each game
     twice to collect them separately would double the cost for nothing. Sides
-    alternate on odd games so first-player advantage cancels.
+    alternate on odd games so first-player advantage cancels. A `FreshPerGame`
+    opponent (or agent) is reloaded before every game (#247).
 
     Zero games returns the neutral 0.5 for both rates rather than 0: no evidence is
     not evidence of failure.
@@ -139,10 +146,11 @@ def opponent_record(agent, opponent, games, seed_base, rewards_fn=_play_rewards)
     shares = []
     for g in range(games):
         seed = seed_base + g
+        me, them = _per_game(agent), _per_game(opponent)
         if g % 2 == 0:
-            mine, theirs = rewards_fn(agent, opponent, seed)
+            mine, theirs = rewards_fn(me, them, seed)
         else:
-            theirs, mine = rewards_fn(opponent, agent, seed)
+            theirs, mine = rewards_fn(them, me, seed)
         shares.append(share(mine, theirs))
         if mine > theirs:
             w += 1
