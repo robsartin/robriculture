@@ -1,4 +1,4 @@
-"""Fetch real external competitor agents for local measurement only (#78).
+"""Fetch real external competitor agents into a local, pinned pool (#78, #152).
 
 The owner decided against vendoring external agents into this repo at all
 (ADR-0008 amendment, 2026-08-18): no third-party code is ever committed to
@@ -6,9 +6,9 @@ git. Instead this script reads ``harness/external_agents.json`` -- the single
 source of truth for which agents to fetch, their licenses, and required
 attribution -- and downloads each into a gitignored local directory
 (``external_agents/`` by default). ``harness/external_pool.py`` then
-discovers agents there for measurement tools that opt in
-(``harness/genome_bench.py --include-external``); nothing else ever reads
-this directory.
+discovers agents there for the gate's external limb, the ranking and
+evolution, each opt-in (#152); every entry is pinned by sha256 and verified
+on fetch.
 
 Two source kinds:
 

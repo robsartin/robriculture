@@ -98,6 +98,40 @@ harness; (3) the diverse external-opponent pool; (4) submission integration.
   `wheat_hands` — are near-duplicate forks of one lineage. The pool has fewer
   independent voices than its count implies, on top of being entirely
   self-authored (see above).
+- **Pinned externals may be gate anchors, ranking opponents and opt-in evolution
+  anchors (#152, 2026-09-07).** This corrects the #78 amendment's "measurement
+  only" rule. Three things changed after it: every contender since #219 beat all
+  six `DEFAULT_ANCHORS` 16/16, so the frozen bar stopped separating a better agent
+  from a worse one (and pool share against it crowned a gate-REJECTED contender,
+  #241); twenty licence-checked externals sat in the manifest, five of which beat
+  the champion `third_herder` on both of seeds 700-701 (our reward share:
+  `pilkwang_structured_economic_policy` 0.197, `lonespear_kaggriculture_v21`
+  0.362, `premaananda108_ecobot_v7` 0.411,
+  `shashankjangid_agent_v1000_sovereign_prime` 0.475,
+  `madhur_sabherwal_hub_geometry_agent` 0.488; the other fifteen lost 2/2 at
+  0.60-1.00); and `harness/evolve.py --include-external` had been putting externals
+  in the fitness anchor list all along, contradicting the rule. The
+  reproducibility objection is answered by a pin, not a vendoring: every manifest
+  entry now carries the sha256 of the fetched file, a `github_file` entry's `ref`
+  is the commit fetched, the fetch refuses a mismatch, `resolve_opponents` raises
+  on one, and the gate loads only anchors that verify
+  (`harness.external_pool.external_anchor_agents`). What stands from #78: no
+  third-party code is committed, `scripts/submit.py` never packages one, and an
+  external is never the gate opponent (ours by succession, #241). The gate's
+  external limb and its declared set (`harness.external_pool.EXTERNAL_ANCHORS`)
+  are ADR-0007's amendment of the same date. Rejected: keeping #78 and fixing the
+  code (leaves the gate blind to the field; the ghost bench has the same
+  gitignored-data problem and cannot react); vendoring after all (re-litigates a
+  licensing decision a pin makes unnecessary). Cost: a gate run needs
+  `external_agents/` fetched and verified on the machine that runs it; CI does
+  not run the gate and never did. The 2026-09-07 pin run also found
+  `adilshamim8_kaggriculture_grandmaster_starter` (a Kaggle kernel taken by the
+  2026-09-06 re-survey, #229) returning a permanent 404; it was removed from the
+  manifest, since an entry nobody can fetch breaks the manifest's own contract,
+  leaving nineteen entries, all pinned. `--pin` resolved every GitHub branch ref
+  to the commit fetched on 2026-09-07; `naisha123_kaggriculture_agent` had moved
+  upstream since its 2026-09-06 fetch, so its pinned bytes differ from the ones
+  #229 measured, and it is not an anchor.
 
 ## Alternatives considered
 

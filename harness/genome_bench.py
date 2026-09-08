@@ -14,8 +14,9 @@ Usage:
 
 ``--include-external`` additionally benchmarks against real competitor agents
 fetched locally into the gitignored ``external_agents/`` directory (#78, see
-``scripts/fetch_external_agents.py``). Off by default, and opt-in only: the
-named anchors alone remain the frozen, reproducible comparability bar.
+``scripts/fetch_external_agents.py``). Off by default; the pool is verified
+against the manifest pins (#152), so the number is reproducible on any machine
+holding the same bytes.
 """
 
 from __future__ import annotations
@@ -75,8 +76,8 @@ def build_bench_agents(anchor_names, include_external=False, discover_fn=None, b
 
     ``include_external=True`` additionally folds in whatever real competitor
     agents ``harness.external_pool.discover_external_agents`` finds locally
-    (#78) -- opt-in only; never wired into ``DEFAULT_ANCHORS`` or
-    ``harness.promotion.designate``. It raises when the pool is short of the
+    (#78), pinned and verified (#152) -- opt-in here; never a member of
+    ``DEFAULT_ANCHORS``. It raises when the pool is short of the
     manifest (including the fully-empty case) rather than quietly falling
     back to a shrunken or internal-only pool; ``allow_partial=True`` accepts
     that shortfall with a loud warning instead (#153).
@@ -98,8 +99,7 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--anchors", nargs="*", default=list(DEFAULT_ANCHORS))
     ap.add_argument("--include-external", action="store_true",
                     help="also benchmark against real competitor agents fetched locally "
-                         "into external_agents/ (#78); measurement only, off by default "
-                         "so the frozen bar stays reproducible")
+                         "into external_agents/ (#78, pinned per #152); off by default")
     ap.add_argument("--allow-partial-pool", action="store_true",
                     help="accept a --include-external pool that is short of the manifest "
                          "with a loud warning instead of raising (#153); off by default.")

@@ -1,4 +1,4 @@
-"""Loader for locally-fetched external competitor agents (#78) -- measurement only.
+"""Loader for locally-fetched external competitor agents (#78), pinned per #152.
 
 Real competitor agents (kaggle_environments-style: a module-level
 ``agent(observation, configuration)`` callable) live in a gitignored local
@@ -6,13 +6,13 @@ directory, downloaded by ``scripts/fetch_external_agents.py`` from the
 manifest at ``harness/external_agents.json``. No third-party code is ever
 committed to this repo (ADR-0005, ADR-0008 amendment 2026-08-18).
 
-This module is deliberately **measurement-only**: it is never imported by
-``harness/evolve.py``'s ``DEFAULT_ANCHORS``, ``harness/promotion.py``'s
-``designate``, or the evolution loop itself. The only sanctioned entry point
-is an explicit opt-in flag on a measurement tool
-(``harness/genome_bench.py --include-external``), off by default, so the
-frozen comparability bar never depends on what happens to be sitting in a
-directory that isn't checked into git.
+Since #152 (ADR-0008 amendment 2026-09-07) a *pinned* external may be a gate
+anchor (``EXTERNAL_ANCHORS``, loaded by ``external_anchor_agents``), a ranking
+opponent (``harness.promotion --designate --include-external``) or an opt-in
+evolution anchor (``harness.evolve --include-external``). The pin is the
+manifest's ``sha256`` of the fetched file; a mismatch always raises, an
+unpinned agent is measurement-only and never a gate anchor. ``DEFAULT_ANCHORS``
+never contains an external: the six named anchors remain the committed floor.
 
 An absent directory is a no-op returning ``{}``: a clean clone, CI, and a
 machine that never ran the fetch script must all behave identically. A file

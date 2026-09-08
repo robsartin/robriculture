@@ -42,11 +42,12 @@ CHAMPION = "rival_aware"
 #: against it can be read beside #219's 15/16 for `rival_aware`.
 REFERENCE = "dense_farm"
 
-#: Recorded, never gated: the measurement-only ceiling (#234). It beat all
+#: Recorded, never gated: the external ceiling (#234). It beat all
 #: eight of our baselines 32/32, so the one question worth asking is whether
-#: this contender takes a single game off it. Never an anchor and never a gate
-#: opponent -- `external_agents/` is gitignored, so a gate that depended on it
-#: could not be reproduced from a clean clone (ADR-0008 amendment).
+#: this contender takes a single game off it. Recorded here as a single
+#: reference row; since #152 it is also a member of
+#: `external_pool.EXTERNAL_ANCHORS`, the gate's paired external limb, which
+#: later benches use instead of this row.
 EXTERNAL = "lonespear_kaggriculture_v21"
 
 #: Fresh. 100-115 and 200-215 (#202), 300-331 (#211), 400-415 (#219), 500-515
@@ -166,7 +167,7 @@ def _placebo_agents(name):  # pragma: no cover
 
 
 def _external_agents(name):  # pragma: no cover
-    """`head_to_head_rate`'s `agents` hook with the measurement-only external
+    """`head_to_head_rate`'s `agents` hook with the external agent
     injected by name (#234's convention). Raises if the download is absent --
     a missing opponent must not silently become a different measurement."""
     from harness.external_pool import discover_external_agents
@@ -241,7 +242,7 @@ def run_criterion(seeds=SEEDS, split=len(PLACEBO_SEEDS)):  # pragma: no cover
 
 def run_reference(seeds=SEEDS, external_seeds=PLACEBO_SEEDS):  # pragma: no cover
     """Recorded, never gated: the previous champion over the full seed set,
-    and the measurement-only ceiling over four seeds."""
+    and the external ceiling over four seeds."""
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")   # an instrument surfaces crashes
     from harness.triage import head_to_head_rate
     reference_row = head_to_head_rate(CONTENDER, REFERENCE, seeds)
