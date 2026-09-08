@@ -484,6 +484,19 @@ def test_run_pool_names_returns_sorted_resolved_external_names_when_included():
     assert names == ["meta_bot", "pilkwang_structured_economic_policy"]
 
 
+def test_run_pool_pins_is_empty_when_externals_were_not_included():
+    assert ev.run_pool_pins(False, None, {"x": "a" * 64}) == {}
+
+
+def test_run_pool_pins_records_the_pin_of_each_resolved_external_only():
+    """A checkpoint says which bytes it was scored against (#152): the anchors
+    have no pin, an unpinned external has none to record, and an external the
+    run did not resolve is not listed."""
+    resolved = {"meta_bot": object(), "x": object(), "loose": object()}
+    pins = {"x": "a" * 64, "loose": None, "other": "b" * 64}
+    assert ev.run_pool_pins(True, resolved, pins) == {"x": "a" * 64}
+
+
 def test_checkpoint_genome_survives_a_write_failure(tmp_path):
     """A disk hiccup must not kill an 8-hour run — warn and carry on."""
     blocker = tmp_path / "not_a_dir"
