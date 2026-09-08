@@ -621,3 +621,26 @@ def test_evolve_offsets_the_sibling_pool_seeds_by_50000_from_the_anchor_seeds():
     # genome 0: one anchor game (seed 1), one sibling game (seed 1 + 50000);
     # genome 1: identical seeds, since the generation's base is now paired (#72).
     assert seeds == [1, 50001, 1, 50001]
+
+
+def test_opponent_record_gives_a_stateful_external_a_fresh_module_every_game(tmp_path):
+    """#247: the same wrapper plays every game of a run; between games it is re-imported,
+    outside the sim's timer, so a module-level counter reads 1 on every game -- on
+    the candidate side as well as the opponent side (`--designate` plays externals
+    as both). The step used here is never 0, so only `fresh()` can be resetting it."""
+    from harness import external_pool
+    (tmp_path / "counter.py").write_text(
+        "CALLS = 0\n"
+        "def agent(obs, config=None):\n"
+        "    global CALLS\n"
+        "    CALLS += 1\n"
+        "    return CALLS\n")
+    wrapper = external_pool.discover_external_agents(str(tmp_path))["counter"]
+    seen = []
+
+    def rewards(a, b, seed):
+        seen.append((a({"step": 5}), b({"step": 5})))
+        return (1.0, 1.0)
+
+    ev.opponent_record(wrapper, wrapper, games=3, seed_base=0, rewards_fn=rewards)
+    assert seen == [(1, 2), (1, 2), (1, 2)]

@@ -519,3 +519,102 @@ def test_external_anchor_agents_names_the_reason_a_verified_anchor_failed_to_imp
         external_pool.external_anchor_agents(
             names=("x",), directory=str(tmp_path), manifest_path=manifest)
     assert isinstance(exc.value.__cause__, SyntaxError)
+
+
+# --- #247: the evolve path plays one callable across games; it must reload per game ---
+
+_COUNTER = (
+    "CALLS = 0\n"
+    "def agent(obs, config=None):\n"
+    "    global CALLS\n"
+    "    CALLS += 1\n"
+    "    return CALLS\n"
+)
+
+
+def test_a_discovered_external_reloads_its_module_on_every_games_first_step(tmp_path):
+    """The positive control for #247: a stranger's agent that counts its own calls
+    in a module global reads 1 on the first turn of EVERY game. Before the fix
+    the second game opened at 4."""
+    (tmp_path / "counter.py").write_text(_COUNTER)
+    opp = external_pool.discover_external_agents(str(tmp_path))["counter"]
+    assert [opp({"step": 0}), opp({"step": 1}), opp({"step": 2})] == [1, 2, 3]
+    assert [opp({"step": 0}), opp({"step": 1})] == [1, 2]
+
+
+def test_resolve_opponents_hands_the_evolve_path_the_reloading_external(tmp_path):
+    """The path #247 names: `resolve_opponents(include_external=True)` with real
+    discovery. The one callable evolve keeps for the whole run is the reloading one."""
+    (tmp_path / "counter.py").write_text(_COUNTER)
+    manifest_path = _write_manifest(tmp_path, ["counter"])
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest_path, directory=str(tmp_path), warn=lambda message: None)
+    opp = agents["counter"]
+    assert opp({"step": 0}) == 1 and opp({"step": 1}) == 2
+    assert opp({"step": 0}) == 1
+
+
+def test_the_reloading_wrapper_still_reports_the_file_it_came_from(tmp_path):
+    """Pin verification reads the source off the callable (#152); the wrapper must
+    not hide it behind external_pool.py's own namespace. Green before the fix
+    (discovery returned the raw function) and it must stay green after."""
+    (tmp_path / "x.py").write_text(_GOOD)
+    opp = external_pool.discover_external_agents(str(tmp_path))["x"]
+    assert external_pool._source_of(opp) == str(tmp_path / "x.py")
+    assert external_pool.mismatched_sources({"x": opp}, {"x": _sha(_GOOD)}) == []
+
+
+def test_the_wrapper_mirrors_kaggles_arity_rule_for_a_one_argument_agent(tmp_path):
+    """kaggle_environments trims (obs, config) to a function's co_argcount; a class
+    instance has no __code__, so kaggle hands the wrapper both and the wrapper must
+    trim for the inner agent itself. 17 of 19 agents in the real pool are `def agent(obs)`."""
+    (tmp_path / "one.py").write_text("def agent(obs):\n    return obs['step']\n")
+    (tmp_path / "two.py").write_text("def agent(obs, config):\n    return config['k']\n")
+    found = external_pool.discover_external_agents(str(tmp_path))
+    assert found["one"]({"step": 7}, {"k": "cfg"}) == 7
+    assert found["two"]({"step": 7}, {"k": "cfg"}) == "cfg"
+
+
+def test_fresh_reloads_the_module_between_games_and_resets_the_step_zero_fallback(tmp_path):
+    """`fresh()` is what `opponent_record` calls between games: a new module, outside
+    the sim's timer. It also marks the wrapper unused, so the step-0 fallback does not
+    reload a second time at the start of that game."""
+    (tmp_path / "counter.py").write_text(_COUNTER)
+    opp = external_pool.discover_external_agents(str(tmp_path))["counter"]
+    assert [opp({"step": 3}), opp({"step": 4})] == [1, 2]
+    assert opp.fresh() is opp
+    assert [opp({"step": 0}), opp({"step": 1})] == [1, 2]     # one module for the whole game
+
+
+def test_fresh_refuses_a_file_that_changed_on_disk_since_discovery(tmp_path):
+    """Discovery verified these bytes; a reload must not quietly pick up others (#133)."""
+    import pytest
+    (tmp_path / "x.py").write_text(_GOOD)
+    opp = external_pool.discover_external_agents(str(tmp_path))["x"]
+    (tmp_path / "x.py").write_text(_GOOD + "# edited\n")
+    with pytest.raises(RuntimeError, match="changed on disk"):
+        opp.fresh()
+
+
+def test_external_anchor_agents_returns_reloading_wrappers_for_the_designate_path(tmp_path):
+    """`promotion.designation_inputs` keeps these callables for a whole ranking run and
+    plays them as both candidate and opponent; they must reload per game like the
+    discovered pool does."""
+    (tmp_path / "x.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    agents = external_pool.external_anchor_agents(("x",), str(tmp_path), manifest)
+    assert agents["x"].fresh() is agents["x"]
+    assert external_pool._source_of(agents["x"]) == str(tmp_path / "x.py")
+
+
+def test_load_external_agent_unregisters_its_module_once_the_agent_is_built(tmp_path):
+    """The uuid-named module is needed in sys.modules only while the file executes
+    (slotted dataclasses resolve annotations through it); left registered, a long
+    evolve run leaks one large module per game. The agent keeps its own globals."""
+    (tmp_path / "x.py").write_text(_GOOD)
+    before = {m for m in sys.modules if m.startswith("_external_agent_x_")}
+    agent = external_pool.load_external_agent(str(tmp_path / "x.py"))
+    assert {m for m in sys.modules if m.startswith("_external_agent_x_")} == before
+    assert callable(agent) and external_pool._source_of(agent) == str(tmp_path / "x.py")
