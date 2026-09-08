@@ -68,7 +68,14 @@ def load_manifest(path=MANIFEST_PATH):
     return data["agents"]
 
 
-_HEX40 = re.compile(r"^[0-9a-f]{40}$")
+_HEX40 = re.compile(r"[0-9a-f]{40}")
+
+
+def _is_sha40(text):
+    """Is `text` exactly a 40-hex commit sha? `fullmatch`, not `match`: `$`
+    also matches before a trailing newline, so a manifest `ref` carrying a
+    stray "\n" read as already-pinned and `--pin` skipped it (#152 review)."""
+    return bool(_HEX40.fullmatch(str(text)))
 
 
 def read_manifest(path=MANIFEST_PATH):
@@ -121,7 +128,7 @@ def pin_entries(entries, hashes, resolved_refs=None):
         if was_unpinned and name in hashes:
             e["sha256"] = hashes[name]
         if (was_unpinned and e.get("source_type") == "github_file" and name in resolved_refs
-                and not _HEX40.match(str(entry.get("ref", "")))):
+                and not _is_sha40(entry.get("ref", ""))):
             e["ref"] = resolved_refs[name]
         out.append(e)
     return out
@@ -138,7 +145,7 @@ def resolve_commit_sha(entry, runner=subprocess.run):
             f"(exit {result.returncode}): {result.stderr.strip()}"
         )
     sha = result.stdout.strip()
-    if not _HEX40.match(sha):
+    if not _is_sha40(sha):
         raise SystemExit(f"gh api returned no commit sha for {entry['name']!r}: {sha!r}")
     return sha
 
@@ -381,7 +388,7 @@ def main(argv=None):  # pragma: no cover - orchestration, shells out to gh/kaggl
         fetch_entry = dict(entry)
         try:
             if (args.pin and entry.get("source_type") == "github_file"
-                    and not entry.get("sha256") and not _HEX40.match(str(entry.get("ref", "")))):
+                    and not entry.get("sha256") and not _is_sha40(entry.get("ref", ""))):
                 # Resolve first, then fetch at that commit, so the pinned ref and
                 # the pinned bytes are the same snapshot.
                 fetch_entry["ref"] = resolved_refs[entry["name"]] = resolve_commit_sha(entry)

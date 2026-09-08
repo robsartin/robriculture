@@ -600,3 +600,21 @@ def test_every_external_anchor_is_pinned_in_the_committed_manifest():
         assert re.fullmatch(r"[0-9a-f]{64}", entry.get("sha256", "")), name
         if entry["source_type"] == "github_file":
             assert re.fullmatch(r"[0-9a-f]{40}", entry["ref"]), name
+
+
+def test_every_manifest_entry_is_pinned():
+    """Not only the anchors (#152 review): the partial-pin failure Task 4 actually
+    hit left a *non-anchor* entry unpinned and the suite stayed green. A regression
+    pin over the committed manifest, green the moment it was written."""
+    for entry in fea.load_manifest():
+        assert re.fullmatch(r"[0-9a-f]{64}", entry.get("sha256", "")), entry["name"]
+        if entry["source_type"] == "github_file":
+            assert re.fullmatch(r"[0-9a-f]{40}", entry.get("ref", "")), entry["name"]
+
+
+def test_is_sha40_full_matches_so_a_trailing_newline_is_not_a_pinned_ref():
+    """`^...$` matches a trailing newline, so a manifest `ref` carrying a stray
+    "\\n" read as already-pinned and was skipped by --pin (#152 review)."""
+    assert fea._is_sha40("a" * 40)
+    assert not fea._is_sha40("a" * 40 + "\n")
+    assert not fea._is_sha40("main") and not fea._is_sha40("a" * 39) and not fea._is_sha40("A" * 40)
