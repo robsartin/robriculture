@@ -564,3 +564,35 @@ def test_the_reloading_wrapper_still_reports_the_file_it_came_from(tmp_path):
     opp = external_pool.discover_external_agents(str(tmp_path))["x"]
     assert external_pool._source_of(opp) == str(tmp_path / "x.py")
     assert external_pool.mismatched_sources({"x": opp}, {"x": _sha(_GOOD)}) == []
+
+
+def test_the_wrapper_mirrors_kaggles_arity_rule_for_a_one_argument_agent(tmp_path):
+    """kaggle_environments trims (obs, config) to a function's co_argcount; a class
+    instance has no __code__, so kaggle hands the wrapper both and the wrapper must
+    trim for the inner agent itself. 17 of 19 agents in the real pool are `def agent(obs)`."""
+    (tmp_path / "one.py").write_text("def agent(obs):\n    return obs['step']\n")
+    (tmp_path / "two.py").write_text("def agent(obs, config):\n    return config['k']\n")
+    found = external_pool.discover_external_agents(str(tmp_path))
+    assert found["one"]({"step": 7}, {"k": "cfg"}) == 7
+    assert found["two"]({"step": 7}, {"k": "cfg"}) == "cfg"
+
+
+def test_fresh_reloads_the_module_between_games_and_resets_the_step_zero_fallback(tmp_path):
+    """`fresh()` is what `opponent_record` calls between games: a new module, outside
+    the sim's timer. It also marks the wrapper unused, so the step-0 fallback does not
+    reload a second time at the start of that game."""
+    (tmp_path / "counter.py").write_text(_COUNTER)
+    opp = external_pool.discover_external_agents(str(tmp_path))["counter"]
+    assert [opp({"step": 3}), opp({"step": 4})] == [1, 2]
+    assert opp.fresh() is opp
+    assert [opp({"step": 0}), opp({"step": 1})] == [1, 2]     # one module for the whole game
+
+
+def test_fresh_refuses_a_file_that_changed_on_disk_since_discovery(tmp_path):
+    """Discovery verified these bytes; a reload must not quietly pick up others (#133)."""
+    import pytest
+    (tmp_path / "x.py").write_text(_GOOD)
+    opp = external_pool.discover_external_agents(str(tmp_path))["x"]
+    (tmp_path / "x.py").write_text(_GOOD + "# edited\n")
+    with pytest.raises(RuntimeError, match="changed on disk"):
+        opp.fresh()

@@ -193,30 +193,62 @@ def _default_warn(message):
 
 
 class FreshPerGame:
-    """A discovered external that re-imports its module on every game's first step (#247).
+    """A discovered external that plays every game on a freshly imported module (#247).
 
-    The gate (`external_anchor_agents`) imports a fresh module per game; the
-    evolve / genome_bench path (`resolve_opponents`) hands out one callable per
-    run and plays it across every game, so an external that keeps module-level
-    state -- day counters, cached plans, memoised prices -- started its second
-    game with its first game's memory, and the gate and the ranking measured
-    different opponents under one name. Reloading on the step-0 observation
-    restores the gate's semantics without changing the ``{name: agent}``
-    contract every consumer holds. `_source_of` reads the file off
-    `__external_source__`, so pin verification (#152) still sees the real file.
+    The gate (`external_anchor_agents` / `rival_bench._gate_agents`) imports a
+    fresh module per game; the evolve / genome_bench / `--designate` path keeps
+    one callable per run and plays it across every game, so an external that
+    keeps module-level state -- day counters, cached plans, memoised prices --
+    started its second game with its first game's memory, and the gate and the
+    ranking measured different opponents under one name.
+
+    Two mechanisms, in order of preference:
+
+    * `fresh()` -- `harness.evolve.opponent_record` calls it between games, so
+      the import runs outside the sim's per-step timer (lonespear's numpy +
+      scipy import costs ~0.4 s of a 1 s step) and a failure raises in the
+      harness loop, where it stops the run, instead of inside the sim, where
+      it would be scored as a 0-reward ERROR.
+    * the step-0 fallback in `__call__` -- for a consumer that keeps the
+      callable and never calls `fresh()`; it reloads inside the timer and its
+      failure is only as loud as the sim makes it.
+
+    Both re-check the file's sha256 against the bytes discovery verified, so a
+    file edited on disk mid-run raises instead of being played (#133).
+
+    kaggle_environments trims ``(observation, configuration)`` to a function's
+    ``co_argcount``; an instance has no ``__code__``, so kaggle hands the
+    wrapper both and `__call__` applies the same rule to the inner agent.
+    `_source_of` reads the file off `__external_source__`, so pin
+    verification (#152) still sees the real file.
     """
 
     def __init__(self, path, agent):
         self.__external_source__ = path
+        self._sha = file_sha256(path)
         self._agent = agent          # the module discovery already imported
         self._used = False
 
-    def __call__(self, obs, *args, **kwargs):
+    def fresh(self):
+        """Re-import the verified file; returns self so a caller can chain."""
+        if file_sha256(self.__external_source__) != self._sha:
+            raise RuntimeError(
+                f"external agent {self.__external_source__!r} changed on disk since it "
+                "was verified; re-run python -m scripts.fetch_external_agents")
+        self._agent = load_external_agent(self.__external_source__)
+        self._used = False
+        return self
+
+    def __call__(self, *args, **kwargs):
+        obs = args[0] if args else kwargs.get("obs")
         step = obs.get("step") if isinstance(obs, dict) else getattr(obs, "step", None)
         if step == 0 and self._used:
-            self._agent = load_external_agent(self.__external_source__)
+            self.fresh()
         self._used = True
-        return self._agent(obs, *args, **kwargs)
+        inner = self._agent
+        if hasattr(inner, "__code__") and hasattr(inner.__code__, "co_argcount"):
+            args = args[: inner.__code__.co_argcount]
+        return inner(*args, **kwargs)
 
 
 def discover_external_agents(directory=DEFAULT_DIR, warn=None):
