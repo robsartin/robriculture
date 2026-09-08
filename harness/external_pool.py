@@ -266,7 +266,7 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
                 f"include_external was requested but the external pool is missing "
                 f"{len(missing)} of {len(expected)} manifest agent(s): "
                 f"{', '.join(missing)}. external_agents/ is gitignored -- re-run "
-                "scripts/fetch_external_agents.py to repair it."
+                "python -m scripts.fetch_external_agents to repair it."
             )
             if not allow_partial:
                 raise RuntimeError(message)
@@ -280,7 +280,7 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
             # pool, a mismatched file is code nobody reviewed (#152).
             raise RuntimeError(
                 f"external agent(s) on disk do not match the manifest pin: "
-                f"{', '.join(mismatched)}. Re-run scripts/fetch_external_agents.py (it "
+                f"{', '.join(mismatched)}. Re-run python -m scripts.fetch_external_agents (it "
                 "refuses a mismatch); if the author published a new version you have "
                 "checked, re-pin with --pin and commit the manifest."
             )
@@ -312,7 +312,7 @@ def external_anchor_paths(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
     if problems:
         detail = ", ".join(f"{n} ({s})" for n, s in problems.items())
         raise RuntimeError(
-            f"gate anchors are not verified: {detail}. Run scripts/fetch_external_agents.py "
+            f"gate anchors are not verified: {detail}. Run python -m scripts.fetch_external_agents "
             "(--pin for an unpinned entry) and commit the manifest; the gate never runs "
             "against an unverified external."
         )
@@ -350,7 +350,7 @@ def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
     if mismatched:
         raise RuntimeError(
             f"external agent(s) on disk do not match the manifest pin: "
-            f"{', '.join(mismatched)}. Re-run scripts/fetch_external_agents.py (it "
+            f"{', '.join(mismatched)}. Re-run python -m scripts.fetch_external_agents (it "
             "refuses a mismatch); if the author published a new version you have "
             "checked, re-pin with --pin and commit the manifest."
         )

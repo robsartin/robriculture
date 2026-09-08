@@ -1,8 +1,8 @@
 {
   "_comment": [
     "Single source of truth for real external competitor agents (#78; roles widened by",
-    "#152, ADR-0008 amendment 2026-09-07). Each entry's sha256 pins the fetched file;",
-    "vendored into this repo -- scripts/fetch_external_agents.py reads this",
+    "#152, ADR-0008 amendment 2026-09-07). Each entry's sha256 pins the fetched file,",
+    "never vendored into this repo -- scripts/fetch_external_agents.py reads this",
     "file and downloads each entry into a gitignored local directory",
     "(external_agents/ by default) and refuses a pin mismatch. No third-party code is committed to git.",
     "Every entry's license was checked by the #67 survey before being added",

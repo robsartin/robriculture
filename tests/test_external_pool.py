@@ -1,4 +1,4 @@
-"""Loader for locally-fetched external competitor agents (#78) -- measurement only.
+"""Loader for locally-fetched external competitor agents (#78; pinned gate anchors since #152).
 
 `harness.external_pool.discover_external_agents` reads a gitignored local
 directory (never committed) and returns opponent callables for measurement

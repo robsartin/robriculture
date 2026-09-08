@@ -2,7 +2,7 @@
 
 The fetch script reads harness/external_agents.json (the single source of
 truth for which external agents to download) and pulls each into a gitignored
-local directory for measurement only. Every network-touching call is
+local directory (pinned by sha256 since #152). Every network-touching call is
 exercised here with an injected fake `runner` -- nothing touches the real
 `gh` or `kaggle` CLIs, or the network.
 """
@@ -618,3 +618,11 @@ def test_is_sha40_full_matches_so_a_trailing_newline_is_not_a_pinned_ref():
     assert fea._is_sha40("a" * 40)
     assert not fea._is_sha40("a" * 40 + "\n")
     assert not fea._is_sha40("main") and not fea._is_sha40("a" * 39) and not fea._is_sha40("A" * 40)
+
+
+def test_manifest_comment_still_says_no_third_party_code_is_vendored():
+    """Final review I1: the #152 comment rewrite dropped "never", so the licensing
+    artifact of record read as if the agents were vendored into the repo."""
+    comment = " ".join(fea.read_manifest()["_comment"])
+    assert "never vendored into this repo" in comment
+    assert "No third-party code is committed to git" in comment

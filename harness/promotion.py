@@ -217,8 +217,10 @@ def designate(candidates, pool, games=2, seed_base=0,
               rewards_fn=_play_rewards, benchmarks=None):
     """Rank by pool share and split the result into the champion's two roles.
 
-    `gate_opponent` is the outright leader — benchmarks included, because the
-    gate wants the most demanding representative bar available.
+    `gate_opponent` here is the ranking's outright leader, benchmarks included,
+    so the ranking reports the most demanding bar it saw. The *recorded* gate
+    opponent is by succession (#241) and is always ours: a pool-share body is
+    informational and `save_champion` will not write it over a succession.
 
     `submit_default` is the leading non-benchmark. `scripts/submit.py` packages
     it with no arguments, so a vendored external agent must never land here:
@@ -391,7 +393,9 @@ def _read_role(path, field):
 
 
 def gate_opponent(path=CHAMPION_PATH):
-    """The opponent an ADR-0007 promotion test measures against. May be a benchmark."""
+    """The opponent an ADR-0007 promotion test measures against: the last challenger
+    to PROMOTE (#241), so ours, never an external -- the field enters through the
+    gate's paired external limb (#152)."""
     return _read_role(path, "gate_opponent")
 
 
