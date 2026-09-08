@@ -358,3 +358,29 @@ criterion would have been worse still.
 --games G --ties T --seeds A-B --date YYYY-MM-DD`, in its own issue (as #241
 was), so the decision is deliberate and not a side effect of the experiment's
 PR. Both roles go to the challenger; a benchmark is refused.
+
+### 2026-09-07 — the gate gains a paired external limb (#152)
+
+**What this corrects.** The criterion above had two limbs: the champion bar and
+the ≥ 90% floor against each `DEFAULT_ANCHOR`. Since #219 every contender has
+cleared the floor 16/16, so it no longer separates contenders. A third limb is
+added; the two existing ones are unchanged.
+
+**The limb.** For each external anchor in `harness.external_pool.EXTERNAL_ANCHORS`
+(cite the code, not a copy: the tuple is the authority and changing it is a
+dated amendment here), the contender and the champion are both played on the
+declared seeds in the same run, sides alternated by list position, and the
+contender's win count must be **at least the champion's**. Ties are not wins on
+either side. A pair not played on the same seeds is an error, not a verdict
+(`harness.rival_bench.criterion`, `paired_external_rows`, passed to `criterion`
+as the keyword-only `external_pairs=`). Paired non-regression was chosen over a
+fixed bar because the champion loses to these anchors 0/2 today: a fixed 90%
+could never be met, and "recorded, not gated" would keep the field out of the
+verdict — which is what the limb exists to change.
+
+**Reproducibility.** The anchors are not committed (ADR-0008 amendment of this
+date); they are pinned by sha256 in `harness/external_agents.json`, and the gate
+refuses to load an anchor that is missing, unpinned or mismatched.
+
+**Cost.** Five anchors × 16 seeds × two strategies = 160 games per gate run, on
+top of the 112 the first two limbs cost.

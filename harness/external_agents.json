@@ -1,10 +1,10 @@
 {
   "_comment": [
-    "Single source of truth for real external competitor agents used for",
-    "MEASUREMENT ONLY (#78, ADR-0008 amendment 2026-08-18). These are never",
-    "vendored into this repo -- scripts/fetch_external_agents.py reads this",
+    "Single source of truth for real external competitor agents (#78; roles widened by",
+    "#152, ADR-0008 amendment 2026-09-07). Each entry's sha256 pins the fetched file,",
+    "never vendored into this repo -- scripts/fetch_external_agents.py reads this",
     "file and downloads each entry into a gitignored local directory",
-    "(external_agents/ by default). No third-party code is committed to git.",
+    "(external_agents/ by default) and refuses a pin mismatch. No third-party code is committed to git.",
     "Every entry's license was checked by the #67 survey before being added",
     "here; do not add an entry without a confirmed permissive license."
   ],
@@ -17,31 +17,34 @@
       "license": "Apache-2.0",
       "attribution": "pilkwang, \"Kaggriculture: Structured Economic Policy\" (https://www.kaggle.com/code/pilkwang/kaggriculture-structured-economic-policy), Apache License 2.0.",
       "dest_filename": "pilkwang_structured_economic_policy.py",
-      "notes": "Kaggle notebook; the submittable agent lives in the single code cell tagged with the `%%agentfile` cell magic (writes kaggle's main.py). The fetch script extracts that cell only -- the rest of the notebook is narrative/plotting for the writeup and is not fetched or executed."
+      "notes": "Kaggle notebook; the submittable agent lives in the single code cell tagged with the `%%agentfile` cell magic (writes kaggle's main.py). The fetch script extracts that cell only -- the rest of the notebook is narrative/plotting for the writeup and is not fetched or executed.",
+      "sha256": "17c45f1cc1966161631f4a9de6ddb987825ec24b3eef25ff065f837fa142a3a8"
     },
     {
       "name": "madhur_sabherwal_hub_geometry_agent",
       "source_type": "github_file",
       "repo": "Madhur-Sabherwal/kaggriculture-hub-geometry-agent",
       "path": "src/agent.py",
-      "ref": "main",
+      "ref": "8fbd5fea0f4658b6172538f2bde7c8a93e5f9658",
       "url": "https://github.com/Madhur-Sabherwal/kaggriculture-hub-geometry-agent/blob/main/src/agent.py",
       "license": "MIT",
       "attribution": "Madhur Sabherwal, kaggriculture-hub-geometry-agent (https://github.com/Madhur-Sabherwal/kaggriculture-hub-geometry-agent), MIT License.",
       "dest_filename": "madhur_sabherwal_hub_geometry_agent.py",
-      "notes": "Structurally distinct job-scoring approach (hub geometry), picked for strategic diversity per the #67 survey."
+      "notes": "Structurally distinct job-scoring approach (hub geometry), picked for strategic diversity per the #67 survey.",
+      "sha256": "8448b4509483a267594506c9cbff7904dd4ca87b8aa5d093a9184098ed5a86c9"
     },
     {
       "name": "seyamalam_candidate_v6_adaptive_livestock",
       "source_type": "github_file",
       "repo": "Seyamalam/Kaggriculture",
       "path": "agents/candidate_v6_adaptive_livestock.py",
-      "ref": "main",
+      "ref": "8b8c421eb10634c756583ce10c75189f50c83a72",
       "url": "https://github.com/Seyamalam/Kaggriculture/blob/main/agents/candidate_v6_adaptive_livestock.py",
       "license": "MIT",
       "attribution": "Seyamalam, Kaggriculture (https://github.com/Seyamalam/Kaggriculture), agents/candidate_v6_adaptive_livestock.py, MIT License.",
       "dest_filename": "seyamalam_candidate_v6_adaptive_livestock.py",
-      "notes": "DO NOT fetch this author's candidate_v7_public_v18/v19/v20/v21 -- those are 300KB+ compressed-blob replayers, explicitly rejected by the #67 survey. Only v1-v6 (plain heuristic agents) are in scope, and only v6 is vendored here."
+      "notes": "DO NOT fetch this author's candidate_v7_public_v18/v19/v20/v21 -- those are 300KB+ compressed-blob replayers, explicitly rejected by the #67 survey. Only v1-v6 (plain heuristic agents) are in scope, and only v6 is vendored here.",
+      "sha256": "1464c72bba660d5c86d9c3295c7a5c17551241c0a2cb75f53fcf1159266aadcb"
     },
     {
       "name": "alexandergremyakov_harvest_pulse_goose_dividend_v2",
@@ -51,7 +54,8 @@
       "license": "Apache-2.0",
       "attribution": "Alexander Gremyakov, \"harvest-pulse-goose-dividend-v2\" (https://www.kaggle.com/code/alexandergremyakov/harvest-pulse-goose-dividend-v2), Apache License 2.0.",
       "dest_filename": "alexandergremyakov_harvest_pulse_goose_dividend_v2.py",
-      "notes": "Kaggle notebook; single code cell tagged `%%writefile /kaggle/working/main.py`. The fetch script extracts that cell only."
+      "notes": "Kaggle notebook; single code cell tagged `%%writefile /kaggle/working/main.py`. The fetch script extracts that cell only.",
+      "sha256": "8f3f216a39d5ce0c383d19c31f317dbad85422fc5b86d3c311eee756f3fb15e9"
     },
     {
       "name": "premaananda108_ecobot_v7",
@@ -62,41 +66,34 @@
       "attribution": "premaananda108, \"Economics-Driven Rule Agent (EcoBot v7) + Arena\" (https://www.kaggle.com/code/premaananda108/economics-driven-rule-agent-ecobot-v7-arena), Apache License 2.0.",
       "dest_filename": "premaananda108_ecobot_v7.py",
       "cell_file": "main.py",
-      "notes": "Public 819.0 / best 995.2 -- the strongest agent in this pool, and well above our own ~520-535. Its notebook tags TWO cells: main.py (the agent) and arena.py (a self-play harness); cell_file pins the former, so do not remove it (#151). Measured share ~0.792 vs DEFAULT_ANCHORS. Roughly 2.5x slower per game than the other externals."
+      "notes": "Public 819.0 / best 995.2 -- the strongest agent in this pool, and well above our own ~520-535. Its notebook tags TWO cells: main.py (the agent) and arena.py (a self-play harness); cell_file pins the former, so do not remove it (#151). Measured share ~0.792 vs DEFAULT_ANCHORS. Roughly 2.5x slower per game than the other externals.",
+      "sha256": "0dc02e03c94ef60c06b5093efc2e2fd0530aa6eea20df507a90b90d6651bd067"
     },
     {
       "name": "shashankjangid_agent_v300_champion",
       "source_type": "github_file",
       "repo": "ShashankJangid/kaggriculture-agent",
       "path": "agent_v300_champion.py",
-      "ref": "main",
+      "ref": "2fc0e4f00b5cd2e9d5bed10e1d0193dc3c3f1457",
       "url": "https://github.com/ShashankJangid/kaggriculture-agent/blob/main/agent_v300_champion.py",
       "license": "MIT",
       "attribution": "Shashank Jangid, kaggriculture-agent (https://github.com/ShashankJangid/kaggriculture-agent), agent_v300_champion.py, MIT License.",
       "dest_filename": "shashankjangid_agent_v300_champion.py",
-      "notes": "The near-parity rung: measured share ~0.536 vs DEFAULT_ANCHORS (0.5 is parity). Chosen with v1000 to span a real measured spread. That repo has 57 agent files whose version numbers do NOT track strength -- v25_master is the weakest measured (~0.095) and v9 beats v100_sota -- so do not add rungs by version number without measuring (#151)."
+      "notes": "The near-parity rung: measured share ~0.536 vs DEFAULT_ANCHORS (0.5 is parity). Chosen with v1000 to span a real measured spread. That repo has 57 agent files whose version numbers do NOT track strength -- v25_master is the weakest measured (~0.095) and v9 beats v100_sota -- so do not add rungs by version number without measuring (#151).",
+      "sha256": "fe78f67c784fb44c4c5f6dd70b3cca8a5f0ef82fc384351da3c000c0f9315ac8"
     },
     {
       "name": "shashankjangid_agent_v1000_sovereign_prime",
       "source_type": "github_file",
       "repo": "ShashankJangid/kaggriculture-agent",
       "path": "agent_v1000_sovereign_prime.py",
-      "ref": "main",
+      "ref": "2fc0e4f00b5cd2e9d5bed10e1d0193dc3c3f1457",
       "url": "https://github.com/ShashankJangid/kaggriculture-agent/blob/main/agent_v1000_sovereign_prime.py",
       "license": "MIT",
       "attribution": "Shashank Jangid, kaggriculture-agent (https://github.com/ShashankJangid/kaggriculture-agent), agent_v1000_sovereign_prime.py, MIT License.",
       "dest_filename": "shashankjangid_agent_v1000_sovereign_prime.py",
-      "notes": "The strong rung: measured share ~0.677 vs DEFAULT_ANCHORS, beating every one of our anchors. Do NOT also add agent_v1500_sovereign_apex -- it measures ~0.674, within the ~0.01 run-to-run noise, so it is a duplicate voice for double the runtime (#151)."
-    },
-    {
-      "name": "adilshamim8_kaggriculture_grandmaster_starter",
-      "source_type": "kaggle_kernel",
-      "kernel_ref": "adilshamim8/kaggriculture-grandmaster-starter",
-      "url": "https://www.kaggle.com/code/adilshamim8/kaggriculture-grandmaster-starter",
-      "license": "Apache-2.0",
-      "attribution": "adilshamim8, \"Kaggriculture: From First Sprout to Grandmaster\" (https://www.kaggle.com/code/adilshamim8/kaggriculture-grandmaster-starter), Apache License 2.0.",
-      "dest_filename": "adilshamim8_kaggriculture_grandmaster_starter.py",
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; single code cell tagged `%%writefile submission.py`, imports `math` only. Public/best 387.5."
+      "notes": "The strong rung: measured share ~0.677 vs DEFAULT_ANCHORS, beating every one of our anchors. Do NOT also add agent_v1500_sovereign_apex -- it measures ~0.674, within the ~0.01 run-to-run noise, so it is a duplicate voice for double the runtime (#151).",
+      "sha256": "658c26f7eed60ec476e04e16a282fc2f5f99a7ffd8817c516a99f301588abc1f"
     },
     {
       "name": "songoku2005_kaggriculture",
@@ -106,7 +103,8 @@
       "license": "Apache-2.0",
       "attribution": "songoku2005, \"Kaggriculture\" (https://www.kaggle.com/code/songoku2005/kaggriculture), Apache License 2.0.",
       "dest_filename": "songoku2005_kaggriculture.py",
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; single code cell tagged `%%writefile submission.py`. Pulls CROPS/ANIMALS from `kaggle_environments.envs.kaggriculture.kaggriculture` itself rather than hardcoding them. Public 445.5 / best 450.1."
+      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; single code cell tagged `%%writefile submission.py`. Pulls CROPS/ANIMALS from `kaggle_environments.envs.kaggriculture.kaggriculture` itself rather than hardcoding them. Public 445.5 / best 450.1.",
+      "sha256": "feefbf82435d2a782eec5ca348e6f5280d08f1d5bfdd860cba4f00d91aa56b0b"
     },
     {
       "name": "chaimaamatrag_kaggriculture_competition",
@@ -117,7 +115,8 @@
       "attribution": "chaimaamatrag, \"Kaggriculture Competition\" (https://www.kaggle.com/code/chaimaamatrag/kaggriculture-competition), Apache License 2.0.",
       "dest_filename": "chaimaamatrag_kaggriculture_competition.py",
       "cell_index": 2,
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; the notebook never uses the `%%agentfile`/`%%writefile` cell-magic convention at all, so `cell_index` (#229) selects the plain `def agent(obs):` code cell directly by position -- the only viable extraction path for a notebook like this. Self-contained single cell, 7.2KB."
+      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; the notebook never uses the `%%agentfile`/`%%writefile` cell-magic convention at all, so `cell_index` (#229) selects the plain `def agent(obs):` code cell directly by position -- the only viable extraction path for a notebook like this. Self-contained single cell, 7.2KB.",
+      "sha256": "083060091f4bed2356a87e2be48915c3080b830d04560f0e4f42bd22f1bc217e"
     },
     {
       "name": "dianatofficial_reactive_agent_strategy_eda",
@@ -129,7 +128,8 @@
       "dest_filename": "dianatofficial_reactive_agent_strategy_eda.py",
       "cell_index": 5,
       "entrypoint": "apex_agent",
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; no `%%agentfile`/`%%writefile` magic anywhere, so `cell_index` selects the agent-definition code cell directly. The submittable callable is named `apex_agent(obs)`, not `agent` -- `entrypoint: \"apex_agent\"` (#229) has the fetch script append `agent = apex_agent` so the file still resolves under harness.external_pool's fixed `agent` contract. Self-contained, 3.1KB."
+      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; no `%%agentfile`/`%%writefile` magic anywhere, so `cell_index` selects the agent-definition code cell directly. The submittable callable is named `apex_agent(obs)`, not `agent` -- `entrypoint: \"apex_agent\"` (#229) has the fetch script append `agent = apex_agent` so the file still resolves under harness.external_pool's fixed `agent` contract. Self-contained, 3.1KB.",
+      "sha256": "576b198fa69a63b4fef0ebea694d23ed2902fdcd43380259577cbe2c3bb6ad47"
     },
     {
       "name": "georgymamarin_visualized_what_every_crop_pays",
@@ -140,7 +140,8 @@
       "attribution": "georgymamarin, \"Kaggriculture, Visualized: A Beginner's Guide to Every Mechanic (and What Every Crop Pays)\" (https://www.kaggle.com/code/georgymamarin/kaggriculture-visualized-what-every-crop-pays), Apache License 2.0.",
       "dest_filename": "georgymamarin_visualized_what_every_crop_pays.py",
       "cell_file": "main.py",
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; single code cell tagged `%%writefile main.py`. \"Carrot Crew\" -- the survey's own naming for this agent -- is deliberately simple; vendored as a **floor anchor**, not a ceiling voice. 3.7KB."
+      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; single code cell tagged `%%writefile main.py`. \"Carrot Crew\" -- the survey's own naming for this agent -- is deliberately simple; vendored as a **floor anchor**, not a ceiling voice. 3.7KB.",
+      "sha256": "8df88e304782741d251af9a691c6cb217bd651d1475a23b3fda7a9b638c41cef"
     },
     {
       "name": "paiky1995_inside_the_market_machine",
@@ -152,7 +153,8 @@
       "dest_filename": "paiky1995_inside_the_market_machine.py",
       "cell_index": 36,
       "entrypoint": "make_farm_agent(\"daily\")",
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook is analysis-only (its own words: \"This one contains no agent\") and never uses `%%agentfile`/`%%writefile`, so `cell_index` selects the `make_farm_agent(sell_mode)` factory cell directly. `sell_mode` is a parameter, not a fixed agent -- `entrypoint: 'make_farm_agent(\"daily\")'` (#229) picks the sell_mode the notebook's own comparison recommends: its playbook section 7 states \"Unsold goods are worth $0 at turn 720; cash is the only score\" and \"hold-and-dump lost every episode to an identical farm\", i.e. `daily` (cash out every turn) beat `enddump` (hold and dump at day 28) in the notebook's own head-to-head. Vendored as `daily`, not `enddump`."
+      "notes": "2026-09-06 re-survey (#229). Kaggle notebook is analysis-only (its own words: \"This one contains no agent\") and never uses `%%agentfile`/`%%writefile`, so `cell_index` selects the `make_farm_agent(sell_mode)` factory cell directly. `sell_mode` is a parameter, not a fixed agent -- `entrypoint: 'make_farm_agent(\"daily\")'` (#229) picks the sell_mode the notebook's own comparison recommends: its playbook section 7 states \"Unsold goods are worth $0 at turn 720; cash is the only score\" and \"hold-and-dump lost every episode to an identical farm\", i.e. `daily` (cash out every turn) beat `enddump` (hold and dump at day 28) in the notebook's own head-to-head. Vendored as `daily`, not `enddump`.",
+      "sha256": "7beb7cac9e317a3addd9b70e0513a20ffa76b00e0b6befefa043df43a966e4e0"
     },
     {
       "name": "raykkretzschmar_rank_your_agent_floor_anchor",
@@ -163,80 +165,87 @@
       "attribution": "raykkretzschmar, \"Kaggriculture: rank your agent against a known ladder\" (https://www.kaggle.com/code/raykkretzschmar/kaggriculture-rank-your-agent), Apache License 2.0.",
       "dest_filename": "raykkretzschmar_rank_your_agent_floor_anchor.py",
       "cell_file": "my_agent.py",
-      "notes": "2026-09-06 re-survey (#229). CAVEAT from the survey: the notebook's headline 2563.4/2990.4 score belongs to a 120KB `zlib`+`b64`-packed opponent ladder in a separate cell (opaque -- rejected, never fetched). `cell_file: \"my_agent.py\"` pins the OTHER tagged cell -- the tiny naive tutorial challenger this notebook actually teaches -- so do not read this agent's local measurement as anywhere near 2990; it is a **floor anchor only**, 1.5KB."
+      "notes": "2026-09-06 re-survey (#229). CAVEAT from the survey: the notebook's headline 2563.4/2990.4 score belongs to a 120KB `zlib`+`b64`-packed opponent ladder in a separate cell (opaque -- rejected, never fetched). `cell_file: \"my_agent.py\"` pins the OTHER tagged cell -- the tiny naive tutorial challenger this notebook actually teaches -- so do not read this agent's local measurement as anywhere near 2990; it is a **floor anchor only**, 1.5KB.",
+      "sha256": "114123d17ad08ebb71487b885f0f48ae97251b1f9b4495082ea2d799785ddb1c"
     },
     {
       "name": "loubaliber_kaggriculture_loubal",
       "source_type": "github_file",
       "repo": "loubaliber/kaggriculture-loubal",
       "path": "submission.py",
-      "ref": "main",
+      "ref": "654030419d68dd7729125c41cbcd2cbc01d820f0",
       "url": "https://github.com/loubaliber/kaggriculture-loubal/blob/main/submission.py",
       "license": "MIT",
       "attribution": "loubaliber, kaggriculture-loubal (https://github.com/loubaliber/kaggriculture-loubal), submission.py, MIT License.",
       "dest_filename": "loubaliber_kaggriculture_loubal.py",
-      "notes": "2026-09-06 re-survey (#229). Self-described rolling-horizon MPC (model predictive control) -- architecturally unlike anything else in the pool, picked for strategic diversity. 39KB, module-level `def agent(obs):`."
+      "notes": "2026-09-06 re-survey (#229). Self-described rolling-horizon MPC (model predictive control) -- architecturally unlike anything else in the pool, picked for strategic diversity. 39KB, module-level `def agent(obs):`.",
+      "sha256": "0cc430fc46a2a6ede33420532e683d90f10affb4d2e3073757012ba3251b5748"
     },
     {
       "name": "shashankjangid_agent_v9",
       "source_type": "github_file",
       "repo": "ShashankJangid/kaggriculture-agent",
       "path": "agent_v9.py",
-      "ref": "main",
+      "ref": "2fc0e4f00b5cd2e9d5bed10e1d0193dc3c3f1457",
       "url": "https://github.com/ShashankJangid/kaggriculture-agent/blob/main/agent_v9.py",
       "license": "MIT",
       "attribution": "Shashank Jangid, kaggriculture-agent (https://github.com/ShashankJangid/kaggriculture-agent), agent_v9.py, MIT License.",
       "dest_filename": "shashankjangid_agent_v9.py",
-      "notes": "2026-09-06 re-survey (#229). A third measured rung from this author, alongside the existing v300/v1000 entries -- the #151 note on this repo already records that v9 beats v100_sota despite the version numbers not tracking strength. stdlib (`math`, `collections`). Do not add further rungs from this repo's 57 agent files without measuring first (#151)."
+      "notes": "2026-09-06 re-survey (#229). A third measured rung from this author, alongside the existing v300/v1000 entries -- the #151 note on this repo already records that v9 beats v100_sota despite the version numbers not tracking strength. stdlib (`math`, `collections`). Do not add further rungs from this repo's 57 agent files without measuring first (#151).",
+      "sha256": "e5a60c72d0bfaa3ab8c425378466162db60de64b66dfbdf15149422df4b70810"
     },
     {
       "name": "driw0x_kaggriculture_chi7",
       "source_type": "github_file",
       "repo": "Driw0x/Kaggriculture",
       "path": "src/agents/chi7.py",
-      "ref": "master",
+      "ref": "f7ea71ddae8591bddaf0925a119c3b4196e06319",
       "url": "https://github.com/Driw0x/Kaggriculture/blob/master/src/agents/chi7.py",
       "license": "Apache-2.0",
       "attribution": "Driw0x, Kaggriculture (https://github.com/Driw0x/Kaggriculture), src/agents/chi7.py, Apache License 2.0.",
       "dest_filename": "driw0x_kaggriculture_chi7.py",
-      "notes": "2026-09-06 re-survey (#229). Fixed tile-layout planner: a module-level `CROP_STATE` dict hardcodes a crop assignment per board coordinate. 24KB, module-level `def agent(obs):`."
+      "notes": "2026-09-06 re-survey (#229). Fixed tile-layout planner: a module-level `CROP_STATE` dict hardcodes a crop assignment per board coordinate. 24KB, module-level `def agent(obs):`.",
+      "sha256": "2ce05deccb2f45dc2d9593db8c5d290a2d53469d77b9ad987cc6c06016c86536"
     },
     {
       "name": "darunesh1_kaggriculture_baseline_v1",
       "source_type": "github_file",
       "repo": "Darunesh1/Kaggriculture",
       "path": "baselines/v1/main.py",
-      "ref": "main",
+      "ref": "af5bf6e3464d31d27c0b40bf9b24ed3e458a8f88",
       "url": "https://github.com/Darunesh1/Kaggriculture/blob/main/baselines/v1/main.py",
       "license": "MIT",
       "attribution": "Darunesh1, Kaggriculture (https://github.com/Darunesh1/Kaggriculture), baselines/v1/main.py, MIT License.",
       "dest_filename": "darunesh1_kaggriculture_baseline_v1.py",
-      "notes": "2026-09-06 re-survey (#229). Explicitly a frozen, self-contained baseline per the repo's own naming. 10KB, module-level `def agent(obs, config=None):`."
+      "notes": "2026-09-06 re-survey (#229). Explicitly a frozen, self-contained baseline per the repo's own naming. 10KB, module-level `def agent(obs, config=None):`.",
+      "sha256": "18fe32384200941a141f06637f35ba4fcfdcf2a7f995c15b541b2389a6905e67"
     },
     {
       "name": "naisha123_kaggriculture_agent",
       "source_type": "github_file",
       "repo": "Naisha-123/Kaggriculture_Agent",
       "path": "agent.py",
-      "ref": "main",
+      "ref": "2f2c0444c0f3d15be43050e797c57b451242b14d",
       "url": "https://github.com/Naisha-123/Kaggriculture_Agent/blob/main/agent.py",
       "license": "Apache-2.0",
       "attribution": "Naisha-123, Kaggriculture_Agent (https://github.com/Naisha-123/Kaggriculture_Agent), agent.py, Apache License 2.0.",
       "dest_filename": "naisha123_kaggriculture_agent.py",
       "entrypoint": "my_agent",
-      "notes": "2026-09-06 re-survey (#229). The survey listed this as plain stdlib, but did not catch that the file's actual submission entry point is a module-level `my_agent(obs)` wrapping a per-player-keyed factory -- there is no module-level `agent` at all (found only by reading the fetched file directly, not by the survey's smoke test description). `entrypoint: \"my_agent\"` (#229) has the fetch script append `agent = my_agent`. 8.9KB, stdlib."
+      "notes": "2026-09-06 re-survey (#229). The survey listed this as plain stdlib, but did not catch that the file's actual submission entry point is a module-level `my_agent(obs)` wrapping a per-player-keyed factory -- there is no module-level `agent` at all (found only by reading the fetched file directly, not by the survey's smoke test description). `entrypoint: \"my_agent\"` (#229) has the fetch script append `agent = my_agent`. 8.9KB, stdlib.",
+      "sha256": "90d5ec771c8c9a92edb4fe33d7545a9e86ad09b298def7fe63f28fa96ea78e30"
     },
     {
       "name": "lonespear_kaggriculture_v21",
       "source_type": "github_file",
       "repo": "lonespear/kaggriculture",
       "path": "main_v21.py",
-      "ref": "main",
+      "ref": "774b26093ccf4246525517d48420349b841b6e50",
       "url": "https://github.com/lonespear/kaggriculture/blob/main/main_v21.py",
       "license": "MIT",
       "attribution": "lonespear, kaggriculture (https://github.com/lonespear/kaggriculture), main_v21.py, MIT License.",
       "dest_filename": "lonespear_kaggriculture_v21.py",
-      "notes": "2026-09-06 re-survey (#229). Needs numpy + scipy (module-level `try: import numpy; from scipy.optimize import linear_sum_assignment` for a Hungarian-algorithm worker assignment, with a graceful stdlib fallback if unavailable). Taken despite the dependency: harness/external_pool.py's own docstring is explicit that externals are \"opponents and gate opponents only, never submission candidates\" (scripts/submit.py never packages one, per ADR-0005), and ADR-0008's stdlib-only citations (\"stdlib-only in the submitted artifact (ADR-0004)\") are all scoped to what WE submit, not to measurement opponents. 47KB, module-level `def agent(obs):`."
+      "notes": "2026-09-06 re-survey (#229). Needs numpy + scipy (module-level `try: import numpy; from scipy.optimize import linear_sum_assignment` for a Hungarian-algorithm worker assignment, with a graceful stdlib fallback if unavailable). Taken despite the dependency: harness/external_pool.py's own docstring is explicit that externals are \"opponents and gate opponents only, never submission candidates\" (scripts/submit.py never packages one, per ADR-0005), and ADR-0008's stdlib-only citations (\"stdlib-only in the submitted artifact (ADR-0004)\") are all scoped to what WE submit, not to measurement opponents. 47KB, module-level `def agent(obs):`.",
+      "sha256": "2b7bbac6e30178f12c97573e7556546918ecbfc88499916d83b39a54cabcac57"
     }
   ]
 }

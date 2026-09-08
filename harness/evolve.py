@@ -328,6 +328,17 @@ def run_pool_names(anchor_names, include_external, resolved_external=None):
     return sorted(resolved_external)
 
 
+def run_pool_pins(include_external, resolved_external, pins):
+    """{stem: sha256} for the externals a run resolved (#152); {} when none.
+
+    `pins` is `external_pool.manifest_pins()`. Anchors are not in the manifest
+    and an unpinned external has nothing to record, so both are left out.
+    """
+    if not include_external or not resolved_external:
+        return {}
+    return {n: pins[n] for n in sorted(resolved_external) if pins.get(n)}
+
+
 def main(argv=None):  # pragma: no cover
     ap = argparse.ArgumentParser(description="robriculture neuroevolution (#66)")
     ap.add_argument("--generations", type=int, default=10)
@@ -381,6 +392,9 @@ def main(argv=None):  # pragma: no cover
         # The resolved pool composition (#153), so a checkpoint says which
         # pool it was measured against instead of just include_external: true.
         "resolved_pool": run_pool_names(args.anchors, args.include_external, resolved_external),
+        "external_pins": run_pool_pins(
+            args.include_external, resolved_external,
+            external_pool.manifest_pins() if args.include_external else {}),
         "anchor_weight": args.anchor_weight,
         "seed_genome": args.seed_genome,
     }

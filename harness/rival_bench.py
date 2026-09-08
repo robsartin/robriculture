@@ -56,14 +56,39 @@ def _rate(row):
     return row["wins"] / games if games else 0.0
 
 
-def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR, anchor_bar=ANCHOR_BAR):
-    """The declared verdict: both bars, ties never wins."""
+def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
+              anchor_bar=ANCHOR_BAR, *, external_pairs=()):
+    """The declared verdict: the champion bar, each anchor's bar, and -- when
+    `external_pairs` are given (#152) -- paired non-regression against each
+    external anchor: the contender's wins on the seeds must be >= the
+    champion's wins on the *same* seeds in the same run. Ties never count as
+    wins on either side. With no pairs the verdict is exactly the pre-#152 one.
+
+    `external_pairs` is keyword-only so it can never capture a positional bar:
+    `clock_bench`, `pasture_bench` and `herder_bench` all call
+    `criterion(row, anchors, CHAMPION_BAR, ANCHOR_BAR)` positionally.
+    """
     champion_rate = _rate(champion_row)
     anchor_rates = {r["opponent"]: _rate(r) for r in anchor_rows}
+    external = {}
+    for pair in external_pairs:
+        contender, champion = pair["contender"], pair["champion"]
+        # `seeds` is `triage._seed_range`'s lossy "lo-hi" string, so two rows
+        # from differently-sized runs on the same range stringify alike; the
+        # game count is what catches them (#152 review).
+        if (contender["seeds"] != champion["seeds"]
+                or contender["games"] != champion["games"]):
+            raise ValueError(
+                f"external pair {pair['opponent']!r} is not paired: contender on seeds "
+                f"{contender['seeds']} ({contender['games']} games), champion on "
+                f"{champion['seeds']} ({champion['games']} games)"
+            )
+        external[pair["opponent"]] = (contender["wins"], champion["wins"])
     failing = ([champion_row["opponent"]] if champion_rate < champion_bar else []) + \
-              [n for n, rate in anchor_rates.items() if rate < anchor_bar]
+              [n for n, rate in anchor_rates.items() if rate < anchor_bar] + \
+              [f"external:{n}" for n, (ours, theirs) in external.items() if ours < theirs]
     return {"passed": not failing, "champion_rate": champion_rate,
-            "anchor_rates": anchor_rates, "failing": failing}
+            "anchor_rates": anchor_rates, "external": external, "failing": failing}
 
 
 def ablation_verdict(contender_wins, ablation_wins, games):
@@ -136,6 +161,65 @@ def format_rows(rows):
         lines.append(f"{r['opponent']:<16} {r['wins']:>3}/{r['games']:<3} {r.get('ties', 0):>4} "
                      f"{_rate(r):>6.1%}")
     return "\n".join(lines)
+
+
+def format_external(pairs):
+    """One line per external anchor: contender W/G, champion W/G, ok or REGRESSED."""
+    lines = [f"{'external':<44} {'contender':>10} {'champion':>10}  verdict"]
+    for p in pairs:
+        c, k = p["contender"], p["champion"]
+        verdict = "ok" if c["wins"] >= k["wins"] else "REGRESSED"
+        lines.append(f"{p['opponent']:<44} {c['wins']:>3}/{c['games']:<6} "
+                     f"{k['wins']:>3}/{k['games']:<6}  {verdict}")
+    return "\n".join(lines)
+
+
+def paired_external_rows(contender, champion, seeds, names=None, play=None, agents=None):
+    """Both strategies against each external anchor on the same `seeds`, sides
+    alternated by list position (`harness.triage.head_to_head_rate`), in the
+    shape `criterion`'s `external_pairs` reads. `names` defaults to
+    `external_pool.EXTERNAL_ANCHORS`; `agents` defaults to `_gate_agents()`."""
+    from harness.triage import head_to_head_rate
+
+    if names is None:
+        from harness.external_pool import EXTERNAL_ANCHORS as names
+    agents = agents or _gate_agents()
+    seeds = list(seeds)
+    return [{"opponent": name,
+             "contender": head_to_head_rate(contender, name, seeds, play, agents),
+             "champion": head_to_head_rate(champion, name, seeds, play, agents)}
+            for name in names]
+
+
+def _gate_agents(paths=None, registry=None):
+    """`head_to_head_rate`'s agents hook: registry names from the registry,
+    anchor names loaded **fresh from their verified file on every call**.
+
+    The pool is verified once (`external_anchor_paths`, which refuses a
+    missing/unpinned/mismatched anchor) and then re-imported per game. A
+    stranger's agent may keep module-level state across calls, and
+    `paired_external_rows` plays the contender's whole seed set before the
+    champion's -- one shared callable would hand the champion an opponent that
+    had already played 16 games and the contender a cold one, biasing exactly
+    the paired comparison this limb exists to make (#152 review). The registry
+    is fresh per game for the same reason (`triage._default_agents`).
+
+    `paths` and `registry` are injected by the tests; live, both are resolved
+    from the pinned pool and the strategy registry.
+    """
+    from harness.external_pool import external_anchor_paths, load_external_agent
+    from harness.triage import _default_agents
+
+    if paths is None:
+        paths = external_anchor_paths()
+    if registry is None:
+        registry = _default_agents()
+
+    def agents(name):
+        if name in paths:
+            return load_external_agent(paths[name])
+        return registry(name)
+    return agents
 
 
 # --- live games -------------------------------------------------------------

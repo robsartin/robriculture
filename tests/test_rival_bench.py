@@ -124,3 +124,116 @@ def test_timing_reading_says_rival_signal_does_something_a_clock_cannot_when_no_
 def test_timing_reading_reports_partial_with_best_clock_when_neither_bound_hits():
     rows = [_timing_row(4, 12), _timing_row(6, 13)]  # neither >=14 nor all <=12
     assert rb.timing_reading(rows, 15, 11) == "partial: the best clock is N=6 at 13/16"
+
+
+# --- the external limb (#152): paired non-regression against EXTERNAL_ANCHORS ---
+
+def _pair(name, contender_wins, champion_wins, seeds="848-863", champion_seeds=None):
+    return {"opponent": name,
+            "contender": {"name": "x", "opponent": name, "wins": contender_wins, "ties": 0,
+                          "games": 16, "seeds": seeds},
+            "champion": {"name": "y", "opponent": name, "wins": champion_wins, "ties": 0,
+                         "games": 16, "seeds": champion_seeds or seeds}}
+
+
+def _six_anchors():
+    return [_row(n, 15) for n in ("meta_bot", "ranch_hands", "market_farmer",
+                                  "ranch_adaptive", "wheat_hands", "field_rival")]
+
+
+def test_criterion_with_no_pairs_is_unchanged_and_reports_an_empty_external_map():
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors())
+    assert verdict["passed"] is True and verdict["failing"] == [] and verdict["external"] == {}
+
+
+def test_criterion_fails_an_external_where_the_contender_wins_fewer_than_the_champion():
+    pairs = [_pair("lonespear_kaggriculture_v21", 0, 1), _pair("pilkwang_structured_economic_policy", 2, 2)]
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
+    assert verdict["passed"] is False
+    assert verdict["failing"] == ["external:lonespear_kaggriculture_v21"]
+    assert verdict["external"] == {"lonespear_kaggriculture_v21": (0, 1),
+                                   "pilkwang_structured_economic_policy": (2, 2)}
+
+
+def test_criterion_passes_an_external_on_equal_wins_and_a_tie_is_not_a_win():
+    equal = _pair("a", 3, 3)
+    tied = _pair("b", 2, 3)
+    tied["contender"]["ties"] = 5          # 2 wins + 5 ties still reads 2
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=[equal, tied])
+    assert verdict["failing"] == ["external:b"]
+
+
+def test_criterion_raises_when_a_pair_was_not_played_on_the_same_seeds():
+    import pytest
+
+    with pytest.raises(ValueError, match="not paired"):
+        rb.criterion(_row("dense_farm", 10), _six_anchors(),
+                     external_pairs=[_pair("a", 3, 3, seeds="848-863", champion_seeds="700-715")])
+
+
+def test_format_external_marks_a_regression():
+    text = rb.format_external([_pair("a", 3, 3), _pair("b", 1, 2)])
+    lines = text.splitlines()
+    assert lines[1].startswith("a") and lines[1].rstrip().endswith("ok")
+    assert lines[2].startswith("b") and lines[2].rstrip().endswith("REGRESSED")
+    assert "3/16" in lines[1] and "1/16" in lines[2] and "2/16" in lines[2]
+
+
+def test_paired_external_rows_plays_both_strategies_on_the_same_seeds():
+    """The agents hook answers names; the fake play makes the contender win
+    every seed and the champion lose every seed, so the rows are checkable."""
+    played = []
+
+    def play(a, b, seed):
+        played.append((a, b, seed))
+        if "cont" in (a, b):
+            return (1.0, 0.0) if a == "cont" else (0.0, 1.0)
+        return (0.0, 1.0) if a == "champ" else (1.0, 0.0)
+
+    pairs = rb.paired_external_rows("cont", "champ", [848, 849, 850, 851], names=("ext1", "ext2"),
+                                    play=play, agents=lambda name: name)
+    assert [p["opponent"] for p in pairs] == ["ext1", "ext2"]
+    for p in pairs:
+        assert p["contender"]["seeds"] == p["champion"]["seeds"] == "848-851"
+        assert p["contender"]["wins"] == 4 and p["champion"]["wins"] == 0
+    # sides alternate by list position for both strategies
+    assert ("cont", "ext1", 848) in played and ("ext1", "cont", 849) in played
+    assert ("champ", "ext1", 848) in played and ("ext1", "champ", 849) in played
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
+    assert verdict["passed"] is True
+
+
+def test_criterion_keeps_the_bars_positional_for_the_sibling_benches():
+    """clock/pasture/herder_bench pass both bars positionally; the external
+    limb must be keyword-only so it can never capture one of them."""
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), 0.60, 0.90)
+    assert verdict["passed"] is True and verdict["external"] == {}
+
+
+def test_criterion_raises_when_a_pair_differs_in_game_count():
+    """`head_to_head_rate` records seeds as a lossy "lo-hi" string, so a 16-game
+    row and a 2-game row on the same range would otherwise read as paired."""
+    import pytest
+
+    pair = _pair("a", 10, 2)
+    pair["champion"]["games"] = 2
+    with pytest.raises(ValueError, match="not paired"):
+        rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=[pair])
+
+
+def test_paired_external_rows_defaults_names_to_the_external_anchors(monkeypatch):
+    """`names=None` reads `external_pool.EXTERNAL_ANCHORS` -- the live gate's
+    only source of opponents, and otherwise exercised for the first time
+    minutes into a real run."""
+    monkeypatch.setattr("harness.external_pool.EXTERNAL_ANCHORS", ("e1",))
+    pairs = rb.paired_external_rows("cont", "champ", [848, 849],
+                                    play=lambda a, b, seed: (1.0, 0.0),
+                                    agents=lambda name: name)
+    assert [p["opponent"] for p in pairs] == ["e1"]
+
+
+def test_gate_agents_serves_a_fresh_external_per_call_and_registry_names_from_the_registry(tmp_path):
+    (tmp_path / "ext.py").write_text("def agent(obs, config=None):\n    return {}\n")
+    hook = rb._gate_agents(paths={"ext": str(tmp_path / "ext.py")}, registry=lambda name: f"registry:{name}")
+    assert hook("ext") is not hook("ext")
+    assert callable(hook("ext")) and hook("third_herder") == "registry:third_herder"

@@ -68,6 +68,6 @@ score_kaggle.sh
 
 # --- Real external competitor agents (#78, ADR-0008 amendment 2026-08-18) ---
 # Fetched locally by scripts/fetch_external_agents.py from harness/external_agents.json
-# for MEASUREMENT ONLY (harness/genome_bench.py --include-external). Never
-# vendored: no third-party code is committed to this repo.
+# pinned by sha256 in the manifest (#152) and used as gate anchors, ranking and
+# opt-in evolution opponents. Never vendored: no third-party code is committed.
 external_agents/

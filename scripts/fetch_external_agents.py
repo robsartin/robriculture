@@ -1,4 +1,4 @@
-"""Fetch real external competitor agents for local measurement only (#78).
+"""Fetch real external competitor agents into a local, pinned pool (#78, #152).
 
 The owner decided against vendoring external agents into this repo at all
 (ADR-0008 amendment, 2026-08-18): no third-party code is ever committed to
@@ -6,9 +6,9 @@ git. Instead this script reads ``harness/external_agents.json`` -- the single
 source of truth for which agents to fetch, their licenses, and required
 attribution -- and downloads each into a gitignored local directory
 (``external_agents/`` by default). ``harness/external_pool.py`` then
-discovers agents there for measurement tools that opt in
-(``harness/genome_bench.py --include-external``); nothing else ever reads
-this directory.
+discovers agents there for the gate's external limb, the ranking and
+evolution, each opt-in (#152); every entry is pinned by sha256 and verified
+on fetch.
 
 Two source kinds:
 
@@ -25,10 +25,15 @@ Every download gets a ``<dest_filename>.meta.json`` sidecar recording its
 name, license, attribution, and source URL, so the license obligation travels
 with the file even though the file itself is gitignored.
 
+A manifest entry may pin the file it expects with ``sha256``; a pinned
+entry's fetched bytes are verified against that pin on every fetch and the
+fetch is refused (the file removed) on a mismatch (#152).
+
 Usage (from repo root, venv active, ``gh`` and ``kaggle`` CLIs authenticated):
 
     python -m scripts.fetch_external_agents
     python -m scripts.fetch_external_agents --dest /tmp/other_dir
+    python -m scripts.fetch_external_agents --pin
 """
 
 from __future__ import annotations
@@ -36,10 +41,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+
+from harness.external_pool import file_sha256
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -58,6 +66,88 @@ def load_manifest(path=MANIFEST_PATH):
     with open(path) as fh:
         data = json.load(fh)
     return data["agents"]
+
+
+_HEX40 = re.compile(r"[0-9a-f]{40}")
+
+
+def _is_sha40(text):
+    """Is `text` exactly a 40-hex commit sha? `fullmatch`, not `match`: `$`
+    also matches before a trailing newline, so a manifest `ref` carrying a
+    stray "\n" read as already-pinned and `--pin` skipped it (#152 review)."""
+    return bool(_HEX40.fullmatch(str(text)))
+
+
+def read_manifest(path=MANIFEST_PATH):
+    """The whole manifest document (`_comment` included), for writing back."""
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def save_manifest(path, document):
+    """Write the manifest back in its committed shape: 2-space indent, trailing newline."""
+    with open(path, "w") as fh:
+        json.dump(document, fh, indent=2)
+        fh.write("\n")
+
+
+def verify_pin(entry, path):
+    """Compare a pinned entry's fetched bytes to its manifest pin (#152).
+
+    On a mismatch the file (and any stale sidecar) is removed before raising,
+    so `discover_external_agents` never imports bytes the manifest does not
+    vouch for. Returns the hash on a match, None when the entry is unpinned.
+    """
+    pinned = entry.get("sha256")
+    if not pinned:
+        return None
+    got = file_sha256(path)
+    if got != pinned:
+        os.remove(path)
+        sidecar = path + ".meta.json"
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
+        raise SystemExit(
+            f"{entry['name']!r}: fetched sha256 {got} does not match the manifest pin "
+            f"{pinned}; file removed. If the author published a new version you have "
+            "checked, re-pin with: python -m scripts.fetch_external_agents --pin"
+        )
+    return got
+
+
+def pin_entries(entries, hashes, resolved_refs=None):
+    """Pure: copies of `entries` with `sha256` filled for unpinned names in
+    `hashes`, and a `github_file` branch `ref` replaced by `resolved_refs[name]`.
+    Already-pinned entries and 40-hex refs are returned unchanged."""
+    resolved_refs = resolved_refs or {}
+    out = []
+    for entry in entries:
+        e = dict(entry)
+        name = e["name"]
+        was_unpinned = not entry.get("sha256")
+        if was_unpinned and name in hashes:
+            e["sha256"] = hashes[name]
+        if (was_unpinned and e.get("source_type") == "github_file" and name in resolved_refs
+                and not _is_sha40(entry.get("ref", ""))):
+            e["ref"] = resolved_refs[name]
+        out.append(e)
+    return out
+
+
+def resolve_commit_sha(entry, runner=subprocess.run):
+    """The commit a `github_file` entry's `ref` points at right now, via `gh api`."""
+    ref = entry.get("ref") or "HEAD"
+    args = ["gh", "api", "--method", "GET", f"repos/{entry['repo']}/commits/{ref}", "--jq", ".sha"]
+    result = runner(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(
+            f"gh api failed resolving the commit for {entry['name']!r} "
+            f"(exit {result.returncode}): {result.stderr.strip()}"
+        )
+    sha = result.stdout.strip()
+    if not _is_sha40(sha):
+        raise SystemExit(f"gh api returned no commit sha for {entry['name']!r}: {sha!r}")
+    return sha
 
 
 def dest_path(entry, dest_dir=DEST_DIR):
@@ -265,6 +355,7 @@ def fetch_one(entry, dest_dir=DEST_DIR, runner=subprocess.run, work_dir=None):
     entrypoint = entry.get("entrypoint")
     if entrypoint:
         append_entrypoint_alias(path, entrypoint)
+    verify_pin(entry, path)
     write_meta(entry, dest_dir)
     return path
 
@@ -283,19 +374,39 @@ def main(argv=None):  # pragma: no cover - orchestration, shells out to gh/kaggl
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--manifest", default=MANIFEST_PATH, help="path to the agent manifest")
     ap.add_argument("--dest", default=DEST_DIR, help="local (gitignored) directory to fetch into")
+    ap.add_argument("--pin", action="store_true",
+                    help="after fetching, record each unpinned entry's sha256 (and, for a "
+                         "github_file, the commit fetched) in the manifest (#152)")
     args = ap.parse_args(argv)
 
-    entries = load_manifest(args.manifest)
+    document = read_manifest(args.manifest)
+    entries = document["agents"]
     failed_names = []
+    hashes, resolved_refs = {}, {}
     for entry in entries:
         print(f"fetching {entry['name']} ({entry['source_type']}) ...")
+        fetch_entry = dict(entry)
         try:
-            path = fetch_one(entry, dest_dir=args.dest)
+            if (args.pin and entry.get("source_type") == "github_file"
+                    and not entry.get("sha256") and not _is_sha40(entry.get("ref", ""))):
+                # Resolve first, then fetch at that commit, so the pinned ref and
+                # the pinned bytes are the same snapshot.
+                fetch_entry["ref"] = resolved_refs[entry["name"]] = resolve_commit_sha(entry)
+            path = fetch_one(fetch_entry, dest_dir=args.dest)
         except (SystemExit, ValueError, OSError) as exc:
             print(f"  FAILED: {exc}", file=sys.stderr)
             failed_names.append(entry["name"])
+            resolved_refs.pop(entry["name"], None)
             continue
         print(f"  -> {path}  [{entry['license']}]")
+        if args.pin and not entry.get("sha256"):
+            hashes[entry["name"]] = file_sha256(path)
+            print(f"  pinned sha256={hashes[entry['name']]}")
+
+    if args.pin and (hashes or resolved_refs):
+        document["agents"] = pin_entries(entries, hashes, resolved_refs)
+        save_manifest(args.manifest, document)
+        print(f"manifest updated: {len(hashes)} entr{'y' if len(hashes) == 1 else 'ies'} pinned")
 
     if failed_names:
         print(failure_summary(failed_names, len(entries)), file=sys.stderr)
