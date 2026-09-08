@@ -148,7 +148,7 @@ def test_criterion_with_no_pairs_is_unchanged_and_reports_an_empty_external_map(
 
 def test_criterion_fails_an_external_where_the_contender_wins_fewer_than_the_champion():
     pairs = [_pair("lonespear_kaggriculture_v21", 0, 1), _pair("pilkwang_structured_economic_policy", 2, 2)]
-    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), pairs)
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
     assert verdict["passed"] is False
     assert verdict["failing"] == ["external:lonespear_kaggriculture_v21"]
     assert verdict["external"] == {"lonespear_kaggriculture_v21": (0, 1),
@@ -159,7 +159,7 @@ def test_criterion_passes_an_external_on_equal_wins_and_a_tie_is_not_a_win():
     equal = _pair("a", 3, 3)
     tied = _pair("b", 2, 3)
     tied["contender"]["ties"] = 5          # 2 wins + 5 ties still reads 2
-    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), [equal, tied])
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=[equal, tied])
     assert verdict["failing"] == ["external:b"]
 
 
@@ -168,7 +168,7 @@ def test_criterion_raises_when_a_pair_was_not_played_on_the_same_seeds():
 
     with pytest.raises(ValueError, match="not paired"):
         rb.criterion(_row("dense_farm", 10), _six_anchors(),
-                     [_pair("a", 3, 3, seeds="848-863", champion_seeds="700-715")])
+                     external_pairs=[_pair("a", 3, 3, seeds="848-863", champion_seeds="700-715")])
 
 
 def test_format_external_marks_a_regression():
@@ -199,5 +199,12 @@ def test_paired_external_rows_plays_both_strategies_on_the_same_seeds():
     # sides alternate by list position for both strategies
     assert ("cont", "ext1", 848) in played and ("ext1", "cont", 849) in played
     assert ("champ", "ext1", 848) in played and ("ext1", "champ", 849) in played
-    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), pairs)
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
     assert verdict["passed"] is True
+
+
+def test_criterion_keeps_the_bars_positional_for_the_sibling_benches():
+    """clock/pasture/herder_bench pass both bars positionally; the external
+    limb must be keyword-only so it can never capture one of them."""
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), 0.60, 0.90)
+    assert verdict["passed"] is True and verdict["external"] == {}

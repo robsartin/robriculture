@@ -56,13 +56,17 @@ def _rate(row):
     return row["wins"] / games if games else 0.0
 
 
-def criterion(champion_row, anchor_rows, external_pairs=(), champion_bar=CHAMPION_BAR,
-              anchor_bar=ANCHOR_BAR):
+def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
+              anchor_bar=ANCHOR_BAR, *, external_pairs=()):
     """The declared verdict: the champion bar, each anchor's bar, and -- when
     `external_pairs` are given (#152) -- paired non-regression against each
     external anchor: the contender's wins on the seeds must be >= the
     champion's wins on the *same* seeds in the same run. Ties never count as
     wins on either side. With no pairs the verdict is exactly the pre-#152 one.
+
+    `external_pairs` is keyword-only so it can never capture a positional bar:
+    `clock_bench`, `pasture_bench` and `herder_bench` all call
+    `criterion(row, anchors, CHAMPION_BAR, ANCHOR_BAR)` positionally.
     """
     champion_rate = _rate(champion_row)
     anchor_rates = {r["opponent"]: _rate(r) for r in anchor_rows}
