@@ -519,3 +519,48 @@ def test_external_anchor_agents_names_the_reason_a_verified_anchor_failed_to_imp
         external_pool.external_anchor_agents(
             names=("x",), directory=str(tmp_path), manifest_path=manifest)
     assert isinstance(exc.value.__cause__, SyntaxError)
+
+
+# --- #247: the evolve path plays one callable across games; it must reload per game ---
+
+_COUNTER = (
+    "CALLS = 0\n"
+    "def agent(obs, config=None):\n"
+    "    global CALLS\n"
+    "    CALLS += 1\n"
+    "    return CALLS\n"
+)
+
+
+def test_a_discovered_external_reloads_its_module_on_every_games_first_step(tmp_path):
+    """The positive control for #247: a stranger's agent that counts its own calls
+    in a module global reads 1 on the first turn of EVERY game. Before the fix
+    the second game opened at 4."""
+    (tmp_path / "counter.py").write_text(_COUNTER)
+    opp = external_pool.discover_external_agents(str(tmp_path))["counter"]
+    assert [opp({"step": 0}), opp({"step": 1}), opp({"step": 2})] == [1, 2, 3]
+    assert [opp({"step": 0}), opp({"step": 1})] == [1, 2]
+
+
+def test_resolve_opponents_hands_the_evolve_path_the_reloading_external(tmp_path):
+    """The path #247 names: `resolve_opponents(include_external=True)` with real
+    discovery. The one callable evolve keeps for the whole run is the reloading one."""
+    (tmp_path / "counter.py").write_text(_COUNTER)
+    manifest_path = _write_manifest(tmp_path, ["counter"])
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest_path, directory=str(tmp_path), warn=lambda message: None)
+    opp = agents["counter"]
+    assert opp({"step": 0}) == 1 and opp({"step": 1}) == 2
+    assert opp({"step": 0}) == 1
+
+
+def test_the_reloading_wrapper_still_reports_the_file_it_came_from(tmp_path):
+    """Pin verification reads the source off the callable (#152); the wrapper must
+    not hide it behind external_pool.py's own namespace. Green before the fix
+    (discovery returned the raw function) and it must stay green after."""
+    (tmp_path / "x.py").write_text(_GOOD)
+    opp = external_pool.discover_external_agents(str(tmp_path))["x"]
+    assert external_pool._source_of(opp) == str(tmp_path / "x.py")
+    assert external_pool.mismatched_sources({"x": opp}, {"x": _sha(_GOOD)}) == []

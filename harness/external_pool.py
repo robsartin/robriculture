@@ -155,6 +155,9 @@ def _source_of(agent):
     """
     while isinstance(agent, functools.partial):
         agent = agent.func
+    source = getattr(agent, "__external_source__", None)        # a FreshPerGame wrapper (#247)
+    if source is not None:
+        return source
     namespace = getattr(agent, "__globals__", None)              # a plain function
     if namespace is None:
         bound = getattr(agent, "__func__", None)                 # a bound method
@@ -189,6 +192,33 @@ def _default_warn(message):
     print(f"warning: {message}", file=sys.stderr)
 
 
+class FreshPerGame:
+    """A discovered external that re-imports its module on every game's first step (#247).
+
+    The gate (`external_anchor_agents`) imports a fresh module per game; the
+    evolve / genome_bench path (`resolve_opponents`) hands out one callable per
+    run and plays it across every game, so an external that keeps module-level
+    state -- day counters, cached plans, memoised prices -- started its second
+    game with its first game's memory, and the gate and the ranking measured
+    different opponents under one name. Reloading on the step-0 observation
+    restores the gate's semantics without changing the ``{name: agent}``
+    contract every consumer holds. `_source_of` reads the file off
+    `__external_source__`, so pin verification (#152) still sees the real file.
+    """
+
+    def __init__(self, path, agent):
+        self.__external_source__ = path
+        self._agent = agent          # the module discovery already imported
+        self._used = False
+
+    def __call__(self, obs, *args, **kwargs):
+        step = obs.get("step") if isinstance(obs, dict) else getattr(obs, "step", None)
+        if step == 0 and self._used:
+            self._agent = load_external_agent(self.__external_source__)
+        self._used = True
+        return self._agent(obs, *args, **kwargs)
+
+
 def discover_external_agents(directory=DEFAULT_DIR, warn=None):
     """Return ``{name: agent_callable}`` for every importable agent in `directory`.
 
@@ -196,6 +226,8 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
     ``.meta.json`` license/attribution sidecars the fetch script writes
     alongside each download are ignored here (see
     ``scripts/fetch_external_agents.py``).
+    Each agent is a `FreshPerGame` wrapper, so a consumer that keeps the callable for
+    a whole run still plays a fresh module per game (#247).
     """
     warn = warn or _default_warn
     agents: dict = {}
@@ -208,7 +240,7 @@ def discover_external_agents(directory=DEFAULT_DIR, warn=None):
         name = fname[: -len(".py")]
         path = os.path.join(directory, fname)
         try:
-            agents[name] = load_external_agent(path)
+            agents[name] = FreshPerGame(path, load_external_agent(path))
         except Exception as exc:  # a stranger's code -- anything can go wrong here
             # One malformed download never takes down a benchmark: the loader's
             # own message (no callable `agent`, or the import error) rides along.
