@@ -335,8 +335,12 @@ def external_anchor_agents(names=EXTERNAL_ANCHORS, directory=DEFAULT_DIR,
         for name, path in paths.items():
             try:
                 found[name] = load_external_agent(path)
-            except Exception:   # a stranger's code -- named below, never swallowed
-                pass
+            except Exception as exc:   # a stranger's code -- refuse, and say why
+                raise RuntimeError(
+                    f"gate anchor(s) failed to import: {name} ({exc!r}). The file verified "
+                    "against its pin, so this is the agent's own code or a missing "
+                    "dependency, not a fetch problem."
+                ) from exc
     else:
         found = discover_fn()
     absent = [n for n in names if n not in found]

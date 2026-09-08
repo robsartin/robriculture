@@ -505,3 +505,17 @@ def test_load_external_agent_leaves_no_module_registered_when_the_file_is_bad(tm
         external_pool.load_external_agent(str(tmp_path / "no_agent.py"))
     leaked = {m for m in sys.modules if m.startswith("_external_agent_")} - before
     assert leaked == set()
+
+
+def test_external_anchor_agents_names_the_reason_a_verified_anchor_failed_to_import(tmp_path):
+    """Fix-round-2 review N-1: the refusal must carry the import error, not
+    swallow it -- an operator blocked with no reason cannot repair anything."""
+    import pytest
+
+    broken = "def agent(:\n    pass\n"
+    (tmp_path / "x.py").write_text(broken)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(broken)})
+    with pytest.raises(RuntimeError, match="failed to import.*x.*SyntaxError") as exc:
+        external_pool.external_anchor_agents(
+            names=("x",), directory=str(tmp_path), manifest_path=manifest)
+    assert isinstance(exc.value.__cause__, SyntaxError)
