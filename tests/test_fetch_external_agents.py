@@ -418,14 +418,19 @@ def test_append_entrypoint_alias_appends_an_agent_binding(tmp_path):
     p = tmp_path / "foo.py"
     p.write_text("def apex_agent(obs):\n    return {}\n")
     fea.append_entrypoint_alias(str(p), "apex_agent")
-    assert p.read_text() == "def apex_agent(obs):\n    return {}\n\n\nagent = apex_agent\n"
+    assert p.read_text() == (
+        "def apex_agent(obs):\n    return {}\n"
+        "\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = apex_agent\n"
+    )
 
 
 def test_append_entrypoint_alias_supports_a_factory_call_expression(tmp_path):
     p = tmp_path / "foo.py"
     p.write_text("def make_farm_agent(sell_mode):\n    return sell_mode\n")
     fea.append_entrypoint_alias(str(p), 'make_farm_agent("daily")')
-    assert p.read_text().endswith('\n\nagent = make_farm_agent("daily")\n')
+    assert p.read_text().endswith(
+        '\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = make_farm_agent("daily")\n'
+    )
 
 
 # --- fetch_one: dispatch + meta sidecar ---
@@ -468,7 +473,8 @@ def test_fetch_one_applies_the_entrypoint_alias_when_the_entry_declares_one(tmp_
     }
     fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout="def my_agent(obs):\n    pass\n"))
     assert (tmp_path / "foo.py").read_text() == (
-        "def my_agent(obs):\n    pass\n\n\nagent = my_agent\n"
+        "def my_agent(obs):\n    pass\n"
+        "\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = my_agent\n"
     )
 
 
@@ -496,3 +502,94 @@ def test_failure_summary_names_each_failed_agent():
 
 def test_failure_summary_reports_zero_when_the_failed_list_is_empty():
     assert fea.failure_summary([], 4) == "0 of 4 agent(s) failed to fetch: "
+
+
+# --- pins (#152): verify on fetch, and --pin writes the manifest ---
+
+import hashlib
+import os
+import re
+
+
+def _sha(text):
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def test_fetch_one_passes_a_pinned_entry_whose_bytes_match(tmp_path):
+    body = "def agent(obs):\n    pass\n"
+    entry = {"name": "foo", "source_type": "github_file", "repo": "r/r", "path": "a.py",
+             "license": "MIT", "attribution": "x", "dest_filename": "foo.py", "sha256": _sha(body)}
+    path = fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout=body))
+    assert (tmp_path / "foo.py").read_text() == body
+    assert os.path.exists(path + ".meta.json")
+
+
+def test_fetch_one_removes_the_file_and_raises_on_a_pin_mismatch(tmp_path):
+    body = "def agent(obs):\n    pass\n"
+    entry = {"name": "foo", "source_type": "github_file", "repo": "r/r", "path": "a.py",
+             "license": "MIT", "attribution": "x", "dest_filename": "foo.py", "sha256": _sha("other")}
+    with pytest.raises(SystemExit) as exc:
+        fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout=body))
+    message = str(exc.value)
+    assert _sha(body) in message and _sha("other") in message and "--pin" in message
+    assert not (tmp_path / "foo.py").exists()
+    assert not (tmp_path / "foo.py.meta.json").exists()
+
+
+def test_fetch_one_pins_the_bytes_after_the_entrypoint_alias(tmp_path):
+    """The pin is over the file as written -- alias line included -- so the
+    bytes the loader imports are the bytes that were pinned."""
+    body = "def my_agent(obs):\n    pass\n"
+    aliased = body + "\n# entrypoint alias appended by scripts/fetch_external_agents.py\nagent = my_agent\n"
+    entry = {"name": "foo", "source_type": "github_file", "repo": "r/r", "path": "a.py",
+             "license": "MIT", "attribution": "x", "dest_filename": "foo.py",
+             "entrypoint": "my_agent", "sha256": _sha(aliased)}
+    fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout=body))
+    assert (tmp_path / "foo.py").read_text() == aliased
+
+
+def test_fetch_one_skips_verification_for_an_unpinned_entry(tmp_path):
+    entry = {"name": "foo", "source_type": "github_file", "repo": "r/r", "path": "a.py",
+             "license": "MIT", "attribution": "x", "dest_filename": "foo.py"}
+    fea.fetch_one(entry, str(tmp_path), runner=_runner(stdout="x = 1\n"))
+    assert (tmp_path / "foo.py").exists()
+
+
+def test_pin_entries_fills_only_unpinned_entries_and_only_branch_refs():
+    entries = [
+        {"name": "a", "source_type": "github_file", "ref": "main"},
+        {"name": "b", "source_type": "github_file", "ref": "main", "sha256": "1" * 64},
+        {"name": "c", "source_type": "kaggle_kernel", "kernel_ref": "u/k"},
+        {"name": "d", "source_type": "github_file", "ref": "f" * 40},
+    ]
+    out = fea.pin_entries(entries, {"a": "a" * 64, "b": "9" * 64, "c": "c" * 64, "d": "d" * 64},
+                          {"a": "e" * 40, "b": "e" * 40, "d": "0" * 40})
+    assert out[0] == {"name": "a", "source_type": "github_file", "ref": "e" * 40, "sha256": "a" * 64}
+    assert out[1] == entries[1]                                   # already pinned: untouched
+    assert out[2] == {"name": "c", "source_type": "kaggle_kernel", "kernel_ref": "u/k", "sha256": "c" * 64}
+    assert out[3]["ref"] == "f" * 40 and out[3]["sha256"] == "d" * 64   # a commit ref stays
+    assert entries[0] == {"name": "a", "source_type": "github_file", "ref": "main"}  # pure
+
+
+def test_manifest_round_trips_comment_and_order(tmp_path):
+    p = tmp_path / "m.json"
+    doc = {"_comment": ["one", "two"], "agents": [{"name": "b"}, {"name": "a"}]}
+    fea.save_manifest(str(p), doc)
+    assert p.read_text().endswith("}\n") and '\n  "_comment"' in p.read_text()
+    assert fea.read_manifest(str(p)) == doc
+
+
+def test_resolve_commit_sha_returns_the_40_hex_sha_for_the_entry_ref():
+    seen = {}
+    sha = fea.resolve_commit_sha(
+        {"name": "a", "repo": "r/r", "ref": "master"},
+        runner=_runner(stdout="a" * 40 + "\n", side_effect=lambda args: seen.setdefault("args", args)))
+    assert sha == "a" * 40
+    assert "repos/r/r/commits/master" in seen["args"] and "--jq" in seen["args"]
+
+
+def test_resolve_commit_sha_raises_on_a_nonzero_exit_or_a_non_sha():
+    with pytest.raises(SystemExit, match="gh api"):
+        fea.resolve_commit_sha({"name": "a", "repo": "r/r", "ref": "main"}, runner=_runner(returncode=1, stderr="no"))
+    with pytest.raises(SystemExit, match="no commit sha"):
+        fea.resolve_commit_sha({"name": "a", "repo": "r/r", "ref": "main"}, runner=_runner(stdout="not-a-sha\n"))
