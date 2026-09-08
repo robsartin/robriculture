@@ -73,10 +73,15 @@ def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
     external = {}
     for pair in external_pairs:
         contender, champion = pair["contender"], pair["champion"]
-        if contender["seeds"] != champion["seeds"]:
+        # `seeds` is `triage._seed_range`'s lossy "lo-hi" string, so two rows
+        # from differently-sized runs on the same range stringify alike; the
+        # game count is what catches them (#152 review).
+        if (contender["seeds"] != champion["seeds"]
+                or contender["games"] != champion["games"]):
             raise ValueError(
                 f"external pair {pair['opponent']!r} is not paired: contender on seeds "
-                f"{contender['seeds']}, champion on {champion['seeds']}"
+                f"{contender['seeds']} ({contender['games']} games), champion on "
+                f"{champion['seeds']} ({champion['games']} games)"
             )
         external[pair["opponent"]] = (contender["wins"], champion["wins"])
     failing = ([champion_row["opponent"]] if champion_rate < champion_bar else []) + \

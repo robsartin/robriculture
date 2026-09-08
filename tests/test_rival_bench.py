@@ -208,3 +208,14 @@ def test_criterion_keeps_the_bars_positional_for_the_sibling_benches():
     limb must be keyword-only so it can never capture one of them."""
     verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), 0.60, 0.90)
     assert verdict["passed"] is True and verdict["external"] == {}
+
+
+def test_criterion_raises_when_a_pair_differs_in_game_count():
+    """`head_to_head_rate` records seeds as a lossy "lo-hi" string, so a 16-game
+    row and a 2-game row on the same range would otherwise read as paired."""
+    import pytest
+
+    pair = _pair("a", 10, 2)
+    pair["champion"]["games"] = 2
+    with pytest.raises(ValueError, match="not paired"):
+        rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=[pair])
