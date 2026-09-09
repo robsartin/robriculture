@@ -105,3 +105,13 @@ preflight before push.
 PROMOTE → PR closes #252; designation is a separate step on Rob's say-so. REJECTED → record
 and root cause on #252, closed `not_planned`; the PR carries the seams and the bench as a
 record (#245's precedent). VOID → the control that failed and the census, on #252.
+
+## Note, 2026-09-09 (Task 3 review, before the bench ran)
+
+The slot layout is derived from the frozen herder pair (`_crop_slot`, kept as #239 decided),
+so worker 6 keeps its slot when it herds from day 8 and its six tiles idle, and the twelfth
+hand (hired day 15) lands on slot 10, whose slice runs past the end of the 61-tile
+`CROP_TILES_F`: it works one tile. In effect the package works about 55 crop tiles from day
+15, not 60. Not changed here — a re-map is the second, unmeasured change #239 declined — and
+not reached by the shape controls (day 8 and 12). Recorded so a REJECTED result is not
+root-caused against "tiles per hand" without this in view.
