@@ -55,6 +55,11 @@ def test_census_on_day_takes_the_closing_board_and_raises_on_a_missing_day():
         sp.census_on_day(turns, 7)
 
 
+def test_census_on_day_says_when_there_were_no_turns_at_all():
+    with pytest.raises(ValueError, match="day 3: no turns at all"):
+        sp.census_on_day([], 3)
+
+
 def test_game_reading_records_both_sides_at_each_day_and_the_final_result():
     ours = _turns([1000] * 22, strawberry=22, head=11)
     theirs = _turns([1500] * 21 + [900], strawberry=24, head=14)

@@ -56,9 +56,8 @@ def census_on_day(turns, day):
     run stopped early" and "nobody was behind" must not read the same."""
     census = last_census_on_day(turns, day)
     if census is None:
-        raise ValueError(f"no census recorded on day {day}: the game covers days "
-                         f"{turns[0][0]}-{turns[-1][0]}" if turns else
-                         f"no census recorded on day {day}: no turns at all")
+        span = f"the game covers days {turns[0][0]}-{turns[-1][0]}" if turns else "no turns at all"
+        raise ValueError(f"no census recorded on day {day}: {span}")
     return census
 
 
