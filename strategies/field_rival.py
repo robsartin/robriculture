@@ -339,7 +339,7 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
                   empty_plots, standing=None, caps=None, prefer=None, target=None,
-                  land=None):
+                  land=None, hire=None, reserve=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -354,6 +354,9 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     turn (#237, used only by the placebo arm); `None` keeps the frozen ramp.
 
     `land`: quadrants to own today, or ``None`` for the frozen `land_target` ramp (#246).
+
+    `hire`: hands to have working today, or ``None`` for the frozen `hire_target` ramp (#252).
+    `reserve`: cash held back from the herd, or ``None`` for `CAPITAL_RESERVE` (#252).
     """
     sells: list = []
     buys: list = []
@@ -373,7 +376,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             sells.append(["SELL", item, sell])
 
     if hour == 0:
-        want = max(0, hire_target(day) - hands)
+        want = max(0, (hire_target(day) if hire is None else hire) - hands)
         for k in range(1, want + 1):
             wage = hh.hand_wage(hands + k)
             if budget < wage:
@@ -414,11 +417,12 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     # 100-item shed, which then silently discarded every harvest.
     pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
     want_head = animal_target(day) if target is None else target
+    keep = CAPITAL_RESERVE if reserve is None else reserve
     for _ in range(max(0, want_head - animals - pending)):
         kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
                           else HERD_MIX[0])
         cost = economy.ANIMALS[kind]["cost"]
-        if budget - cost < CAPITAL_RESERVE:
+        if budget - cost < keep:
             break
         # The count is not optional: the sim's `_parse_order` rejects a
         # BUY_ANIMAL of length 2 and drops it without a word, which is
@@ -641,6 +645,17 @@ class FieldRivalStrategy(Strategy):
         so its land schedule stays frozen (#181)."""
         return None
 
+    def hire_target(self, day):
+        """Hands to have working on `day`, or ``None`` for the frozen
+        `hire_target` ramp. A seam for contenders (#252); on the benchmark it
+        never fires, so its crew schedule stays frozen (#181)."""
+        return None
+
+    def capital_reserve(self):
+        """Cash held back from the herd, or ``None`` for `CAPITAL_RESERVE`. A
+        seam for contenders (#252); never fires on the benchmark."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -696,7 +711,8 @@ class FieldRivalStrategy(Strategy):
                                len(me.get("unlocked_quadrants") or ["NW"]),
                                animals, shed, seeds, empty, standing,
                                caps=self.CAPS, prefer=self.herd_preference(obs),
-                               target=self.herd_target(day), land=self.land_target(day))
+                               target=self.herd_target(day), land=self.land_target(day),
+                               hire=self.hire_target(day), reserve=self.capital_reserve())
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
