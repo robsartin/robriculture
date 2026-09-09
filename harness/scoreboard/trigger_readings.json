@@ -1,0 +1,3300 @@
+{
+ "champion": "third_herder",
+ "seeds": [
+  864,
+  865,
+  866,
+  867,
+  868,
+  869,
+  870,
+  871,
+  872,
+  873,
+  874,
+  875,
+  876,
+  877,
+  878,
+  879
+ ],
+ "days": [
+  12,
+  15,
+  18,
+  21
+ ],
+ "margins": [
+  10,
+  20,
+  30
+ ],
+ "fire_bar": 0.25,
+ "harm_bar": 0.2,
+ "readings": [
+  {
+   "opponent": "third_herder",
+   "seed": 864,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10319.0,
+     "theirs": 10319.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13188.0,
+     "theirs": 13188.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14494.0,
+     "theirs": 14494.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 24194.0,
+     "theirs": 24194.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 67821.0,
+   "final_theirs": 67821.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 865,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10276.0,
+     "theirs": 10276.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13095.0,
+     "theirs": 13095.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14099.0,
+     "theirs": 14099.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 22658.0,
+     "theirs": 22658.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 62179.0,
+   "final_theirs": 62179.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 866,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10277.0,
+     "theirs": 10277.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13112.0,
+     "theirs": 13112.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14193.0,
+     "theirs": 14193.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 22927.0,
+     "theirs": 22927.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 61802.0,
+   "final_theirs": 61802.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 867,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10319.0,
+     "theirs": 10319.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13189.0,
+     "theirs": 13189.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14443.0,
+     "theirs": 14443.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 23653.0,
+     "theirs": 23653.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 63572.0,
+   "final_theirs": 63572.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 868,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10349.0,
+     "theirs": 10349.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13224.0,
+     "theirs": 13224.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14233.0,
+     "theirs": 14233.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 21908.0,
+     "theirs": 21908.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 44556.0,
+   "final_theirs": 44556.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 869,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10369.0,
+     "theirs": 10369.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13285.0,
+     "theirs": 13285.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14287.0,
+     "theirs": 14287.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 22121.0,
+     "theirs": 22121.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 50179.0,
+   "final_theirs": 50179.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 870,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 11065.0,
+     "theirs": 11065.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 14467.0,
+     "theirs": 14383.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 17696.0,
+     "theirs": 17612.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 26696.0,
+     "theirs": 26612.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 79822.0,
+   "final_theirs": 79614.0,
+   "result": "win"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 871,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10293.0,
+     "theirs": 10293.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13137.0,
+     "theirs": 13137.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 15025.0,
+     "theirs": 15025.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 26743.0,
+     "theirs": 26743.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 81468.0,
+   "final_theirs": 81468.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 872,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10888.0,
+     "theirs": 10888.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 14236.0,
+     "theirs": 14236.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 17224.0,
+     "theirs": 17224.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 25699.0,
+     "theirs": 25699.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 68004.0,
+   "final_theirs": 68004.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 873,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 11034.0,
+     "theirs": 11034.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 14418.0,
+     "theirs": 14418.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 17381.0,
+     "theirs": 17381.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 26065.0,
+     "theirs": 26065.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 76305.0,
+   "final_theirs": 76305.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 874,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10894.0,
+     "theirs": 10894.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 14292.0,
+     "theirs": 14292.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 17093.0,
+     "theirs": 17093.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 24512.0,
+     "theirs": 24512.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 49904.0,
+   "final_theirs": 49904.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 875,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10316.0,
+     "theirs": 10316.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13094.0,
+     "theirs": 13179.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14041.0,
+     "theirs": 14126.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 22252.0,
+     "theirs": 22337.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 54140.0,
+   "final_theirs": 54552.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 876,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10435.0,
+     "theirs": 10435.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 14198.0,
+     "theirs": 14198.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 17388.0,
+     "theirs": 17388.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 30182.0,
+     "theirs": 30182.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 84343.0,
+   "final_theirs": 84343.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 877,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10368.0,
+     "theirs": 10368.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13274.0,
+     "theirs": 13274.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14662.0,
+     "theirs": 14662.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 25374.0,
+     "theirs": 25374.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 78443.0,
+   "final_theirs": 78443.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 878,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 10293.0,
+     "theirs": 10293.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13136.0,
+     "theirs": 13136.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14291.0,
+     "theirs": 14291.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 23968.0,
+     "theirs": 23968.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 71815.0,
+   "final_theirs": 71815.0,
+   "result": "tie"
+  },
+  {
+   "opponent": "third_herder",
+   "seed": 879,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10332.0,
+     "theirs": 10332.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 13218.0,
+     "theirs": 13230.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 14513.0,
+     "theirs": 14525.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 23822.0,
+     "theirs": 23834.0,
+     "strawberry_gap": 0,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 68649.0,
+   "final_theirs": 68661.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 864,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 7831.0,
+     "theirs": 21212.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11201.0,
+     "theirs": 33826.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 11955.0,
+     "theirs": 53070.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 18725.0,
+     "theirs": 76055.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 46228.0,
+   "final_theirs": 128904.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 865,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 7831.0,
+     "theirs": 22868.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11825.0,
+     "theirs": 36852.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 13654.0,
+     "theirs": 54951.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 20701.0,
+     "theirs": 72349.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 34856.0,
+   "final_theirs": 107051.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 866,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 7859.0,
+     "theirs": 23316.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11987.0,
+     "theirs": 38167.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 14374.0,
+     "theirs": 61219.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 23919.0,
+     "theirs": 91286.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 62307.0,
+   "final_theirs": 162831.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 867,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 11725.0,
+     "theirs": 8484.0,
+     "strawberry_gap": 0,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 15620.0,
+     "theirs": 16095.0,
+     "strawberry_gap": -1,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 17805.0,
+     "theirs": 24290.0,
+     "strawberry_gap": -1,
+     "head_gap": 2
+    },
+    "21": {
+     "ours": 25232.0,
+     "theirs": 38575.0,
+     "strawberry_gap": -4,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 37562.0,
+   "final_theirs": 60791.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 868,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 7857.0,
+     "theirs": 21186.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 10677.0,
+     "theirs": 31554.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 9507.0,
+     "theirs": 41537.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 10290.0,
+     "theirs": 47177.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 8430.0,
+   "final_theirs": 60625.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 869,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 7801.0,
+     "theirs": 20186.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 10142.0,
+     "theirs": 29395.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 8413.0,
+     "theirs": 42128.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 10361.0,
+     "theirs": 57389.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 17225.0,
+   "final_theirs": 86299.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 870,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 7795.0,
+     "theirs": 22333.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11764.0,
+     "theirs": 36901.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 13941.0,
+     "theirs": 60530.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 23684.0,
+     "theirs": 88064.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 68325.0,
+   "final_theirs": 161475.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 871,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 7799.0,
+     "theirs": 23402.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 12102.0,
+     "theirs": 39123.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 14906.0,
+     "theirs": 65100.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 25758.0,
+     "theirs": 99076.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 73386.0,
+   "final_theirs": 183999.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 872,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 8420.0,
+     "theirs": 21639.0,
+     "strawberry_gap": 10,
+     "head_gap": 9
+    },
+    "15": {
+     "ours": 12356.0,
+     "theirs": 35831.0,
+     "strawberry_gap": 10,
+     "head_gap": 7
+    },
+    "18": {
+     "ours": 14657.0,
+     "theirs": 62000.0,
+     "strawberry_gap": 10,
+     "head_gap": 7
+    },
+    "21": {
+     "ours": 24171.0,
+     "theirs": 93123.0,
+     "strawberry_gap": 5,
+     "head_gap": 7
+    }
+   },
+   "final_ours": 47127.0,
+   "final_theirs": 162513.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 873,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 8429.0,
+     "theirs": 20722.0,
+     "strawberry_gap": 10,
+     "head_gap": 9
+    },
+    "15": {
+     "ours": 11906.0,
+     "theirs": 34440.0,
+     "strawberry_gap": 10,
+     "head_gap": 7
+    },
+    "18": {
+     "ours": 13229.0,
+     "theirs": 57560.0,
+     "strawberry_gap": 10,
+     "head_gap": 7
+    },
+    "21": {
+     "ours": 19230.0,
+     "theirs": 80032.0,
+     "strawberry_gap": 5,
+     "head_gap": 7
+    }
+   },
+   "final_ours": 22350.0,
+   "final_theirs": 125587.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 874,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 8068.0,
+     "theirs": 20929.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 10286.0,
+     "theirs": 30999.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 9135.0,
+     "theirs": 43925.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 12015.0,
+     "theirs": 65437.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 19253.0,
+   "final_theirs": 103392.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 875,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 7830.0,
+     "theirs": 20178.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 10197.0,
+     "theirs": 29435.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 8952.0,
+     "theirs": 42367.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 10993.0,
+     "theirs": 57938.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 18185.0,
+   "final_theirs": 92599.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 876,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 7878.0,
+     "theirs": 22497.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11857.0,
+     "theirs": 38209.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 14026.0,
+     "theirs": 61775.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 23171.0,
+     "theirs": 94167.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 57276.0,
+   "final_theirs": 164604.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 877,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 7834.0,
+     "theirs": 22648.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11712.0,
+     "theirs": 36280.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 13568.0,
+     "theirs": 55199.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 21461.0,
+     "theirs": 74770.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 39676.0,
+   "final_theirs": 107751.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 878,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 7834.0,
+     "theirs": 22072.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11533.0,
+     "theirs": 35344.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 12364.0,
+     "theirs": 54482.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 17950.0,
+     "theirs": 75122.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 31585.0,
+   "final_theirs": 112624.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "pilkwang_structured_economic_policy",
+   "seed": 879,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 7799.0,
+     "theirs": 23202.0,
+     "strawberry_gap": 16,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 11903.0,
+     "theirs": 37498.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 14101.0,
+     "theirs": 54822.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 21987.0,
+     "theirs": 71238.0,
+     "strawberry_gap": 16,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 46968.0,
+   "final_theirs": 118963.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 864,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13406.0,
+     "theirs": 6192.0,
+     "strawberry_gap": -1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17571.0,
+     "theirs": 15929.0,
+     "strawberry_gap": 0,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 19511.0,
+     "theirs": 28648.0,
+     "strawberry_gap": 0,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 30005.0,
+     "theirs": 47827.0,
+     "strawberry_gap": 0,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 68861.0,
+   "final_theirs": 112123.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 865,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13374.0,
+     "theirs": 6907.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17823.0,
+     "theirs": 17116.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 20174.0,
+     "theirs": 30644.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 31917.0,
+     "theirs": 54382.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 79816.0,
+   "final_theirs": 109090.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 866,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13556.0,
+     "theirs": 4734.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 16128.0,
+     "theirs": 14818.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 15099.0,
+     "theirs": 22260.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 17922.0,
+     "theirs": 34540.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 28666.0,
+   "final_theirs": 71771.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 867,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13399.0,
+     "theirs": 5287.0,
+     "strawberry_gap": 2,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 16690.0,
+     "theirs": 13991.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 16183.0,
+     "theirs": 20469.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 19078.0,
+     "theirs": 27605.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 21247.0,
+   "final_theirs": 42386.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 868,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13368.0,
+     "theirs": 5341.0,
+     "strawberry_gap": 2,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 16633.0,
+     "theirs": 14036.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 16050.0,
+     "theirs": 20497.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 19029.0,
+     "theirs": 27416.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 33401.0,
+   "final_theirs": 54103.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 869,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13703.0,
+     "theirs": 5115.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 16822.0,
+     "theirs": 15673.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 17008.0,
+     "theirs": 27227.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 21533.0,
+     "theirs": 42772.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 38089.0,
+   "final_theirs": 86502.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 870,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13341.0,
+     "theirs": 5290.0,
+     "strawberry_gap": 2,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17043.0,
+     "theirs": 14306.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 17687.0,
+     "theirs": 23726.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 23738.0,
+     "theirs": 35759.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 42034.0,
+   "final_theirs": 65046.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 871,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13415.0,
+     "theirs": 6221.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17604.0,
+     "theirs": 16223.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 19583.0,
+     "theirs": 28837.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 30662.0,
+     "theirs": 45034.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 77334.0,
+   "final_theirs": 104925.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 872,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13419.0,
+     "theirs": 6222.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17722.0,
+     "theirs": 17496.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 20259.0,
+     "theirs": 34553.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 31031.0,
+     "theirs": 57055.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 64944.0,
+   "final_theirs": 118011.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 873,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13341.0,
+     "theirs": 5214.0,
+     "strawberry_gap": 2,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 16599.0,
+     "theirs": 13903.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 16054.0,
+     "theirs": 20349.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 19547.0,
+     "theirs": 29730.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 36150.0,
+   "final_theirs": 57354.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 874,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13380.0,
+     "theirs": 6075.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17310.0,
+     "theirs": 17801.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 19010.0,
+     "theirs": 31482.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 26774.0,
+     "theirs": 54831.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 49012.0,
+   "final_theirs": 100877.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 875,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13325.0,
+     "theirs": 5925.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17184.0,
+     "theirs": 15408.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 18522.0,
+     "theirs": 24839.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 27697.0,
+     "theirs": 42305.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 56841.0,
+   "final_theirs": 83019.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 876,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13380.0,
+     "theirs": 4680.0,
+     "strawberry_gap": 2,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 16380.0,
+     "theirs": 14966.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 15975.0,
+     "theirs": 24822.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 19441.0,
+     "theirs": 39447.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 41094.0,
+   "final_theirs": 89287.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 877,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13342.0,
+     "theirs": 5954.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17373.0,
+     "theirs": 15493.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 18934.0,
+     "theirs": 27171.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 28806.0,
+     "theirs": 44330.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 64138.0,
+   "final_theirs": 94475.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 878,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13391.0,
+     "theirs": 6757.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17671.0,
+     "theirs": 16775.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 20007.0,
+     "theirs": 33384.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 30817.0,
+     "theirs": 56328.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 63069.0,
+   "final_theirs": 111812.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "lonespear_kaggriculture_v21",
+   "seed": 879,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13390.0,
+     "theirs": 5938.0,
+     "strawberry_gap": 1,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 17128.0,
+     "theirs": 15286.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 18087.0,
+     "theirs": 23651.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 26085.0,
+     "theirs": 39463.0,
+     "strawberry_gap": 2,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 54557.0,
+   "final_theirs": 79791.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 864,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9805.0,
+     "theirs": 12697.0,
+     "strawberry_gap": 6,
+     "head_gap": 12
+    },
+    "15": {
+     "ours": 13531.0,
+     "theirs": 21314.0,
+     "strawberry_gap": 6,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 13874.0,
+     "theirs": 35585.0,
+     "strawberry_gap": 6,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 21831.0,
+     "theirs": 56019.0,
+     "strawberry_gap": 6,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 64915.0,
+   "final_theirs": 98055.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 865,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 9782.0,
+     "theirs": 14720.0,
+     "strawberry_gap": -8,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 13386.0,
+     "theirs": 19019.0,
+     "strawberry_gap": 3,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 15100.0,
+     "theirs": 31446.0,
+     "strawberry_gap": 3,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 21276.0,
+     "theirs": 44127.0,
+     "strawberry_gap": -1,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 44864.0,
+   "final_theirs": 80297.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 866,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9222.0,
+     "theirs": 19065.0,
+     "strawberry_gap": -8,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 12350.0,
+     "theirs": 25881.0,
+     "strawberry_gap": -7,
+     "head_gap": 6
+    },
+    "18": {
+     "ours": 14548.0,
+     "theirs": 37908.0,
+     "strawberry_gap": -7,
+     "head_gap": 6
+    },
+    "21": {
+     "ours": 23451.0,
+     "theirs": 49266.0,
+     "strawberry_gap": -7,
+     "head_gap": 6
+    }
+   },
+   "final_ours": 51091.0,
+   "final_theirs": 74929.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 867,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 9471.0,
+     "theirs": 17732.0,
+     "strawberry_gap": -22,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 12311.0,
+     "theirs": 25574.0,
+     "strawberry_gap": -22,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 13418.0,
+     "theirs": 33824.0,
+     "strawberry_gap": -22,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 21371.0,
+     "theirs": 40861.0,
+     "strawberry_gap": -22,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 52403.0,
+   "final_theirs": 79244.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 868,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9913.0,
+     "theirs": 13493.0,
+     "strawberry_gap": -17,
+     "head_gap": 12
+    },
+    "15": {
+     "ours": 13669.0,
+     "theirs": 21695.0,
+     "strawberry_gap": -17,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 15474.0,
+     "theirs": 30085.0,
+     "strawberry_gap": -17,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 20835.0,
+     "theirs": 36287.0,
+     "strawberry_gap": -17,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 34593.0,
+   "final_theirs": 59123.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 869,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 10303.0,
+     "theirs": 20945.0,
+     "strawberry_gap": -6,
+     "head_gap": 2
+    },
+    "15": {
+     "ours": 13282.0,
+     "theirs": 22748.0,
+     "strawberry_gap": -5,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 13108.0,
+     "theirs": 29606.0,
+     "strawberry_gap": -5,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 16406.0,
+     "theirs": 38240.0,
+     "strawberry_gap": -5,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 35926.0,
+   "final_theirs": 77537.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 870,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9992.0,
+     "theirs": 16910.0,
+     "strawberry_gap": -10,
+     "head_gap": 4
+    },
+    "15": {
+     "ours": 14117.0,
+     "theirs": 21600.0,
+     "strawberry_gap": 4,
+     "head_gap": 6
+    },
+    "18": {
+     "ours": 16484.0,
+     "theirs": 37091.0,
+     "strawberry_gap": 4,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 26340.0,
+     "theirs": 51142.0,
+     "strawberry_gap": -1,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 52779.0,
+   "final_theirs": 91477.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 871,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 9402.0,
+     "theirs": 16337.0,
+     "strawberry_gap": -9,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 14121.0,
+     "theirs": 22237.0,
+     "strawberry_gap": 2,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 16262.0,
+     "theirs": 37766.0,
+     "strawberry_gap": 2,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 26568.0,
+     "theirs": 52003.0,
+     "strawberry_gap": 1,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 67078.0,
+   "final_theirs": 102144.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 872,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9651.0,
+     "theirs": 20263.0,
+     "strawberry_gap": -8,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 13362.0,
+     "theirs": 22831.0,
+     "strawberry_gap": -6,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 13781.0,
+     "theirs": 34344.0,
+     "strawberry_gap": -6,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 20405.0,
+     "theirs": 47364.0,
+     "strawberry_gap": -7,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 53132.0,
+   "final_theirs": 85274.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 873,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 9594.0,
+     "theirs": 18052.0,
+     "strawberry_gap": -7,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 13235.0,
+     "theirs": 22901.0,
+     "strawberry_gap": 8,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 13554.0,
+     "theirs": 36691.0,
+     "strawberry_gap": 8,
+     "head_gap": 4
+    },
+    "21": {
+     "ours": 19459.0,
+     "theirs": 50644.0,
+     "strawberry_gap": 5,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 44097.0,
+   "final_theirs": 89136.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 874,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9907.0,
+     "theirs": 19900.0,
+     "strawberry_gap": -8,
+     "head_gap": 4
+    },
+    "15": {
+     "ours": 12835.0,
+     "theirs": 22289.0,
+     "strawberry_gap": -6,
+     "head_gap": 4
+    },
+    "18": {
+     "ours": 12601.0,
+     "theirs": 31455.0,
+     "strawberry_gap": -6,
+     "head_gap": 6
+    },
+    "21": {
+     "ours": 15899.0,
+     "theirs": 40813.0,
+     "strawberry_gap": -7,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 35431.0,
+   "final_theirs": 71740.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 875,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 8729.0,
+     "theirs": 20369.0,
+     "strawberry_gap": -6,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 12905.0,
+     "theirs": 29311.0,
+     "strawberry_gap": -6,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 14950.0,
+     "theirs": 42093.0,
+     "strawberry_gap": -6,
+     "head_gap": 2
+    },
+    "21": {
+     "ours": 29003.0,
+     "theirs": 69898.0,
+     "strawberry_gap": -6,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 71841.0,
+   "final_theirs": 124044.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 876,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9360.0,
+     "theirs": 16635.0,
+     "strawberry_gap": -6,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 13040.0,
+     "theirs": 22187.0,
+     "strawberry_gap": 4,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 13358.0,
+     "theirs": 35105.0,
+     "strawberry_gap": 4,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 21960.0,
+     "theirs": 58816.0,
+     "strawberry_gap": 4,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 68402.0,
+   "final_theirs": 103384.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 877,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 9596.0,
+     "theirs": 16657.0,
+     "strawberry_gap": -6,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 13235.0,
+     "theirs": 22714.0,
+     "strawberry_gap": 4,
+     "head_gap": 8
+    },
+    "18": {
+     "ours": 13518.0,
+     "theirs": 35806.0,
+     "strawberry_gap": 4,
+     "head_gap": 8
+    },
+    "21": {
+     "ours": 20739.0,
+     "theirs": 49625.0,
+     "strawberry_gap": 0,
+     "head_gap": 8
+    }
+   },
+   "final_ours": 58232.0,
+   "final_theirs": 100614.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 878,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 9378.0,
+     "theirs": 20006.0,
+     "strawberry_gap": -8,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 13100.0,
+     "theirs": 24352.0,
+     "strawberry_gap": -6,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 13547.0,
+     "theirs": 35390.0,
+     "strawberry_gap": -6,
+     "head_gap": 6
+    },
+    "21": {
+     "ours": 21032.0,
+     "theirs": 54023.0,
+     "strawberry_gap": -6,
+     "head_gap": 6
+    }
+   },
+   "final_ours": 56996.0,
+   "final_theirs": 92486.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "premaananda108_ecobot_v7",
+   "seed": 879,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 8806.0,
+     "theirs": 19687.0,
+     "strawberry_gap": -7,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 12459.0,
+     "theirs": 28383.0,
+     "strawberry_gap": -7,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 12892.0,
+     "theirs": 39176.0,
+     "strawberry_gap": -7,
+     "head_gap": 3
+    },
+    "21": {
+     "ours": 16592.0,
+     "theirs": 63601.0,
+     "strawberry_gap": -7,
+     "head_gap": 3
+    }
+   },
+   "final_ours": 37355.0,
+   "final_theirs": 109194.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 864,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13786.0,
+     "theirs": 4452.0,
+     "strawberry_gap": 16,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17282.0,
+     "theirs": 13301.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 18550.0,
+     "theirs": 30240.0,
+     "strawberry_gap": 7,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 24001.0,
+     "theirs": 38855.0,
+     "strawberry_gap": 7,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 33941.0,
+   "final_theirs": 53476.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 865,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13237.0,
+     "theirs": 5094.0,
+     "strawberry_gap": 16,
+     "head_gap": 2
+    },
+    "15": {
+     "ours": 17643.0,
+     "theirs": 10838.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 20389.0,
+     "theirs": 32083.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 30286.0,
+     "theirs": 48872.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 75065.0,
+   "final_theirs": 83880.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 866,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13173.0,
+     "theirs": 4130.0,
+     "strawberry_gap": 5,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17119.0,
+     "theirs": 10462.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 18749.0,
+     "theirs": 27734.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 24624.0,
+     "theirs": 38442.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 43151.0,
+   "final_theirs": 56158.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 867,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13169.0,
+     "theirs": 4591.0,
+     "strawberry_gap": 15,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 16998.0,
+     "theirs": 9270.0,
+     "strawberry_gap": 16,
+     "head_gap": -2
+    },
+    "18": {
+     "ours": 18764.0,
+     "theirs": 25971.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 26011.0,
+     "theirs": 38158.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 50809.0,
+   "final_theirs": 62804.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 868,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13422.0,
+     "theirs": 4402.0,
+     "strawberry_gap": 7,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17581.0,
+     "theirs": 9636.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 19173.0,
+     "theirs": 26636.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 24721.0,
+     "theirs": 38606.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 43349.0,
+   "final_theirs": 59554.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 869,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13216.0,
+     "theirs": 4240.0,
+     "strawberry_gap": 15,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 16279.0,
+     "theirs": 8559.0,
+     "strawberry_gap": 16,
+     "head_gap": -2
+    },
+    "18": {
+     "ours": 15857.0,
+     "theirs": 21533.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 19253.0,
+     "theirs": 31472.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 40223.0,
+   "final_theirs": 55342.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 870,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13435.0,
+     "theirs": 4406.0,
+     "strawberry_gap": 7,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17602.0,
+     "theirs": 9816.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 19295.0,
+     "theirs": 26874.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 25948.0,
+     "theirs": 39797.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 46348.0,
+   "final_theirs": 62777.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 871,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13225.0,
+     "theirs": 5420.0,
+     "strawberry_gap": 16,
+     "head_gap": 2
+    },
+    "15": {
+     "ours": 17626.0,
+     "theirs": 11566.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 20169.0,
+     "theirs": 31888.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 28425.0,
+     "theirs": 46644.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 50347.0,
+   "final_theirs": 68531.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 872,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13162.0,
+     "theirs": 4982.0,
+     "strawberry_gap": 16,
+     "head_gap": 2
+    },
+    "15": {
+     "ours": 17405.0,
+     "theirs": 10727.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 20079.0,
+     "theirs": 31716.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 29480.0,
+     "theirs": 47843.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 69108.0,
+   "final_theirs": 80277.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 873,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13159.0,
+     "theirs": 4771.0,
+     "strawberry_gap": 6,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17862.0,
+     "theirs": 10468.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 21224.0,
+     "theirs": 31857.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 32585.0,
+     "theirs": 47338.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 84442.0,
+   "final_theirs": 87029.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 874,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13724.0,
+     "theirs": 4693.0,
+     "strawberry_gap": 6,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 17325.0,
+     "theirs": 9437.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 18810.0,
+     "theirs": 24916.0,
+     "strawberry_gap": 14,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 26857.0,
+     "theirs": 37091.0,
+     "strawberry_gap": 11,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 52566.0,
+   "final_theirs": 62193.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 875,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13185.0,
+     "theirs": 4351.0,
+     "strawberry_gap": 5,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17429.0,
+     "theirs": 9478.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 20151.0,
+     "theirs": 27154.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 30257.0,
+     "theirs": 42626.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 77016.0,
+   "final_theirs": 79860.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 876,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13207.0,
+     "theirs": 4208.0,
+     "strawberry_gap": 9,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17382.0,
+     "theirs": 11201.0,
+     "strawberry_gap": 15,
+     "head_gap": -2
+    },
+    "18": {
+     "ours": 19826.0,
+     "theirs": 28959.0,
+     "strawberry_gap": 14,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 29359.0,
+     "theirs": 42843.0,
+     "strawberry_gap": 14,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 73819.0,
+   "final_theirs": 78445.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 877,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13184.0,
+     "theirs": 4978.0,
+     "strawberry_gap": 16,
+     "head_gap": 2
+    },
+    "15": {
+     "ours": 17327.0,
+     "theirs": 10493.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 19417.0,
+     "theirs": 29997.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 26082.0,
+     "theirs": 42969.0,
+     "strawberry_gap": 13,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 45675.0,
+   "final_theirs": 61865.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 878,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13184.0,
+     "theirs": 3914.0,
+     "strawberry_gap": 5,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17348.0,
+     "theirs": 10315.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 19750.0,
+     "theirs": 27389.0,
+     "strawberry_gap": 14,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 28326.0,
+     "theirs": 40291.0,
+     "strawberry_gap": 12,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 60745.0,
+   "final_theirs": 65991.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "shashankjangid_agent_v1000_sovereign_prime",
+   "seed": 879,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13188.0,
+     "theirs": 4194.0,
+     "strawberry_gap": 15,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 16612.0,
+     "theirs": 8467.0,
+     "strawberry_gap": 16,
+     "head_gap": -2
+    },
+    "18": {
+     "ours": 17630.0,
+     "theirs": 23964.0,
+     "strawberry_gap": 16,
+     "head_gap": -1
+    },
+    "21": {
+     "ours": 23736.0,
+     "theirs": 35060.0,
+     "strawberry_gap": 15,
+     "head_gap": -1
+    }
+   },
+   "final_ours": 48919.0,
+   "final_theirs": 57852.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 864,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13449.0,
+     "theirs": 457.0,
+     "strawberry_gap": -21,
+     "head_gap": 6
+    },
+    "15": {
+     "ours": 18499.0,
+     "theirs": 3698.0,
+     "strawberry_gap": -7,
+     "head_gap": 3
+    },
+    "18": {
+     "ours": 20906.0,
+     "theirs": 15510.0,
+     "strawberry_gap": -7,
+     "head_gap": 3
+    },
+    "21": {
+     "ours": 28876.0,
+     "theirs": 24054.0,
+     "strawberry_gap": -7,
+     "head_gap": 3
+    }
+   },
+   "final_ours": 62721.0,
+   "final_theirs": 56337.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 865,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13198.0,
+     "theirs": 1641.0,
+     "strawberry_gap": -14,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17430.0,
+     "theirs": 4719.0,
+     "strawberry_gap": -10,
+     "head_gap": -1
+    },
+    "18": {
+     "ours": 18340.0,
+     "theirs": 13514.0,
+     "strawberry_gap": -9,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 27726.0,
+     "theirs": 27951.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 74272.0,
+   "final_theirs": 65425.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 866,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13143.0,
+     "theirs": 609.0,
+     "strawberry_gap": -17,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 17193.0,
+     "theirs": 3302.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 17843.0,
+     "theirs": 15374.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "21": {
+     "ours": 24320.0,
+     "theirs": 25799.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 56650.0,
+   "final_theirs": 53545.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 867,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13335.0,
+     "theirs": 1304.0,
+     "strawberry_gap": -13,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 16573.0,
+     "theirs": 4892.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "18": {
+     "ours": 18373.0,
+     "theirs": 15417.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "21": {
+     "ours": 25726.0,
+     "theirs": 26475.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    }
+   },
+   "final_ours": 58988.0,
+   "final_theirs": 55771.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 868,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13170.0,
+     "theirs": 682.0,
+     "strawberry_gap": -13,
+     "head_gap": 4
+    },
+    "15": {
+     "ours": 17849.0,
+     "theirs": 4348.0,
+     "strawberry_gap": -8,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 20090.0,
+     "theirs": 18203.0,
+     "strawberry_gap": -8,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 29009.0,
+     "theirs": 28661.0,
+     "strawberry_gap": -8,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 58423.0,
+   "final_theirs": 54917.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 869,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13178.0,
+     "theirs": 1645.0,
+     "strawberry_gap": -14,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 17396.0,
+     "theirs": 1745.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 18196.0,
+     "theirs": 8076.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "21": {
+     "ours": 25183.0,
+     "theirs": 21088.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 49683.0,
+   "final_theirs": 38335.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 870,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13250.0,
+     "theirs": 184.0,
+     "strawberry_gap": -9,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 17463.0,
+     "theirs": 4580.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "18": {
+     "ours": 18547.0,
+     "theirs": 13039.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "21": {
+     "ours": 26623.0,
+     "theirs": 32771.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    }
+   },
+   "final_ours": 66318.0,
+   "final_theirs": 71939.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 871,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13207.0,
+     "theirs": 860.0,
+     "strawberry_gap": -15,
+     "head_gap": 2
+    },
+    "15": {
+     "ours": 17369.0,
+     "theirs": 3351.0,
+     "strawberry_gap": -14,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 18344.0,
+     "theirs": 10535.0,
+     "strawberry_gap": -9,
+     "head_gap": 3
+    },
+    "21": {
+     "ours": 27979.0,
+     "theirs": 23734.0,
+     "strawberry_gap": -9,
+     "head_gap": 4
+    }
+   },
+   "final_ours": 75258.0,
+   "final_theirs": 80133.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 872,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13247.0,
+     "theirs": 224.0,
+     "strawberry_gap": -6,
+     "head_gap": 4
+    },
+    "15": {
+     "ours": 18002.0,
+     "theirs": 5586.0,
+     "strawberry_gap": -6,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 20337.0,
+     "theirs": 22812.0,
+     "strawberry_gap": -6,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 31086.0,
+     "theirs": 35028.0,
+     "strawberry_gap": -6,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 78495.0,
+   "final_theirs": 79305.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 873,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13216.0,
+     "theirs": 1675.0,
+     "strawberry_gap": -13,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 17357.0,
+     "theirs": 7196.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "18": {
+     "ours": 18173.0,
+     "theirs": 15829.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "21": {
+     "ours": 25375.0,
+     "theirs": 30587.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    }
+   },
+   "final_ours": 65607.0,
+   "final_theirs": 67039.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 874,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13352.0,
+     "theirs": 1726.0,
+     "strawberry_gap": -14,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 18344.0,
+     "theirs": 6329.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "18": {
+     "ours": 20766.0,
+     "theirs": 20067.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "21": {
+     "ours": 31697.0,
+     "theirs": 38548.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    }
+   },
+   "final_ours": 80642.0,
+   "final_theirs": 84995.0,
+   "result": "loss"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 875,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13198.0,
+     "theirs": 1575.0,
+     "strawberry_gap": -14,
+     "head_gap": 1
+    },
+    "15": {
+     "ours": 17431.0,
+     "theirs": 4679.0,
+     "strawberry_gap": -8,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 18314.0,
+     "theirs": 13085.0,
+     "strawberry_gap": -8,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 26295.0,
+     "theirs": 26573.0,
+     "strawberry_gap": -8,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 65973.0,
+   "final_theirs": 56177.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 876,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13234.0,
+     "theirs": 1494.0,
+     "strawberry_gap": -14,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 17355.0,
+     "theirs": 6641.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "18": {
+     "ours": 17942.0,
+     "theirs": 14756.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    },
+    "21": {
+     "ours": 26416.0,
+     "theirs": 31914.0,
+     "strawberry_gap": -9,
+     "head_gap": 1
+    }
+   },
+   "final_ours": 73938.0,
+   "final_theirs": 72010.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 877,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13229.0,
+     "theirs": 1374.0,
+     "strawberry_gap": -14,
+     "head_gap": 0
+    },
+    "15": {
+     "ours": 17421.0,
+     "theirs": 1826.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 18226.0,
+     "theirs": 6862.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "21": {
+     "ours": 24564.0,
+     "theirs": 20153.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 44755.0,
+   "final_theirs": 31096.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 878,
+   "seat": 0,
+   "at": {
+    "12": {
+     "ours": 13228.0,
+     "theirs": 662.0,
+     "strawberry_gap": -9,
+     "head_gap": 4
+    },
+    "15": {
+     "ours": 17418.0,
+     "theirs": 5451.0,
+     "strawberry_gap": -9,
+     "head_gap": 0
+    },
+    "18": {
+     "ours": 18290.0,
+     "theirs": 17201.0,
+     "strawberry_gap": -9,
+     "head_gap": 0
+    },
+    "21": {
+     "ours": 25851.0,
+     "theirs": 28508.0,
+     "strawberry_gap": -9,
+     "head_gap": 0
+    }
+   },
+   "final_ours": 68309.0,
+   "final_theirs": 63378.0,
+   "result": "win"
+  },
+  {
+   "opponent": "madhur_sabherwal_hub_geometry_agent",
+   "seed": 879,
+   "seat": 1,
+   "at": {
+    "12": {
+     "ours": 13148.0,
+     "theirs": 775.0,
+     "strawberry_gap": -15,
+     "head_gap": 5
+    },
+    "15": {
+     "ours": 17272.0,
+     "theirs": 3720.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "18": {
+     "ours": 17937.0,
+     "theirs": 11866.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    },
+    "21": {
+     "ours": 23470.0,
+     "theirs": 25637.0,
+     "strawberry_gap": -9,
+     "head_gap": 2
+    }
+   },
+   "final_ours": 46198.0,
+   "final_theirs": 44940.0,
+   "result": "win"
+  }
+ ]
+}
