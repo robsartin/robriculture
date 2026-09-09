@@ -62,7 +62,7 @@ CHAMPION_BAR = 0.60
 ANCHOR_BAR = 0.90
 CONTROL_SEED = 896
 
-#: Arm B: the crop-and-land schedule with the herd left as third_herder's.
+#: Arm B: the crop-and-land schedule with no reserve, on third_herder's herd.
 #: Never registered, so it cannot be promoted or packaged by accident.
 ARM_B = "crop_pace"
 
@@ -210,8 +210,8 @@ def main(argv=None):  # pragma: no cover
 
     if args.recorded:
         print(format_rows(run_recorded()))
-        print(f"recorded, not gated: arm B ({ARM_B}: the crop-and-land schedule on "
-              f"third_herder's herd) vs {CHAMPION}")
+        print(f"recorded, not gated: arm B ({ARM_B}: the crop-and-land schedule with no "
+              f"reserve, on third_herder's herd) vs {CHAMPION}")
         return 0
 
     do_controls = args.controls or not args.criterion

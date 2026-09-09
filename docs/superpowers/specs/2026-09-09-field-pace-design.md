@@ -106,12 +106,41 @@ PROMOTE → PR closes #252; designation is a separate step on Rob's say-so. REJE
 and root cause on #252, closed `not_planned`; the PR carries the seams and the bench as a
 record (#245's precedent). VOID → the control that failed and the census, on #252.
 
-## Note, 2026-09-09 (Task 3 review, before the bench ran)
+## Corrections, 2026-09-09 (whole-branch review, then the run)
 
-The slot layout is derived from the frozen herder pair (`_crop_slot`, kept as #239 decided),
-so worker 6 keeps its slot when it herds from day 8 and its six tiles idle, and the twelfth
-hand (hired day 15) lands on slot 10, whose slice runs past the end of the 61-tile
-`CROP_TILES_F`: it works one tile. In effect the package works about 55 crop tiles from day
-15, not 60. Not changed here — a re-map is the second, unmeasured change #239 declined — and
-not reached by the shape controls (day 8 and 12). Recorded so a REJECTED result is not
-root-caused against "tiles per hand" without this in view.
+The bench ran on seed 896 and is **VOID**: identity OK; shape FAILED on `head_placed` 6 < 8
+at day 8 (planted 33, quadrants 2, hands 9, planted@12 47, money@8 15, payday day 13). The
+review had found why before the run, and three of its findings correct this spec:
+
+1. **The bars sat on the construction ceiling (C2).** With the slot layout frozen to the
+   herder pair, the crew works 11 crop tiles on days 0-5 (two of four crop hands hold slots
+   past the 61-tile layout), 36 on days 6-7, **30 on days 8-10** (the third herder's slot
+   idles) and 48 from day 11. "Planted ≥ 30 by day 8" was the ceiling, not a margin; 37 and
+   62 were unreachable on this layout. The earlier note here was wrong twice: there is no
+   twelfth hand (see 2), and the orphaned slot is exactly what the day-8 bar reached. These
+   four figures come from intersecting each worker's slot with which quadrant is unlocked on
+   that day (the review's own arithmetic); `test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window`
+   pins the same slot layout at a looser, land-lock-blind bound over the same five windows —
+   24, 42, 48, 48, 48 — since `crop_cluster` slices `CROP_TILES_F` by slot number alone.
+2. **`HAND_RAMP_F`'s `(15, 12)` never fires (C1).** Hires happen at hour 0 only and the ten-
+   order cap truncates the dawn list, so `hire=12` and `hire=10` emit identical orders; the
+   crew is 10 all season. A declared knob that is a no-op.
+3. **`head_placed ≥ 8` by day 8 is unreachable on the opening bankroll (C3).** Day 0 spends
+   the hires, 480 of seed and 1,900 of herd (three sheep and a cow under #219's rule, not
+   the 1,600 assumed), leaving ~600; the only income before the melon payday is fertilizer
+   and wool, ~3,400 at most, against 4,500-5,500 of land, strawberry seed and herd the
+   schedule wants — and the benchmark's buy order funds land and the whole strawberry seed
+   bill before the herd. The field funds its herd first. The measured 6 head is that order,
+   not the ramp.
+4. **Arm B is mislabelled (I1).** `RESERVE_F = 0` survives into `crop_pace`, and the reserve
+   is a herd-funding knob, so arm B is "the crop-and-land schedule with no reserve, on
+   third_herder's herd", not the crop schedule alone. Never scored (VOID).
+5. **Risk not named (M7).** The 13-head step at day 8 can emit eight `BUY_ANIMAL` orders in
+   one turn and push the feed order off the ten-order cap; self-limiting via `pending`.
+
+What survives: the four seams (reviewed, identity-controlled), the contender as a declared
+package, and the finding that the next schedule contender must (a) declare its bars from the
+tiles the crew actually works — checked against the slot-only ceiling
+`test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window` pins before trusting
+a tighter, land-lock-adjusted count by hand — and (b) change the buy order — herd before
+strawberry seed — which is the ninth knob this package did not carry.

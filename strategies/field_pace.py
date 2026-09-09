@@ -18,6 +18,10 @@ rule, the benchmark's sell and feed rules.
 
 Declared before measurement: every constant below, and the controls and
 criterion in `harness/pace_bench.py` (posted to #252 before any code).
+
+Measured after the fact: the `(15, 12)` hand step never fires (hires are dawn-only
+under the ten-order cap), and the frozen slot layout works 11/36/30/48 crop tiles
+by window, not the 60 the numbers name (#252 review).
 """
 
 from __future__ import annotations
