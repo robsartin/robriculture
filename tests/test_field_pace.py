@@ -16,6 +16,7 @@ from strategies.third_herder import ThirdHerderStrategy
 
 
 def test_the_declared_constants():
+    """Every knob the module docstring promises, on the module and mirrored onto the class."""
     assert fp.HAND_RAMP_F == ((0, 5), (6, 8), (8, 10), (15, 12))
     assert fp.LAND_RAMP_F == ((0, 1), (6, 2), (11, 3))
     assert fp.PIVOT_F == 5
@@ -32,6 +33,7 @@ def test_the_declared_constants():
 
 
 def test_every_hook_answers_with_the_declared_schedule():
+    """Each seam returns the field's own ramp/value, not a frozen default."""
     s = fp.FieldPaceStrategy()
     assert [s.hire_target(d) for d in (0, 5, 6, 8, 15, 29)] == [5, 5, 8, 10, 12, 12]
     assert [s.land_target(d) for d in (0, 5, 6, 11, 29)] == [1, 1, 2, 3, 3]
@@ -47,6 +49,8 @@ def test_the_herd_ramp_never_asks_for_fewer_head_than_the_frozen_ramp():
 
 
 def test_the_block_is_fourteen_nw_tiles_keeping_the_frozen_shed_prefix():
+    """The pasture block is 14 distinct NW tiles, excludes the shed-access tile, and
+    keeps the frozen benchmark's first five so the herders' shed walk is unchanged."""
     assert len(fp.PASTURE_BLOCK_F) == 14 and len(set(fp.PASTURE_BLOCK_F)) == 14
     assert all(fr.quadrant_of(x, y) == "NW" for x, y in fp.PASTURE_BLOCK_F)
     assert (4, 4) not in fp.PASTURE_BLOCK_F
@@ -54,6 +58,7 @@ def test_the_block_is_fourteen_nw_tiles_keeping_the_frozen_shed_prefix():
 
 
 def test_crop_tiles_are_the_frozen_rule_with_the_block_removed():
+    """Crop tiles and pasture block are disjoint and partition every owned tile."""
     owned = [t for q in fr.OWNED_QUADRANTS for t in fr._quadrant_tiles(q)]
     assert not (set(fp.CROP_TILES_F) & set(fp.PASTURE_BLOCK_F))
     assert set(fp.CROP_TILES_F) | set(fp.PASTURE_BLOCK_F) == set(owned)
@@ -71,6 +76,7 @@ def test_pasture_count_caps_at_its_own_block_and_floors_at_its_own_ramp():
 
 
 def test_it_is_a_registered_contender_built_on_third_herder():
+    """Auto-discovered, and its inherited seams still resolve through third_herder."""
     from strategies import REGISTRY, load
     assert "field_pace" in REGISTRY and load("field_pace") is fp.FieldPaceStrategy
     assert issubclass(fp.FieldPaceStrategy, ThirdHerderStrategy)

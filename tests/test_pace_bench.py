@@ -16,6 +16,7 @@ from harness import rival_bench as rb
 
 
 def test_the_declared_constants():
+    """Every value posted to #252 before any code, read straight off the module."""
     assert pb.CONTENDER == "field_pace" and pb.CHAMPION == "third_herder"
     assert pb.SEEDS == tuple(range(896, 912)) and pb.CONTROL_SEED == 896
     assert pb.CHAMPION_BAR == 0.60 and pb.ANCHOR_BAR == 0.90
@@ -27,6 +28,7 @@ def test_the_declared_constants():
 
 
 def test_the_seeds_are_fresh_against_every_range_already_spent():
+    """A #252 result must not reuse a seed already burned by an earlier experiment."""
     spent = set(range(100, 116)) | set(range(200, 216)) | set(range(300, 332)) \
         | set(range(400, 416)) | set(range(500, 516)) | set(range(600, 616)) \
         | set(range(700, 704)) | set(range(800, 896))
@@ -34,6 +36,7 @@ def test_the_seeds_are_fresh_against_every_range_already_spent():
 
 
 def test_the_verdict_logic_is_rival_benchs_not_a_copy():
+    """The re-exported names are the same objects as rival_bench's, not a fork of them."""
     assert pb.criterion is rb.criterion and pb.format_rows is rb.format_rows
     assert pb.format_external is rb.format_external
     assert pb.paired_external_rows is rb.paired_external_rows

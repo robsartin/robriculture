@@ -770,6 +770,7 @@ def test_market_orders_with_reserve_keeps_that_much_back_from_the_herd():
 # --- #252: the pivot and cluster seams, and the frozen rules they default to ---
 
 def test_the_benchmarks_pivot_and_cluster_hooks_ask_for_the_frozen_rules():
+    """Both seams default to ``None`` on the benchmark, so it stays frozen (#181)."""
     assert fr.FieldRivalStrategy().pivot_day() is None
     assert fr.FieldRivalStrategy().cluster_size() is None
 
@@ -784,6 +785,7 @@ def test_crop_for_day_with_a_pivot_swings_to_strawberry_on_that_day():
 
 
 def test_market_orders_with_a_pivot_buys_that_days_seed():
+    """An explicit `pivot` swings the seed buy to strawberry ahead of the frozen day 10."""
     orders = fr.market_orders(day=5, hour=1, money=50_000, hands=6, quadrants=1, animals=0,
                               shed={}, seeds={}, empty_plots=4, standing={}, pivot=5)
     assert ["BUY_SEED", "STRAWBERRY", 4] in orders
