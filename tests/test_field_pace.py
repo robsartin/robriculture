@@ -78,3 +78,31 @@ def test_it_is_a_registered_contender_built_on_third_herder():
     assert s.livestock_workers(8) == ThirdHerderStrategy().livestock_workers(8)
     assert fp.FieldPaceStrategy.LEAD_TILES == ThirdHerderStrategy.LEAD_TILES
     assert fp.FieldPaceStrategy.THRESHOLD == ThirdHerderStrategy.THRESHOLD
+
+
+def _worked(day, hands):
+    """Crop tiles the crew actually holds on `day`: every non-herding worker's cluster,
+    counted once. Workers are the farmer plus `hands`; herders come from the seam."""
+    from strategies import field_rival as fr
+    s = fp.FieldPaceStrategy()
+    workers = s.livestock_workers(day) or fr.LIVESTOCK_WORKERS
+    tiles = set()
+    for worker in range(1 + hands):
+        tiles.update(fr.crop_cluster(worker, workers, crops=s.CROP_TILES_F, cluster=s.CLUSTER_F))
+    return len(tiles)
+
+
+def test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window():
+    """The positive control the shape bars were missing (#252 review C2): with the
+    slot layout frozen to the herder pair, the third herder's slot idles from day 8.
+    `crop_cluster` slices `CROP_TILES_F` by slot number alone, with no regard for
+    which quadrant is unlocked yet, so before day 11 this pins the crew's slot-only
+    ceiling (tiles assigned, not all of them plantable) rather than the review's
+    hand-computed, lock-adjusted "actually worked" figures (11, 36, 30) -- computing
+    the review's own function here gives 24, 42 and 48 instead. From day 11 all land
+    is owned and the two readings coincide."""
+    assert _worked(0, 5) == 24        # hands 5: workers 0,3,4,5 hold slots 0-3; slots 1-3 reach past NW into NE
+    assert _worked(6, 8) == 42        # hands 8: seven crop workers; slot 6 sits entirely in SW, not yet owned
+    assert _worked(8, 10) == 48       # hands 10, third herder takes worker 6 -> slot 4 idles; slots 6-8 sit in SW
+    assert _worked(11, 10) == 48      # SW owned: same slots, tiles now plantable
+    assert _worked(15, 10) == 48      # the twelfth hand is never hired (C1)
