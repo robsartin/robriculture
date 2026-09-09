@@ -726,3 +726,76 @@ def test_market_orders_with_land_buys_to_that_target():
     # The seam: a contender's own quadrant target replaces the ramp's.
     assert _land_orders(6, 1, land=2) == [["BUY_LAND"]]
     assert _land_orders(12, 1, land=1) == []
+
+# --- #252: the hire and reserve seams, and the frozen rules they default to ---
+
+def test_the_benchmarks_hire_and_reserve_hooks_ask_for_the_frozen_rules():
+    # `None` means "the benchmark's own rule", so field_rival stays frozen (#181).
+    assert fr.FieldRivalStrategy().hire_target(0) is None
+    assert fr.FieldRivalStrategy().hire_target(16) is None
+    assert fr.FieldRivalStrategy().capital_reserve() is None
+
+
+def _hires(day, hands, **kw):
+    orders = fr.market_orders(day=day, hour=0, money=50_000, hands=hands, quadrants=1,
+                              animals=0, shed={}, seeds={}, empty_plots=0, standing={}, **kw)
+    return sum(1 for o in orders if o[0] == "HIRE")
+
+
+def test_market_orders_with_hire_hires_to_that_crew():
+    # Golden pin on the default first: day 0, no hands, the frozen ramp wants 6.
+    assert _hires(0, 0) == 6
+    assert _hires(0, 0, hire=5) == 5
+    assert _hires(0, 4, hire=10) == 6
+    assert _hires(0, 6, hire=5) == 0
+
+
+def _herd_buys(money, **kw):
+    orders = fr.market_orders(day=12, hour=1, money=money, hands=8, quadrants=2,
+                              animals=0, shed={}, seeds={}, empty_plots=0, standing={}, **kw)
+    return sum(1 for o in orders if o[0] == "BUY_ANIMAL")
+
+
+def test_market_orders_with_reserve_keeps_that_much_back_from_the_herd():
+    # Day 12 the frozen ramp wants 8 head. With 2,000 in hand the cow rule buys
+    # sheep (500) while budget >= 1,500 and cows (400) below it: the frozen
+    # reserve of 1,200 lets one sheep through (2,000 -> 1,500, then 1,000 <
+    # 1,200 stops it); no reserve buys sheep, sheep, cow, cow (2,000 -> 1,500
+    # -> 1,000 -> 600 -> 200); a reserve equal to the cash buys nothing.
+    assert _herd_buys(2_000) == 1
+    assert _herd_buys(2_000, reserve=0) == 4
+    assert _herd_buys(2_000, reserve=2_000) == 0
+
+
+# --- #252: the pivot and cluster seams, and the frozen rules they default to ---
+
+def test_the_benchmarks_pivot_and_cluster_hooks_ask_for_the_frozen_rules():
+    """Both seams default to ``None`` on the benchmark, so it stays frozen (#181)."""
+    assert fr.FieldRivalStrategy().pivot_day() is None
+    assert fr.FieldRivalStrategy().cluster_size() is None
+
+
+def test_crop_for_day_with_a_pivot_swings_to_strawberry_on_that_day():
+    # Golden pin on the default: melon on day 9, strawberry on day 10.
+    assert fr.crop_for_day(9) == "MELON" and fr.crop_for_day(10) == "STRAWBERRY"
+    assert fr.crop_for_day(4, pivot=5) == "MELON"
+    assert fr.crop_for_day(5, pivot=5) == "STRAWBERRY"
+    assert fr.crop_for_plot(5, {}, pivot=5) == "STRAWBERRY"
+    assert fr.crop_for_plot(5, {}) == "MELON"
+
+
+def test_market_orders_with_a_pivot_buys_that_days_seed():
+    """An explicit `pivot` swings the seed buy to strawberry ahead of the frozen day 10."""
+    orders = fr.market_orders(day=5, hour=1, money=50_000, hands=6, quadrants=1, animals=0,
+                              shed={}, seeds={}, empty_plots=4, standing={}, pivot=5)
+    assert ["BUY_SEED", "STRAWBERRY", 4] in orders
+    orders = fr.market_orders(day=5, hour=1, money=50_000, hands=6, quadrants=1, animals=0,
+                              shed={}, seeds={}, empty_plots=4, standing={})
+    assert ["BUY_SEED", "MELON", 4] in orders
+
+
+def test_crop_cluster_with_a_cluster_size_slices_that_many_tiles():
+    crops = tuple((x, 9) for x in range(30))
+    assert fr.crop_cluster(0, crops=crops, cluster=6) == crops[0:6]
+    assert fr.crop_cluster(5, crops=crops, cluster=6) == crops[18:24]      # slot 3
+    assert fr.crop_cluster(5, crops=crops) == crops[12:16]                 # frozen 4
