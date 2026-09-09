@@ -765,3 +765,35 @@ def test_market_orders_with_reserve_keeps_that_much_back_from_the_herd():
     assert _herd_buys(2_000) == 1
     assert _herd_buys(2_000, reserve=0) == 4
     assert _herd_buys(2_000, reserve=2_000) == 0
+
+
+# --- #252: the pivot and cluster seams, and the frozen rules they default to ---
+
+def test_the_benchmarks_pivot_and_cluster_hooks_ask_for_the_frozen_rules():
+    assert fr.FieldRivalStrategy().pivot_day() is None
+    assert fr.FieldRivalStrategy().cluster_size() is None
+
+
+def test_crop_for_day_with_a_pivot_swings_to_strawberry_on_that_day():
+    # Golden pin on the default: melon on day 9, strawberry on day 10.
+    assert fr.crop_for_day(9) == "MELON" and fr.crop_for_day(10) == "STRAWBERRY"
+    assert fr.crop_for_day(4, pivot=5) == "MELON"
+    assert fr.crop_for_day(5, pivot=5) == "STRAWBERRY"
+    assert fr.crop_for_plot(5, {}, pivot=5) == "STRAWBERRY"
+    assert fr.crop_for_plot(5, {}) == "MELON"
+
+
+def test_market_orders_with_a_pivot_buys_that_days_seed():
+    orders = fr.market_orders(day=5, hour=1, money=50_000, hands=6, quadrants=1, animals=0,
+                              shed={}, seeds={}, empty_plots=4, standing={}, pivot=5)
+    assert ["BUY_SEED", "STRAWBERRY", 4] in orders
+    orders = fr.market_orders(day=5, hour=1, money=50_000, hands=6, quadrants=1, animals=0,
+                              shed={}, seeds={}, empty_plots=4, standing={})
+    assert ["BUY_SEED", "MELON", 4] in orders
+
+
+def test_crop_cluster_with_a_cluster_size_slices_that_many_tiles():
+    crops = tuple((x, 9) for x in range(30))
+    assert fr.crop_cluster(0, crops=crops, cluster=6) == crops[0:6]
+    assert fr.crop_cluster(5, crops=crops, cluster=6) == crops[18:24]      # slot 3
+    assert fr.crop_cluster(5, crops=crops) == crops[12:16]                 # frozen 4
