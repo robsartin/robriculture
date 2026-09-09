@@ -62,6 +62,21 @@ def census_on_day(turns, day):
     return census
 
 
+def champion_seat(seed):
+    """Sides alternate by seed parity: even seeds seat the champion at 0."""
+    return seed % 2
+
+
+def seat_series(seed, seat0_series, seat1_series):
+    """``(ours, theirs)`` with ours always the champion, whichever seat it sat in."""
+    return (seat0_series, seat1_series) if champion_seat(seed) == 0 else (seat1_series, seat0_series)
+
+
+def seats_alternated(readings):
+    """The seating's positive control: both seats appear in the record."""
+    return {r["seat"] for r in readings} == {0, 1}
+
+
 def game_reading(ours_turns, theirs_turns, opponent, seed, days=DAYS):
     """One game's numbers: both sides' money and the asymmetry at each declared
     day (JSON-friendly: day keys are strings), and the final result."""
@@ -75,7 +90,7 @@ def game_reading(ours_turns, theirs_turns, opponent, seed, days=DAYS):
         }
     final_ours, final_theirs = ours_turns[-1][1]["money"], theirs_turns[-1][1]["money"]
     result = "loss" if final_ours < final_theirs else ("win" if final_ours > final_theirs else "tie")
-    return {"opponent": opponent, "seed": seed, "at": at,
+    return {"opponent": opponent, "seed": seed, "seat": champion_seat(seed), "at": at,
             "final_ours": final_ours, "final_theirs": final_theirs, "result": result}
 
 
@@ -175,10 +190,11 @@ def run(seeds=SEEDS, opponents=OPPONENTS):  # pragma: no cover
             else:
                 wrapper = externals[opponent].fresh()
                 them = (lambda obs, w=wrapper: w(obs, config))
-            if seed % 2 == 0:
-                ours, theirs = census_series(us, them, seed)
+            if champion_seat(seed) == 0:
+                seat0, seat1 = census_series(us, them, seed, closing=True)
             else:
-                theirs, ours = census_series(them, us, seed)
+                seat0, seat1 = census_series(them, us, seed, closing=True)
+            ours, theirs = seat_series(seed, seat0, seat1)
             reading = game_reading(ours, theirs, opponent, seed)
             readings.append(reading)
             print(f"{opponent:<46} seed {seed} {reading['result']:<4} "
@@ -210,6 +226,7 @@ def main(argv=None):  # pragma: no cover
     print(format_asymmetry(readings))
     cells = [(d, m) for (d, m), cell in tabulate(readings).items() if actionable(cell["pooled"])]
     print(f"actionable pooled cells (fire >= {FIRE_BAR:.0%}, harm <= {HARM_BAR:.0%}): {cells or 'none'}")
+    print(f"seating control: {'OK' if seats_alternated(readings) else 'FAIL -- one seat only'}")
     return 0
 
 

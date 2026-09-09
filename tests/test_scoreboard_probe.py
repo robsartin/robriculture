@@ -113,6 +113,28 @@ def test_format_table_prints_a_block_per_cell_with_the_pooled_line_and_the_marke
     assert "*" in starred and "*" not in text        # fire 100% harm 0 is actionable; fire 50% harm 50% is not
 
 
+def test_seat_series_puts_the_champion_first_from_either_seat():
+    """Even seeds seat the champion at 0, odd seeds at 1; the seam returns
+    (ours, theirs) with ours always the champion. This is the branch a wrong
+    swap would invert into a self-consistent, entirely wrong table."""
+    s0, s1 = [(0, {"money": 1.0})], [(0, {"money": 2.0})]
+    assert sp.champion_seat(864) == 0 and sp.champion_seat(865) == 1
+    assert sp.seat_series(864, s0, s1) == (s0, s1)
+    assert sp.seat_series(865, s0, s1) == (s1, s0)
+
+
+def test_game_reading_records_the_seat_and_the_seat_control_wants_both():
+    """Positive control for the seating: a run over an even and an odd seed must
+    show both seats in the record, or the alternation never happened."""
+    ours = _turns([1000] * 22)
+    theirs = _turns([900] * 22)
+    r = sp.game_reading(ours, theirs, "x", 865, days=(12,))
+    assert r["seat"] == 1
+    readings = [sp.game_reading(ours, theirs, "x", s, days=(12,)) for s in (864, 865)]
+    assert sp.seats_alternated(readings) is True
+    assert sp.seats_alternated(readings[:1]) is False
+
+
 def test_format_asymmetry_prints_the_median_gaps_per_opponent_and_day():
     readings = [dict(_reading("x", 1, 1, "win"), at={"15": {"ours": 1, "theirs": 1, "strawberry_gap": g, "head_gap": h}})
                 for g, h in ((2, 3), (4, 1), (6, 5))]
