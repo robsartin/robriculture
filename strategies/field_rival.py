@@ -421,12 +421,12 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     # 100-item shed, which then silently discarded every harvest.
     pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
     want_head = animal_target(day) if target is None else target
-    keep = CAPITAL_RESERVE if reserve is None else reserve
+    cash_floor = CAPITAL_RESERVE if reserve is None else reserve
     for _ in range(max(0, want_head - animals - pending)):
         kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
                           else HERD_MIX[0])
         cost = economy.ANIMALS[kind]["cost"]
-        if budget - cost < keep:
+        if budget - cost < cash_floor:
             break
         # The count is not optional: the sim's `_parse_order` rejects a
         # BUY_ANIMAL of length 2 and drops it without a word, which is
@@ -687,7 +687,8 @@ class FieldRivalStrategy(Strategy):
         animals = count_animals(tiles)
         block, crops = self.layout() or (PASTURE_TILES, CROP_TILES)
         pivot = self.pivot_day()
-        cluster = self.cluster_size() or CLUSTER
+        cluster_size = self.cluster_size()
+        cluster = CLUSTER if cluster_size is None else cluster_size
         pastures = active_pastures(day, animals,
                                    count=self.pasture_count(day, animals), block=block)
         workers = self.livestock_workers(day) or LIVESTOCK_WORKERS
@@ -705,8 +706,8 @@ class FieldRivalStrategy(Strategy):
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
             crop = crop_for_plot(day, standing, caps=self.CAPS, pivot=pivot)
-            action = crop_worker_action(crop_cluster(i, workers, crops=crops, cluster=cluster), tiles, pos, inv,
-                                        crop, day, hour)
+            mine = crop_cluster(i, workers, crops=crops, cluster=cluster)
+            action = crop_worker_action(mine, tiles, pos, inv, crop, day, hour)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
                 # cannot pay for -- so a worker past the seed count would just

@@ -23,6 +23,7 @@ def test_the_declared_constants():
     assert pb.SHAPE_DAY == 8 and pb.CROP_DAY == 12
     assert pb.SHAPE_BARS == {"planted": 30, "quadrants": 2, "hands": 8, "head_placed": 8}
     assert pb.PLANTED_AT_CROP_DAY_BAR == 45 and pb.PAYDAY_MONEY == 5000
+    assert pb.PILKWANG == "pilkwang_structured_economic_policy"
 
 
 def test_the_seeds_are_fresh_against_every_range_already_spent():
@@ -75,6 +76,12 @@ def test_shape_reading_reports_no_payday_when_money_never_crossed():
 def test_shape_reading_raises_when_the_game_never_reached_a_declared_day():
     with pytest.raises(ValueError, match="day 12"):
         pb.shape_reading(_turns()[:20])
+
+
+def test_closing_says_when_there_were_no_turns_at_all():
+    """The empty-turns arm of `_closing`'s message (#252 review M6) -- untested until now."""
+    with pytest.raises(ValueError, match="day 8: no turns at all"):
+        pb.shape_reading([])
 
 
 def test_each_shape_bar_can_fail_alone():

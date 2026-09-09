@@ -34,9 +34,10 @@ from __future__ import annotations
 import argparse
 import os
 
+from harness import external_pool
 from harness.evolve import DEFAULT_ANCHORS
 from harness.herder_bench import last_census_on_day
-from harness.rival_bench import (  # noqa: F401  -- re-exported on purpose
+from harness.rival_bench import (  # noqa: F401  -- the tests pin these to rival_bench's own
     criterion,
     first_day_at_or_above,
     format_external,
@@ -46,6 +47,14 @@ from harness.rival_bench import (  # noqa: F401  -- re-exported on purpose
 
 CONTENDER = "field_pace"
 CHAMPION = "third_herder"
+
+#: The identity/shape controls' reference agent -- declared once, `herder_bench`'s own name.
+REFERENCE = "dense_farm"
+
+#: The pinned gate external this module reports the paired row for. Asserted below to catch
+#: a rename in `external_pool` rather than silently printing ``None`` (#252 review M5).
+PILKWANG = external_pool.EXTERNAL_ANCHORS[0]
+assert PILKWANG.startswith("pilkwang")
 
 #: Fresh. Everything through 895 is spent (see the module docstring).
 SEEDS = tuple(range(896, 912))
@@ -157,10 +166,10 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
         "pivot_day": lambda self: None,
         "cluster_size": lambda self: None,
         "capital_reserve": lambda self: None,
-        "CAPS": load("dense_farm").CAPS,
+        "CAPS": load(REFERENCE).CAPS,
     })
-    base = play_rewards(make_agent(load("dense_farm")()), make_agent(load("dense_farm")()), seed)
-    got = play_rewards(make_agent(off()), make_agent(load("dense_farm")()), seed)
+    base = play_rewards(make_agent(load(REFERENCE)()), make_agent(load(REFERENCE)()), seed)
+    got = play_rewards(make_agent(off()), make_agent(load(REFERENCE)()), seed)
     precondition_ok = base[0] > 0
     out["identity"] = {"ok": got == base and precondition_ok, "base": base, "got": got,
                        "precondition_ok": precondition_ok}
@@ -226,7 +235,7 @@ def main(argv=None):  # pragma: no cover
         print(format_rows([champion_row] + anchor_rows))
         print(format_external(pairs))
         v = criterion(champion_row, anchor_rows, CHAMPION_BAR, ANCHOR_BAR, external_pairs=pairs)
-        pilkwang = v.get("external", {}).get("pilkwang_structured_economic_policy")
+        pilkwang = v.get("external", {}).get(PILKWANG)
         print(f"champion {v['champion_rate']:.1%} (bar {CHAMPION_BAR:.0%}); failing limbs: "
               f"{v['failing'] or 'none'} -> {'PROMOTE' if v['passed'] else 'REJECTED'}; "
               f"pilkwang paired row (contender, champion): {pilkwang}")
