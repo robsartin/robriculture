@@ -104,6 +104,8 @@ def _row(readings, day, margin):
     return {
         "games": games,
         "fired": len(fired),
+        "wins": len(wins),
+        "losses": len(losses),
         "fire_rate": len(fired) / games if games else None,
         "precision": len(fired_losses) / len(fired) if fired else None,
         # No wins: there is nothing for the trigger to harm -- 0, not unknown.
@@ -131,20 +133,30 @@ def actionable(row):
             and row["harm"] is not None and row["harm"] <= HARM_BAR)
 
 
+def informative(row):
+    """A row where the trigger could have been wrong: at least one win to harm
+    and one loss to catch. Against an opponent we never beat, harm is 0 by
+    construction and a star would say nothing."""
+    return row["wins"] >= 1 and row["losses"] >= 1
+
+
 def _pct(x):
     return "   -" if x is None else f"{x:4.0%}"
 
 
 def format_table(table):
-    """One block per (day, margin): a line per opponent, then pooled; `*` marks actionable."""
+    """One block per (day, margin): a line per opponent, then pooled; `*` marks
+    a row that is both actionable and informative (has both outcomes to prove it)."""
     lines = []
     for (day, margin), cell in table.items():
         lines.append(f"day {day}  behind by >= {margin}%")
-        lines.append(f"{'opponent':<46} {'games':>5} {'fired':>5} {'fire':>5} {'prec':>5} {'harm':>5} {'recall':>6}")
+        lines.append(f"{'opponent':<46} {'games':>5} {'fired':>5} {'fire':>5} {'prec':>5} {'harm':>5} "
+                     f"{'recall':>6} {'W':>3} {'L':>3}")
         for name, r in cell.items():
-            mark = " *" if actionable(r) else ""
+            mark = " *" if actionable(r) and informative(r) else ""
             lines.append(f"{name:<46} {r['games']:>5} {r['fired']:>5} {_pct(r['fire_rate']):>5} "
-                         f"{_pct(r['precision']):>5} {_pct(r['harm']):>5} {_pct(r['recall']):>6}{mark}")
+                         f"{_pct(r['precision']):>5} {_pct(r['harm']):>5} {_pct(r['recall']):>6} "
+                         f"{r['wins']:>3} {r['losses']:>3}{mark}")
         lines.append("")
     return "\n".join(lines).rstrip()
 
@@ -224,7 +236,8 @@ def main(argv=None):  # pragma: no cover
     print()
     print("asymmetry, median of rival minus ours (strawberry tiles / head placed):")
     print(format_asymmetry(readings))
-    cells = [(d, m) for (d, m), cell in tabulate(readings).items() if actionable(cell["pooled"])]
+    cells = [(d, m) for (d, m), cell in tabulate(readings).items()
+             if actionable(cell["pooled"]) and informative(cell["pooled"])]
     print(f"actionable pooled cells (fire >= {FIRE_BAR:.0%}, harm <= {HARM_BAR:.0%}): {cells or 'none'}")
     print(f"seating control: {'OK' if seats_alternated(readings) else 'FAIL -- one seat only'}")
     return 0

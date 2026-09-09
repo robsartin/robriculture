@@ -83,7 +83,8 @@ def _four():
 def test_tabulate_counts_fire_precision_harm_and_recall_per_opponent_and_pooled():
     table = sp.tabulate(_four(), days=(15,), margins=(20,))
     row = table[(15, 20)]["x"]
-    assert row == {"games": 4, "fired": 2, "fire_rate": 0.5, "precision": 0.5, "harm": 0.5, "recall": 0.5}
+    assert row == {"games": 4, "fired": 2, "wins": 2, "losses": 2,
+                   "fire_rate": 0.5, "precision": 0.5, "harm": 0.5, "recall": 0.5}
     assert table[(15, 20)]["pooled"] == row
 
 
@@ -109,8 +110,9 @@ def test_format_table_prints_a_block_per_cell_with_the_pooled_line_and_the_marke
     assert "day 15" in text and "20%" in text
     lines = text.splitlines()
     assert any(l.startswith("x") for l in lines) and any(l.startswith("pooled") for l in lines)
-    starred = sp.format_table(sp.tabulate([_reading("x", 700, 1000, "loss")] * 4, days=(15,), margins=(20,)))
-    assert "*" in starred and "*" not in text        # fire 100% harm 0 is actionable; fire 50% harm 50% is not
+    starred_readings = [_reading("x", 700, 1000, "loss")] * 3 + [_reading("x", 1200, 1000, "win")]
+    starred = sp.format_table(sp.tabulate(starred_readings, days=(15,), margins=(20,)))
+    assert "*" in starred and "*" not in text        # fire 75% harm 0, informative; fire 50% harm 50% is not
 
 
 def test_seat_series_puts_the_champion_first_from_either_seat():
@@ -133,6 +135,24 @@ def test_game_reading_records_the_seat_and_the_seat_control_wants_both():
     readings = [sp.game_reading(ours, theirs, "x", s, days=(12,)) for s in (864, 865)]
     assert sp.seats_alternated(readings) is True
     assert sp.seats_alternated(readings[:1]) is False
+
+
+def test_rows_carry_win_and_loss_counts():
+    row = sp.tabulate(_four(), days=(15,), margins=(20,))[(15, 20)]["x"]
+    assert row["wins"] == 2 and row["losses"] == 2
+
+
+def test_the_star_needs_both_outcomes_in_the_row():
+    """Against an opponent we never beat, harm is 0 by construction and every cell
+    would be starred; a trigger is only informative where it could have fired on
+    a win. `actionable` is the declared bar; `informative` is the extra gate the
+    star uses, and the pooled row across six opponents always has both outcomes."""
+    all_losses = [_reading("x", 700, 1000, "loss")] * 4
+    row = sp.tabulate(all_losses, days=(15,), margins=(20,))[(15, 20)]["x"]
+    assert sp.actionable(row) is True and sp.informative(row) is False
+    assert "*" not in sp.format_table(sp.tabulate(all_losses, days=(15,), margins=(20,)))
+    mixed = all_losses + [_reading("x", 1200, 1000, "win")]
+    assert "*" in sp.format_table(sp.tabulate(mixed, days=(15,), margins=(20,)))
 
 
 def test_format_asymmetry_prints_the_median_gaps_per_opponent_and_day():
