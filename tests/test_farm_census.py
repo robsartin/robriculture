@@ -155,3 +155,42 @@ def test_aggregate_should_read_an_empty_game_as_zeros_rather_than_crash():
     assert fc.aggregate([]) == {"turns": 0, "turns_with_head_in_shed": 0,
                                 "pasture_series": [], "max_pasture": 0,
                                 "max_head_placed": 0}
+
+
+# --- census_series: closing state and seat 1's shared keys (#197 review) -----
+
+def test_census_series_with_closing_ends_on_the_state_the_sim_scores():
+    """The reward is the money AFTER the last step; without `closing` the series
+    stops one state early, and an agent that liquidates on the last turn (pilkwang
+    does) is scored as if it never sold. Positive control: the closing census's
+    money equals the env's own final reward."""
+    from kaggle_environments import make
+    from kaggisim.strategy import make_agent
+    from strategies import load
+    from harness.farm_census import census_series
+    a = lambda: make_agent(load("dense_farm")())
+    plain_ours, _ = census_series(a(), a(), 5, episode_steps=24)
+    ours, theirs = census_series(a(), a(), 5, episode_steps=24, closing=True)
+    assert len(plain_ours) == 23 and len(ours) == 24 and len(theirs) == 24
+    env = make("kaggriculture", configuration={"episodeSteps": 24, "seed": 5})
+    env.run([a(), a()])
+    assert ours[-1][1]["money"] == env.steps[-1][0].reward
+    assert theirs[-1][1]["money"] == env.steps[-1][1].reward
+
+
+def test_census_series_hands_seat_one_the_shared_keys_kaggle_would():
+    """kaggle copies seat 0's shared observation (`step`, `day`, `hour`, `farms`,
+    `market`, `town`) into seat 1 before calling it; the raw env state does not.
+    A stranger's agent in seat 1 that reads obs["step"] must not KeyError."""
+    from kaggisim.strategy import make_agent
+    from strategies import load
+    from harness.farm_census import census_series
+    seen = []
+
+    def seat_one(obs):
+        seen.append((obs["step"], obs["player"], "private" in obs))
+        return {"farmer": ["PASS"], "hands": [], "market": []}
+
+    census_series(make_agent(load("dense_farm")()), seat_one, 5, episode_steps=6)
+    assert [s for s, _, _ in seen] == [0, 1, 2, 3, 4]
+    assert all(p == 1 and has_private for _, p, has_private in seen)

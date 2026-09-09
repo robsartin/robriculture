@@ -128,7 +128,7 @@ def aggregate(turns):
     }
 
 
-def census_series(agent_a, agent_b, seed, episode_steps=720):  # pragma: no cover
+def census_series(agent_a, agent_b, seed, episode_steps=720, closing=False):  # pragma: no cover
     """Drive one seeded game and census BOTH farms every turn.
 
     Each side is read off the observation it actually acted on, so each census
@@ -140,16 +140,50 @@ def census_series(agent_a, agent_b, seed, episode_steps=720):  # pragma: no cove
     plus ``episode_steps - 1`` `env.step()` calls (`harness.state_set`); calling
     step() `episode_steps` times overruns an already-done env.
 
+    `closing=True` appends one more census per side read off the final state --
+    the board the sim scores (reward = money AFTER the last step). Without it
+    the series ends one state early and an agent that liquidates on the last
+    turn is scored as if it never sold (#197 review). Default off so the
+    benches' recorded turn counts are unchanged.
+
+    Seat 1's raw state lacks the keys kaggle marks shared and copies from seat
+    0 before calling an agent (`step` among them); they are filled here the
+    same way, never overwriting seat 1's own `player` and `private`.
+
+    The shared keys are refreshed every turn rather than filled in once: the
+    sim's own per-seat observation for seat 1 is built by carrying forward the
+    previous turn's dict, so a key merely absent-then-filled (`setdefault`)
+    would freeze at its first-seen value instead of tracking the real game --
+    a stranger's agent reading `obs["step"]` every turn would see it stuck at 0.
+
     Returns ``(ours, theirs)``, each ``[(day, census), ...]``.
     """
     from kaggle_environments import make
     env = make("kaggriculture", configuration={"episodeSteps": episode_steps, "seed": seed})
     env.reset(2)
     ours, theirs = [], []
-    for _ in range(episode_steps - 1):
+
+    #: The keys kaggriculture.json marks `"shared": true` (farms, market, town,
+    #: day, hour), plus `step` -- a kaggle-core field never marked shared but
+    #: present only in seat 0's raw observation. Never `player` or `private`:
+    #: those are seat 1's own.
+    SHARED_KEYS = ("farms", "market", "town", "day", "hour", "step")
+
+    def seat_views():
         obs0 = env.state[0].observation
         obs1 = env.state[1].observation
+        for key in SHARED_KEYS:
+            if key in obs0:
+                obs1[key] = obs0[key]
+        return obs0, obs1
+
+    for _ in range(episode_steps - 1):
+        obs0, obs1 = seat_views()
         ours.append((obs0.get("day", 0), census(obs0["farms"][obs0["player"]], obs0["private"])))
         theirs.append((obs1.get("day", 0), census(obs1["farms"][obs1["player"]], obs1["private"])))
         env.step([agent_a(obs0), agent_b(obs1)])
+    if closing:
+        obs0, obs1 = seat_views()
+        ours.append((obs0.get("day", 0), census(obs0["farms"][obs0["player"]], obs0["private"])))
+        theirs.append((obs1.get("day", 0), census(obs1["farms"][obs1["player"]], obs1["private"])))
     return ours, theirs
