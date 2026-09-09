@@ -118,10 +118,9 @@ review had found why before the run, and three of its findings correct this spec
    idles) and 48 from day 11. "Planted ≥ 30 by day 8" was the ceiling, not a margin; 37 and
    62 were unreachable on this layout. The earlier note here was wrong twice: there is no
    twelfth hand (see 2), and the orphaned slot is exactly what the day-8 bar reached. These
-   four figures come from intersecting each worker's slot with which quadrant is unlocked on
-   that day (the review's own arithmetic); `test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window`
-   pins the same slot layout at a looser, land-lock-blind bound over the same five windows —
-   24, 42, 48, 48, 48 — since `crop_cluster` slices `CROP_TILES_F` by slot number alone.
+   four figures come from intersecting each worker's slot with the quadrants the land ramp
+   owns on that day; `test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window`
+   pins exactly them (11, 36, 30, 48, and 48 on day 15 since the twelfth hand never comes).
 2. **`HAND_RAMP_F`'s `(15, 12)` never fires (C1).** Hires happen at hour 0 only and the ten-
    order cap truncates the dawn list, so `hire=12` and `hire=10` emit identical orders; the
    crew is 10 all season. A declared knob that is a no-op.
@@ -140,7 +139,6 @@ review had found why before the run, and three of its findings correct this spec
 
 What survives: the four seams (reviewed, identity-controlled), the contender as a declared
 package, and the finding that the next schedule contender must (a) declare its bars from the
-tiles the crew actually works — checked against the slot-only ceiling
-`test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window` pins before trusting
-a tighter, land-lock-adjusted count by hand — and (b) change the buy order — herd before
+tiles the crew actually works, the number
+`test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window` pins, and (b) change the buy order — herd before
 strawberry seed — which is the ninth knob this package did not carry.

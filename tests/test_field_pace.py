@@ -87,28 +87,30 @@ def test_it_is_a_registered_contender_built_on_third_herder():
 
 
 def _worked(day, hands):
-    """Crop tiles the crew actually holds on `day`: every non-herding worker's cluster,
-    counted once. Workers are the farmer plus `hands`; herders come from the seam."""
+    """Crop tiles the crew can actually plant on `day`: every non-herding worker's
+    cluster, counted once, restricted to the quadrants the land ramp owns by then --
+    a slot that reaches into a locked quadrant holds tiles nobody can plant yet.
+    Workers are the farmer plus `hands`; herders come from the seam."""
     from strategies import field_rival as fr
     s = fp.FieldPaceStrategy()
     workers = s.livestock_workers(day) or fr.LIVESTOCK_WORKERS
+    owned = fr.OWNED_QUADRANTS[:s.land_target(day)]
     tiles = set()
     for worker in range(1 + hands):
-        tiles.update(fr.crop_cluster(worker, workers, crops=s.CROP_TILES_F, cluster=s.CLUSTER_F))
+        tiles.update(t for t in fr.crop_cluster(worker, workers, crops=s.CROP_TILES_F,
+                                                cluster=s.CLUSTER_F)
+                     if fr.quadrant_of(*t) in owned)
     return len(tiles)
 
 
 def test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window():
     """The positive control the shape bars were missing (#252 review C2): with the
-    slot layout frozen to the herder pair, the third herder's slot idles from day 8.
-    `crop_cluster` slices `CROP_TILES_F` by slot number alone, with no regard for
-    which quadrant is unlocked yet, so before day 11 this pins the crew's slot-only
-    ceiling (tiles assigned, not all of them plantable) rather than the review's
-    hand-computed, lock-adjusted "actually worked" figures (11, 36, 30) -- computing
-    the review's own function here gives 24, 42 and 48 instead. From day 11 all land
-    is owned and the two readings coincide."""
-    assert _worked(0, 5) == 24        # hands 5: workers 0,3,4,5 hold slots 0-3; slots 1-3 reach past NW into NE
-    assert _worked(6, 8) == 42        # hands 8: seven crop workers; slot 6 sits entirely in SW, not yet owned
-    assert _worked(8, 10) == 48       # hands 10, third herder takes worker 6 -> slot 4 idles; slots 6-8 sit in SW
-    assert _worked(11, 10) == 48      # SW owned: same slots, tiles now plantable
+    slot layout frozen to the herder pair and slots sliced by number with no regard
+    for which quadrant is owned yet, the crew can plant far fewer tiles than the
+    schedule's 37 and 62 name -- and the third herder's slot idles from day 8.
+    These are the ceilings the absolute bars sat on: 30 at day 8 against a bar of 30."""
+    assert _worked(0, 5) == 11        # NW only: slots 1-3 reach past the 14-tile block into locked NE
+    assert _worked(6, 8) == 36        # NE bought: seven crop workers, slot 6 wholly in locked SW
+    assert _worked(8, 10) == 30       # third herder takes worker 6 -> slot 4 idles; slots 6-8 in locked SW
+    assert _worked(11, 10) == 48      # SW bought: every held tile plantable
     assert _worked(15, 10) == 48      # the twelfth hand is never hired (C1)
