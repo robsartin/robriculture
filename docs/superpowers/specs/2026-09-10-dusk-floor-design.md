@@ -105,3 +105,27 @@ PROMOTE → PR closes #258; designation is a separate step on Rob's say-so
 (`python -m harness.promotion --succeed dusk_floor --issue 258 --pr N …`). REJECTED → record
 and root cause on #258, closed `not_planned`; the PR carries the seam and the bench as a
 record. VOID → the control that failed and the census, on #258.
+
+## Result and corrections, 2026-09-10 (the run, then the whole-branch review)
+
+**VOID on the head bar and the crop line.** Controls: identity PASS; mechanism — hands **10**
+(the first contender in this line to keep its crew), head placed **6**; crop gap **45**
+(planted 3 at day 12 against herd_first's 48; one quadrant all game). Money 2 at day 8.
+Criterion and arm B not scored; only seed 944 played. Record and corrections: #258's comments.
+
+**What the probe on seed 944 showed.** The herd bought three cows at 23:00 on day 7 down to
+the floor (1,707 → 507); dawn hired ten hands (→ 364); at 06:00 the feed block — exempt from
+the floor by design, and budgeting wheat at the seed price of 10 while the sim charges the
+market price of 33 — ordered eight wheat against 104 in hand and drained the farm to 2. The
+floor held against the herd, land and seed and not against feed. With a live crew costing 143
+a day the payday slipped to day 17, the herd's `want − animals − pending` stayed positive on
+all 24 hourly turns and took every coin of income before seed saw it; the floor itself cost
+seed two tiles. Two further facts: at a ten-hand target dawn emits ten `HIRE`s and nothing
+else under the ten-order cap; and the VOID was predictable from
+`test_a_floor_is_left_unspent_on_herd_firsts_order_too`, already on this branch.
+
+**Lessons.** (1) A floor must cover every block that spends, feed included, and feed must be
+priced at the market. (2) A seam's positive control and the hypothesis run over the same
+function: compute one turn before spending seeds. (3) A per-turn herd share compounds over 24
+turns a day; the review's starting point for the next brainstorm is the frozen order (land,
+seed, herd) with this floor extended to feed.
