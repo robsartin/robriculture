@@ -120,3 +120,16 @@ def test_format_shape_prints_both_sides_and_the_payday():
     lines = text.splitlines()
     assert len(lines) == 3 and lines[1].startswith("field_pace") and "day 10" in lines[1]
     assert lines[2].rstrip().endswith("never")
+
+
+def test_the_identity_stub_switches_every_seam_off_and_survives_a_turn():
+    """The identity control's Off class must answer every hook the contender's
+    bases define with the frozen None -- with the hook's CURRENT arity. #256
+    gave `capital_reserve` two arguments and the old one-argument lambda raised
+    TypeError inside `act`; a real reset observation catches the next such drift."""
+    from kaggle_environments import make
+    off = pb.off_class()()
+    assert off.capital_reserve(8, 4) is None and off.capital_reserve() is None
+    assert off.layout() is None and off.hire_target(8) is None
+    obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
+    assert set(off.act(obs)) == {"farmer", "hands", "market"}

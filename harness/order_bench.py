@@ -129,16 +129,13 @@ def _arm_b_agents(name):  # pragma: no cover
     return agents
 
 
-def run_controls(seed=CONTROL_SEED):  # pragma: no cover
-    """Identity, then head placed at day 8, then the paired crop line."""
-    os.environ.setdefault("ROBRICULTURE_STRICT", "1")
-    from harness.farm_census import census_series
-    from harness.tournament import play_rewards
-    from kaggisim.strategy import make_agent
+def off_class():
+    """The identity control's subject: the contender with every seam switched
+    off (the frozen None) and dense_farm's caps. Built here, not inside
+    `run_controls`, so a test can prove it survives a turn whenever a hook's
+    arity changes (#256)."""
     from strategies import load
-    out = {}
-
-    off = type("Off", (load(CONTENDER),), {
+    return type("Off", (load(CONTENDER),), {
         "herd_preference": lambda self, obs: None,
         "pasture_count": lambda self, day, animals: None,
         "herd_target": lambda self, day: None,
@@ -148,10 +145,22 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
         "hire_target": lambda self, day: None,
         "pivot_day": lambda self: None,
         "cluster_size": lambda self: None,
-        "capital_reserve": lambda self: None,
+        "capital_reserve": lambda self, day=None, animals=None: None,
         "buy_order": lambda self: None,
         "CAPS": load(REFERENCE).CAPS,
     })
+
+
+def run_controls(seed=CONTROL_SEED):  # pragma: no cover
+    """Identity, then head placed at day 8, then the paired crop line."""
+    os.environ.setdefault("ROBRICULTURE_STRICT", "1")
+    from harness.farm_census import census_series
+    from harness.tournament import play_rewards
+    from kaggisim.strategy import make_agent
+    from strategies import load
+    out = {}
+
+    off = off_class()
     base = play_rewards(make_agent(load(REFERENCE)()), make_agent(load(REFERENCE)()), seed)
     got = play_rewards(make_agent(off()), make_agent(load(REFERENCE)()), seed)
     precondition_ok = base[0] > 0
