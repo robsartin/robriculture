@@ -6,7 +6,8 @@
     python -m harness.order_bench                # controls then criterion
 
 Declared on #254 before any code: seeds 912-927 -- fresh; 100-115, 200-215,
-300-331, 400-415, 500-515, 600-615, 700-703 and 800-896 are spent -- sides
+300-331, 400-415, 500-515, 600-615, 700-703 and 800-896 are spent, and
+897-911 are declared-but-unplayed -- sides
 alternated by list position (`harness.triage.head_to_head_rate`); PROMOTE
 only at >= 60% of 16 vs the champion `third_herder` AND >= 90% vs each
 DEFAULT_ANCHOR AND, for each `external_pool.EXTERNAL_ANCHORS` member, no fewer
@@ -32,8 +33,7 @@ import argparse
 import os
 
 from harness.evolve import DEFAULT_ANCHORS
-from harness.pace_bench import (  # noqa: F401  -- the tests pin these to pace_bench's own
-    PAYDAY_MONEY,
+from harness.pace_bench import (  # noqa: F401  -- shape_reading/format_shape/REFERENCE/PILKWANG are pinned by the tests
     PILKWANG,
     REFERENCE,
     format_shape,

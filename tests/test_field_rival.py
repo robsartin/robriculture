@@ -829,7 +829,8 @@ def test_market_orders_with_an_order_spends_the_same_cash_in_that_order():
     """The seam: the blocks are the same, the budget is shared, only the order
     moves. With 2,000 the frozen order buys land and seed and the herd starves;
     herd-first with the frozen reserve buys one sheep, then land, then seed;
-    herd-first with no reserve buys four head and seed gets the change."""
+    herd-first with no reserve buys four head and seed gets the change, and
+    BUY_LAND is dropped entirely."""
     herd_first = ("hires", "herd", "land", "seed")
     assert _dawn_after_hires(2_000) == [["BUY_LAND"], ["BUY_SEED", "STRAWBERRY", 4]]
     assert _dawn_after_hires(2_000, order=herd_first) == (
