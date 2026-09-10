@@ -47,3 +47,12 @@ def test_it_is_a_registered_contender_that_inherits_herd_firsts_order_and_knobs(
         assert s.herd_target(day) == base.herd_target(day)
     assert s.layout() == base.layout() and s.CAPS == base.CAPS
     assert base.capital_reserve(5, 4) == 0          # herd_first keeps the zero it was rejected on
+
+
+def test_the_bare_call_answers_like_every_sibling():
+    """`act` always passes the day and the head, but the hook's contract (and
+    the benches' identity stubs) allow a bare call; it must not raise. With no
+    day the floor is the ramp's opening crew, with no head only FEED_CARRY."""
+    s = dr.DawnReserveStrategy()
+    assert s.capital_reserve() == dr.wage_bill(s.hire_target(0)) + dr.feed_cost(0) == 92
+    assert s.capital_reserve(day=5) == dr.wage_bill(s.hire_target(6)) + dr.feed_cost(0)

@@ -46,8 +46,11 @@ class DawnReserveStrategy(HerdFirstStrategy):
     benchmark = False
 
     def capital_reserve(self, day=None, animals=None):
-        """Tomorrow's wage bill plus today's feed; the herd buys from what is left."""
-        return wage_bill(self.hire_target(day + 1)) + feed_cost(animals)
+        """Tomorrow's wage bill plus today's feed; the herd buys from what is
+        left. A bare call (no day, no head) answers for the season's opening
+        crew and an empty pasture, so the hook's contract holds here too."""
+        crew = self.hire_target(0 if day is None else day + 1)
+        return wage_bill(crew) + feed_cost(0 if animals is None else animals)
 
 
 STRATEGY = DawnReserveStrategy
