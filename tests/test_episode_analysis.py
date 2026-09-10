@@ -485,3 +485,46 @@ def test_first_sale_survives_a_step_with_no_action():
                   {"observation": {}})
     steps = [stale, _pair(_sells("MELON", 4, day=10, hour=12), {"observation": {}})]
     assert ea.first_sale(steps, 0, "MELON")["contested"] is False
+
+
+# --- money-aware pricing: a buy is booked only as far as the farm could pay ---
+#
+# The sim buys unit by unit only while `farm["money"] >= price`
+# (`kaggriculture.py`), so a broke farm re-ordering feed every hour never pays
+# for the units it could not afford. Without `money` (a replay read without
+# it) the old upper bound stands, for backward compatibility.
+
+def test_a_buy_the_farm_could_not_pay_for_is_booked_only_as_far_as_the_money_went():
+    """The sim buys unit by unit while `money >= price` and drops the rest. With
+    37 in hand and wheat at 30, a BUY_PRODUCT of 10 costs 30, not 300; with 500,
+    three cows cost one cow. Without `money` (a replay read without it) the old
+    upper bound stands."""
+    orders = [["BUY_PRODUCT", "WHEAT", 10]]
+    assert ea.spend_by_category(orders, 0, 1, prices={"WHEAT": 30})["product"] == 300
+    assert ea.spend_by_category(orders, 0, 1, prices={"WHEAT": 30}, money=37)["product"] == 30
+    assert ea.spend_by_category([["BUY_ANIMAL", "COW", 3]], 0, 1, money=500)["animal"] == 400
+    assert ea.spend_by_category([["BUY_SEED", "MELON", 3]], 0, 1, money=100)["seed"] == 80
+    assert ea.spend_by_category([["BUY_LAND"]], 0, 1, money=999)["land"] == 0
+    assert ea.spend_by_category([["HIRE"], ["HIRE"], ["HIRE"]], 0, 1, money=2)["hire"] == 2
+    assert ea.order_spend(orders, 0, 1, prices={"WHEAT": 30}, money=37) == 30
+
+
+def test_the_money_walks_the_orders_in_list_order():
+    # 1,050 in hand: land (1,000) leaves 50, so two of three cows are dropped -- one? none: 50 < 400.
+    orders = [["BUY_LAND"], ["BUY_ANIMAL", "COW", 3]]
+    out = ea.spend_by_category(orders, 0, 1, money=1_050)
+    assert out["land"] == 1000 and out["animal"] == 0
+    out = ea.spend_by_category([["BUY_ANIMAL", "COW", 3], ["BUY_LAND"]], 0, 1, money=1_050)
+    assert out["animal"] == 800 and out["land"] == 0
+
+
+def test_decompose_prices_a_turns_buys_with_that_turns_money_and_the_residual_falls():
+    """The reset slot holds 37; a turn orders ten wheat at 30 and the farm ends at 7:
+    the residual with money-aware pricing is 0 where the old upper bound made it +270."""
+    steps = [
+        [_step(37, {"farmer": ["PASS"], "hands": [], "market": []}, prices={"WHEAT": 30})],
+        [_step(7, {"farmer": ["PASS"], "hands": [], "market": [["BUY_PRODUCT", "WHEAT", 10]]},
+               prices={"WHEAT": 30})],
+    ]
+    out = ea.decompose(steps, player=0)
+    assert out["spend"]["product"] == 30 and out["residual"] == 0

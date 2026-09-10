@@ -51,11 +51,16 @@ def daily_cashflow(steps, player):
         if day != last_day:
             hires_today, last_day = 0, day
         row = table.setdefault(day, {"spend": {c: 0 for c in CATEGORIES}, "revenue": {}, "close": None})
-        for item, amount in sell_revenue(turn["orders"], turn["prices"], turn["shed"],
-                                         turn["banked"], turn["inv_levels"]).items():
+        revenue_this_turn = sell_revenue(turn["orders"], turn["prices"], turn["shed"],
+                                         turn["banked"], turn["inv_levels"])
+        for item, amount in revenue_this_turn.items():
             row["revenue"][item] = row["revenue"].get(item, 0) + amount
+        # Sells settle before buys except at dawn (the reset slot, `money`
+        # None); the dawn case is the upper-bound direction and is left as is.
+        money = (turn["money"] + sum(revenue_this_turn.values())
+                 if turn["money"] is not None else None)
         for bucket, amount in spend_by_category(turn["orders"], hires_today, turn["quadrants"],
-                                                turn["prices"], turn["inv_levels"]).items():
+                                                turn["prices"], turn["inv_levels"], money=money).items():
             row["spend"][bucket] += amount
         hires_today += sum(1 for o in turn["orders"] if isinstance(o, list) and o and o[0] == "HIRE")
 
