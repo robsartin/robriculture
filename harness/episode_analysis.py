@@ -73,7 +73,8 @@ def buy_product_cost(item, units, prices=None, inventory=None):
     return sum(_product_unit_prices(item, units, prices, inventory))
 
 
-def order_spend(orders, hires_before, quadrants, prices=None, inventory=None, money=None):
+def order_spend(orders, hires_before, quadrants, prices=None, inventory=None, money=None,
+                 shed=None, banked=None):
     """Exact cost of one turn's market orders.
 
     Seed cost, animal cost, the quadrant ladder and the n-th hire of the day at
@@ -86,38 +87,60 @@ def order_spend(orders, hires_before, quadrants, prices=None, inventory=None, mo
 
     One walker with `spend_by_category` -- this is simply that function's
     buckets summed, so the two can never drift apart. See `spend_by_category`
-    for what `money` does.
+    for what `money`, `shed` and `banked` do.
     """
-    return sum(spend_by_category(orders, hires_before, quadrants, prices, inventory, money).values())
+    return sum(spend_by_category(orders, hires_before, quadrants, prices, inventory, money,
+                                  shed, banked).values())
 
 
-def spend_by_category(orders, hires_before, quadrants, prices=None, inventory=None, money=None):
+def spend_by_category(orders, hires_before, quadrants, prices=None, inventory=None, money=None,
+                       shed=None, banked=None):
     """`order_spend` split into named buckets, for the write-up.
 
-    `money` is what the farm held when it chose these orders plus this turn's
-    sell revenue; with it, an order is booked only as far as the sim would
-    have paid it (the sim drops the rest unit by unit -- `kaggriculture.py`
-    checks `farm["money"] < price` before every buy). Without it the old
-    upper bound stands, for replays read without money.
+    `money` is what the farm held when it chose these orders; a SELL's
+    proceeds are credited at its place in the list, as the sim credits them,
+    so a buy that precedes a sell is paid from the pre-turn money alone. The
+    credit for the order at index `i` is the proceeds of every SELL in
+    `orders[:i]`, priced by `sell_revenue` -- the same walker the revenue side
+    uses, so the shed cap and the curve can never disagree between the two.
+    That prefix walk is recomputed once per BUY order (at most ten orders a
+    turn, so the repetition is cheap). With `money` given, an order is booked
+    only as far as the sim would have paid it (the sim drops the rest unit by
+    unit -- `kaggriculture.py` checks `farm["money"] < price` before every
+    buy). Without it the old upper bound stands, for replays read without
+    money.
     """
     out = {"seed": 0, "hire": 0, "land": 0, "animal": 0, "product": 0}
     hires = hires_before
     owned = quadrants
-    budget = None if money is None else float(money)
+    have_budget = money is not None
+    base_money = float(money) if have_budget else None
+    total_spent = 0
+    budget = None
+
+    def credit_through(i):
+        """Money available to the order at index i: pre-turn money plus every
+        SELL's proceeds strictly before it, minus everything already spent."""
+        prefix = orders[:i]
+        credited = base_money + sum(sell_revenue(prefix, prices, shed, banked, inventory).values())
+        return credited - total_spent
 
     def pay(cost):
         """Pays `cost` out of the walking budget, unit by unit. Returns
         `(amount_booked, paid)`; with no budget, every cost is paid."""
-        nonlocal budget
+        nonlocal budget, total_spent
         if budget is None or budget >= cost:
             if budget is not None:
                 budget -= cost
+                total_spent += cost
             return cost, True
         return 0, False
 
-    for order in orders:
+    for i, order in enumerate(orders):
         if not isinstance(order, list) or not order:
             continue
+        if have_budget:
+            budget = credit_through(i)
         op = order[0]
         if op == "HIRE":
             spent, _ = pay(_fib(hires))
@@ -395,13 +418,12 @@ def decompose(steps, player):
                                          turn["banked"], turn["inv_levels"])
         for item, amount in revenue_this_turn.items():
             revenue[item] = revenue.get(item, 0) + amount
-        # Sells settle before buys except at dawn (the reset slot, `money`
-        # None); the dawn case is the upper-bound direction and is left as is.
-        money = (turn["money"] + sum(revenue_this_turn.values())
-                 if turn["money"] is not None else None)
+        # A SELL's proceeds are credited at its place in the order list, as
+        # the sim credits them -- spend_by_category walks that prefix itself.
         for bucket, amount in spend_by_category(orders, hires_today,
                                                 turn["quadrants"], turn["prices"],
-                                                turn["inv_levels"], money=money).items():
+                                                turn["inv_levels"], money=turn["money"],
+                                                shed=turn["shed"], banked=turn["banked"]).items():
             spend[bucket] += amount
         hires_today += sum(1 for o in orders
                            if isinstance(o, list) and o and o[0] == "HIRE")

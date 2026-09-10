@@ -55,12 +55,11 @@ def daily_cashflow(steps, player):
                                          turn["banked"], turn["inv_levels"])
         for item, amount in revenue_this_turn.items():
             row["revenue"][item] = row["revenue"].get(item, 0) + amount
-        # Sells settle before buys except at dawn (the reset slot, `money`
-        # None); the dawn case is the upper-bound direction and is left as is.
-        money = (turn["money"] + sum(revenue_this_turn.values())
-                 if turn["money"] is not None else None)
+        # A SELL's proceeds are credited at its place in the order list, as
+        # the sim credits them -- spend_by_category walks that prefix itself.
         for bucket, amount in spend_by_category(turn["orders"], hires_today, turn["quadrants"],
-                                                turn["prices"], turn["inv_levels"], money=money).items():
+                                                turn["prices"], turn["inv_levels"], money=turn["money"],
+                                                shed=turn["shed"], banked=turn["banked"]).items():
             row["spend"][bucket] += amount
         hires_today += sum(1 for o in turn["orders"] if isinstance(o, list) and o and o[0] == "HIRE")
 

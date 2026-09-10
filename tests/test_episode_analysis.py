@@ -528,3 +528,27 @@ def test_decompose_prices_a_turns_buys_with_that_turns_money_and_the_residual_fa
     ]
     out = ea.decompose(steps, player=0)
     assert out["spend"]["product"] == 30 and out["residual"] == 0
+
+
+def test_a_sells_proceeds_are_credited_at_its_place_in_the_list_not_up_front():
+    """The sim resolves a player's orders in list order: a buy before a sell is
+    paid from the pre-turn money alone. With 100 in hand and ten melon at 250,
+    cows before the sell buy nothing; cows after it buy all three."""
+    shed, prices = {"MELON": 10}, {"MELON": 250}
+    before = [["BUY_ANIMAL", "COW", 3], ["SELL", "MELON", 10]]
+    after = [["SELL", "MELON", 10], ["BUY_ANIMAL", "COW", 3]]
+    assert ea.spend_by_category(before, 0, 1, prices=prices, money=100, shed=shed)["animal"] == 0
+    assert ea.spend_by_category(after, 0, 1, prices=prices, money=100, shed=shed)["animal"] == 1200
+
+
+def test_decompose_reconciles_a_dawn_turn_that_buys_before_it_sells():
+    """The benchmark's dawn shape: buys first, the sell sweep after. 100 in hand,
+    a cow the farm cannot pay for, then ten melon sold: money ends at 2,600 and
+    the residual is 0 -- not 1,200 of invented cows."""
+    steps = [
+        [_step(100, {"farmer": ["PASS"], "hands": [], "market": []}, prices={"MELON": 250}, shed={"MELON": 10})],
+        [_step(2600, {"farmer": ["PASS"], "hands": [],
+                      "market": [["BUY_ANIMAL", "COW", 3], ["SELL", "MELON", 10]]}, prices={"MELON": 250})],
+    ]
+    out = ea.decompose(steps, player=0)
+    assert out["spend"]["animal"] == 0 and out["revenue"] == {"MELON": 2500} and out["residual"] == 0
