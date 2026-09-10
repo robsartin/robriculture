@@ -93,3 +93,29 @@ and the readers `pace_bench`'s. Full gate and preflight before push.
 PROMOTE → PR closes #254; designation is a separate step on Rob's say-so. REJECTED → record
 and root cause on #254, closed `not_planned`; the PR carries the seam and the bench as a record.
 VOID → the control that failed and the census, on #254.
+
+## Result and corrections, 2026-09-10 (whole-branch review, then the run)
+
+**REJECTED on the external limb.** Controls all PASS (identity 35,608 both sides; head placed
+8 at day 8; crop gap 1). The champion row **14/16** (87.5%, p = 0.002), every anchor ≥ 90%,
+shashank 4/16 against the champion's 0, **madhur 5/16 against 11/16 — REGRESSED**. The first
+contender since #239 to beat the champion, and it fails the field. Seeds 912-927 spent; arm
+B not played (a REJECTED exit does not run `--recorded`).
+
+**Root cause (the census on seed 912).** The sim clears `farm["hands"]` every night
+(`kaggriculture.py:880`) and the crew is re-hired at dawn for the day's wage ladder. The hire
+block runs first, but it spends what survived the previous day, and with `RESERVE_F = 0` the
+herd block spends every coin on every hour: dawn finds 2-20 in hand and 2-5 hands, the crop
+line stalls at 11 tiles for six days, and against madhur there is no feed wheat either —
+head placed 9 → 3 between days 12 and 16, final 36K to 85K. Zero reserve is not "spend
+everything on growth"; under daily re-hiring it is "fire the crew at dusk". The next single
+decision is a reserve that covers tomorrow's wage bill and the herd's feed.
+
+**From the review, before the run.** (I2) Day 0 is the same under both orders — both agents
+buy 5 hires, 6 melon, 3 sheep and 1 cow and leave ~608 — so the arm's reach on the day-8 bar
+was days 6-8; it reached it (8 placed). (I3) At day 8 dawn the herd block can push the feed
+order and all the sells off the ten-order cap for one turn; self-limiting via `pending`.
+(I1) The bench now records held head and free pasture beside placed head, so a head-placed
+miss says whether the head were never bought or bought and stuck. (M4) `crop_line_ok` is
+symmetric as declared; its upper limb can only VOID an outcome better than predicted and did
+not fire.
