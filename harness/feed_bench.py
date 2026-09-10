@@ -85,14 +85,38 @@ def board_on_day(steps, player, day):
     return board
 
 
-def feed_reading_from(table, boards):
-    """The reading off a cash-flow table and the day-8 / day-12 boards."""
+def hands_on_day(steps, player, day):
+    """The size of the player's crew on `day` -- the `len(hands)` of the LAST
+    observation whose own `day` is `day`, or ``None`` if the day is never
+    reached.
+
+    The sim clears the crew at the nightly rollover, so the boundary board
+    `board_on_day` returns (the state a day's last turn produced, stamped with
+    the NEXT day) always shows `hands == 0` -- it is the day after's opening
+    board. The crew that actually worked `day` is on the observation labelled
+    `day` itself, last one wins (the crew can grow mid-day on a HIRE)."""
+    hands = None
+    for t in range(len(steps)):
+        obs = (_slot(steps, t, player) or {}).get("observation") or {}
+        if obs.get("day") != day:
+            continue
+        farms = obs.get("farms")
+        if not farms:
+            continue
+        farm = farms[obs.get("player", player)] if len(farms) > 1 else farms[0]
+        hands = len(farm.get("hands") or [])
+    return hands
+
+
+def feed_reading_from(table, boards, hands_8):
+    """The reading off a cash-flow table, the day-8 / day-12 boards, and the
+    crew size on day 8 (read separately -- see `hands_on_day`)."""
     b8, b12 = boards[HEAD_DAY], boards[CROP_DAY]
     return {
         "feed_day0": table.get(0, {"spend": {"product": 0}})["spend"]["product"],
         "feed_days_1_5": sum(table.get(d, {"spend": {"product": 0}})["spend"]["product"] for d in FEED_DAYS),
         "head_placed_8": sum(animals_placed(b8["tiles"]).values()),
-        "hands_8": len(b8.get("hands") or []),
+        "hands_8": hands_8,
         "planted_12": sum(planted_by_crop(b12["tiles"]).values()),
     }
 
@@ -103,7 +127,8 @@ def feed_reading(steps, player):
     missing = [d for d, b in boards.items() if b is None]
     if missing:
         raise ValueError(f"no board for day {missing[0]}: the game ended early")
-    return feed_reading_from(daily_cashflow(steps, player), boards)
+    hands_8 = hands_on_day(steps, player, HEAD_DAY)
+    return feed_reading_from(daily_cashflow(steps, player), boards, hands_8)
 
 
 def mechanism_failures(reading):
