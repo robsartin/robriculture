@@ -552,3 +552,18 @@ def test_decompose_reconciles_a_dawn_turn_that_buys_before_it_sells():
     ]
     out = ea.decompose(steps, player=0)
     assert out["spend"]["animal"] == 0 and out["revenue"] == {"MELON": 2500} and out["residual"] == 0
+
+
+def test_a_refused_hire_or_land_buy_does_not_advance_its_ladder():
+    """The sim advances `hires_today` and the quadrant count only when it takes
+    the money. With nothing in hand, a land buy before the sell is refused and
+    the one after it is the FIRST quadrant at 1,000 -- not the second at 2,000;
+    three hires with cash for two cost 1 + 1, and the third, refused, does not
+    push a later hire up the ladder."""
+    shed, prices = {"MELON": 10}, {"MELON": 250}
+    out = ea.spend_by_category([["BUY_LAND"], ["SELL", "MELON", 10], ["BUY_LAND"]], 0, 1,
+                               prices=prices, money=0, shed=shed)
+    assert out["land"] == 1000
+    out = ea.spend_by_category([["HIRE"], ["HIRE"], ["HIRE"], ["SELL", "MELON", 1], ["HIRE"]], 0, 1,
+                               prices=prices, money=2, shed=shed)
+    assert out["hire"] == 1 + 1 + 2          # the refused third hire did not consume rung fib(2)

@@ -143,14 +143,16 @@ def spend_by_category(orders, hires_before, quadrants, prices=None, inventory=No
             budget = credit_through(i)
         op = order[0]
         if op == "HIRE":
-            spent, _ = pay(_fib(hires))
+            spent, paid = pay(_fib(hires))
             out["hire"] += spent
-            hires += 1
+            if paid:
+                hires += 1
         elif op == "BUY_LAND":
             if owned - 1 < len(LAND_COSTS):
-                spent, _ = pay(LAND_COSTS[owned - 1])
+                spent, paid = pay(LAND_COSTS[owned - 1])
                 out["land"] += spent
-                owned += 1
+                if paid:
+                    owned += 1
         elif op == "BUY_SEED" and len(order) >= 3 and order[1] in CROPS:
             unit_cost = CROPS[order[1]]["seed"]
             for _ in range(int(order[2])):
