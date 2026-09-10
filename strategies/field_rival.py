@@ -369,7 +369,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     `reserve`: cash held back from the herd, or ``None`` for `CAPITAL_RESERVE` (#252).
     `pivot`: the crop swing day, or ``None`` for the frozen `PIVOT_DAY` (#252).
     `order`: the buy blocks to run and their order, or ``None`` for the frozen `BUY_ORDER` (#254).
-    `floor`: cash every spending block after hires leaves unspent this turn -- land, seed and the herd alike -- or ``None`` for no floor (#258). Independent of `reserve`, which is the herd's own.
+    `floor`: cash every spending block after hires leaves unspent this turn -- land, seed and the herd alike -- or ``None`` for no floor (#258). Independent of `reserve`, which is the herd's own;
+    hires (dawn, before anything else) and the feed top-up (what the floor is kept for) are exempt.
     """
     sells: list = []
     buys: list = []
@@ -390,7 +391,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
 
     standing = standing or {}
     caps = CROP_CAP if caps is None else caps
-    keep = 0 if floor is None else floor
+    hold = 0 if floor is None else floor
 
     def hires():
         nonlocal budget
@@ -409,7 +410,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         want_land = land_target(day) if land is None else land
         if quadrants < want_land and quadrants - 1 < len(economy.LAND_COSTS):
             cost = economy.LAND_COSTS[quadrants - 1]
-            if budget - cost >= keep:
+            if budget - cost >= hold:
                 buys.append(["BUY_LAND"])
                 budget -= cost
 
@@ -424,7 +425,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             room = empty_plots if cap is None else max(0, cap - standing.get(crop, 0))
             want = max(0, min(empty_plots, room) - seeds.get(crop, 0))
             seed_cost = CROPS[crop]["seed"]
-            buy = min(want, max(0, int((budget - keep) // seed_cost)))
+            buy = min(want, max(0, int((budget - hold) // seed_cost)))
             if buy > 0:
                 buys.append(["BUY_SEED", crop, buy])
                 budget -= buy * seed_cost
@@ -448,7 +449,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
                               else HERD_MIX[0])
             cost = economy.ANIMALS[kind]["cost"]
-            if budget - cost < cash_floor or budget - cost < keep:
+            if budget - cost < cash_floor or budget - cost < hold:
                 break
             # The count is not optional: the sim's `_parse_order` rejects a
             # BUY_ANIMAL of length 2 and drops it without a word, which is
