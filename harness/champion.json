@@ -1,18 +1,18 @@
 {
   "criterion": "gate_succession",
-  "gate_opponent": "third_herder",
-  "submit_default": "third_herder",
+  "gate_opponent": "lean_feed",
+  "submit_default": "lean_feed",
   "succession": {
-    "predecessor": "rival_aware",
-    "issue": 239,
-    "pr": 240,
-    "date": "2026-09-07",
+    "predecessor": "third_herder",
+    "issue": 262,
+    "pr": 263,
+    "date": "2026-09-10",
     "record": {
-      "wins": 16,
+      "wins": 12,
       "ties": 0,
       "games": 16,
-      "seeds": "816-831",
-      "p": 1.52587890625e-05
+      "seeds": "960-975",
+      "p": 0.0384063720703125
     }
   }
 }
