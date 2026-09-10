@@ -69,3 +69,25 @@ def test_arm_b_is_herd_before_seed_after_land_and_is_not_registered():
     assert arm.buy_order() == ob.ORDER_B and base.buy_order() is None
     assert arm.herd_target(8) == base.herd_target(8) and arm.layout() == base.layout()
     assert ob.ARM_B not in REGISTRY and ob.CONTENDER in REGISTRY
+
+
+def test_order_reading_adds_held_head_and_free_pasture_to_pace_benchs_reading():
+    """I1: a head-placed miss must say whether the head were never bought or were
+    bought and stuck in the shed. `head_held` and free pasture tiles are already
+    in the census; pace_bench's reading dropped them."""
+    turns = []
+    for day in range(13):
+        c = {"planted_tiles": 20, "planted": {}, "quadrants": ["NW", "NE"], "hands": 5,
+             "head_placed": 7, "head_held": 4, "money": 300.0,
+             "structures": {"PASTURE": {"total": 14, "occupied": 7, "free": 7, "empty": 7}}}
+        turns.append((day, c)); turns.append((day, c))
+    r = ob.order_reading(turns)
+    assert r["head_placed"] == 7 and r["head_held"] == 4 and r["pasture_free"] == 7
+    assert r["planted_at_crop_day"] == 20                       # pace_bench's keys survive
+
+
+def test_format_order_shape_prints_held_and_free_beside_placed():
+    r = dict(_reading(head=8), head_held=3, pasture_free=6)
+    text = ob.format_order_shape([("herd_first", r)])
+    assert "held@8" in text.splitlines()[0] and "free@8" in text.splitlines()[0]
+    assert text.splitlines()[1].startswith("herd_first")

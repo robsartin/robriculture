@@ -72,6 +72,32 @@ CROP_DAY = 12
 PLANTED_GAP_BAR = 12
 
 
+def order_reading(turns, head_day=HEAD_DAY, crop_day=CROP_DAY):
+    """`pace_bench.shape_reading` plus the two numbers a head-placed miss needs
+    to be root-caused: head bought and still in the shed, and pasture tiles
+    standing free, both on the closing board of `head_day` (#254 review I1).
+    "Could not afford the head" reads held 0 / free > 0; "bought them and the
+    herders could not place them" reads held > 0."""
+    from harness.herder_bench import last_census_on_day
+    reading = shape_reading(turns, head_day, crop_day)
+    at = last_census_on_day(turns, head_day)
+    reading["head_held"] = at["head_held"]
+    reading["pasture_free"] = at["structures"]["PASTURE"]["free"]
+    return reading
+
+
+def format_order_shape(rows):
+    """`format_shape`'s line per side, with held head and free pasture added."""
+    lines = [f"{'side':<16} {'placed@8':>9} {'held@8':>7} {'free@8':>7} {'planted@8':>10} "
+             f"{'quads@8':>8} {'hands@8':>8} {'money@8':>8} {'planted@12':>11} {'money@12':>9} {'payday':>8}"]
+    for label, r in rows:
+        payday = "never" if r["payday"] is None else f"day {r['payday']}"
+        lines.append(f"{label:<16} {r['head_placed']:>9} {r['head_held']:>7} {r['pasture_free']:>7} "
+                     f"{r['planted']:>10} {r['quadrants']:>8} {r['hands']:>8} {r['money_at_shape_day']:>8.0f} "
+                     f"{r['planted_at_crop_day']:>11} {r['money_at_crop_day']:>9.0f} {payday:>8}")
+    return "\n".join(lines)
+
+
 def mechanism_ok(reading):
     """Control (ii): the herd the buy order was moved for is actually standing."""
     return reading["head_placed"] >= HEAD_BAR
@@ -134,9 +160,9 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
 
     ours, theirs = census_series(make_agent(load(CONTENDER)()), make_agent(load(CHAMPION)()), seed)
     pace_turns, _ = census_series(make_agent(load(PACE)()), make_agent(load(CHAMPION)()), seed)
-    contender = shape_reading(ours, HEAD_DAY, CROP_DAY)
-    champion = shape_reading(theirs, HEAD_DAY, CROP_DAY)
-    pace = shape_reading(pace_turns, HEAD_DAY, CROP_DAY)
+    contender = order_reading(ours)
+    champion = order_reading(theirs)
+    pace = order_reading(pace_turns)
     out["mechanism"] = {"ok": mechanism_ok(contender), "contender": contender,
                         "champion": champion, "pace": pace}
     out["crop_line"] = {"ok": crop_line_ok(contender, pace),
@@ -188,8 +214,8 @@ def main(argv=None):  # pragma: no cover
         print(f"control crop line: {'OK' if ctl['crop_line']['ok'] else 'FAIL -- RUN VOID'}  "
               f"(declared: |planted at day {CROP_DAY} - field_pace's| <= {PLANTED_GAP_BAR})  "
               f"gap={ctl['crop_line']['gap']}")
-        print(format_shape([(CONTENDER, c), (PACE, ctl["mechanism"]["pace"]),
-                            (CHAMPION, ctl["mechanism"]["champion"])]))
+        print(format_order_shape([(CONTENDER, c), (PACE, ctl["mechanism"]["pace"]),
+                                  (CHAMPION, ctl["mechanism"]["champion"])]))
         if not all(r["ok"] for r in ctl.values()):
             print("a control failed: the run is VOID and arm B is NOT scored")
             return 2
