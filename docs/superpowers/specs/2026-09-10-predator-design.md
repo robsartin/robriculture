@@ -21,7 +21,7 @@ One game is 2.2 s (`lean_feed` vs `field_rival`, seed 976), so two hours is ~3,0
 
 `PredatorStrategy(FieldRivalStrategy)`, `name = "predator"`, `benchmark = True` (a
 benchmark opponent: `scripts/submit.py` and the designation never pick it). It is built from
-a **genome**: a list of 25 floats in [0, 1], decoded by a pure `decode(genome) -> Schedule`
+a **genome**: a list of 26 floats in [0, 1], decoded by a pure `decode(genome) -> Schedule`
 into values the benchmark's seams return. `Schedule` is a frozen dataclass; `encode(schedule)
 -> genome` is its inverse for representable values, and `FROZEN = encode(Schedule.frozen())`
 decodes to the benchmark's own constants, so `PredatorStrategy()` (no genome) *is*
@@ -29,9 +29,9 @@ decodes to the benchmark's own constants, so `PredatorStrategy()` (no genome) *i
 
 | Schedule field | count | range | seam it drives | frozen value |
 |---|---|---|---|---|
-| `hands` at days 0/6/12/16 | 4 | 1..10, running max | `hire_target(day)` (step table) | 6/7/9/10 at 0/8/12/16 → 6,7,9,10 on the genome's days: 6/6/9/10 |
+| `hands` at days 0/8/12/16 | 4 | 1..10, running max | `hire_target(day)` (step table on the frozen `HAND_RAMP` days) | 6/7/9/10 |
 | `ne_day`, `sw_day` | 2 | 0..31, ≥30 = never; `sw_day ≥ ne_day` | `land_target(day)` = 1 + [day ≥ ne_day] + [day ≥ sw_day] | 12, 16 |
-| `head` at days 0/4/8/12/16 | 5 | 0..12, running max | `herd_target(day)`; and `pasture_count(day, animals)` = max(herd_target(day), animals) — the frozen rule on the genome's ramp | 1/3/4/8/10 |
+| `head` at days 0/4/8/12/16/24 | 6 | 0..12, running max | `herd_target(day)`; and `pasture_count(day, animals)` = max(herd_target(day), animals) — the frozen rule on the genome's ramp | 1/3/4/8/10/11 |
 | `nw_pasture`, `ne_pasture` | 2 | 0..8 each | `layout()` = (NW tiles [1:1+nw] + NE tiles [1:1+ne], every other owned tile in the frozen order) | 5, 7 |
 | `herders` | 1 | 0..3 | `livestock_workers(day)` = (1, 2, 3)[:herders] | 2 |
 | `cap_melon`, `cap_straw`, `cap_wheat` | 3 | 0..24, 0..40, 0..24 | `CAPS` | 12, 15, 5 |
@@ -44,8 +44,8 @@ decodes to the benchmark's own constants, so `PredatorStrategy()` (no genome) *i
 | `prefer` | 1 | none / SHEEP / COW | `herd_preference(obs)` | none |
 
 Decoding is `lo + round(u * (hi - lo))` per field, then the running-max and ordering rules.
-The hands ramp's frozen breakpoints are at days 0/8/12/16; the genome's are at 0/6/12/16, so
-the frozen schedule is represented as 6/6/9/10 (identical values on every day). The stock
+The ramps' breakpoint days are the frozen tables' own days (`HAND_RAMP` 0/8/12/16,
+`ANIMAL_RAMP` 0/4/8/12/16/24), so the frozen schedule is represented exactly. The stock
 field's 0 means "frozen rule" so `FROZEN` stays exact; every other field's frozen value is
 representable directly.
 
