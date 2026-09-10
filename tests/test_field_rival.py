@@ -799,3 +799,57 @@ def test_crop_cluster_with_a_cluster_size_slices_that_many_tiles():
     assert fr.crop_cluster(0, crops=crops, cluster=6) == crops[0:6]
     assert fr.crop_cluster(5, crops=crops, cluster=6) == crops[18:24]      # slot 3
     assert fr.crop_cluster(5, crops=crops) == crops[12:16]                 # frozen 4
+
+
+# --- #254: the buy-order seam, and the frozen order it defaults to ---
+
+def test_the_benchmarks_buy_order_hook_asks_for_the_frozen_order():
+    # `None` means "the benchmark's own order", so field_rival stays frozen (#181).
+    assert fr.FieldRivalStrategy().buy_order() is None
+    assert fr.BUY_ORDER == ("hires", "land", "seed", "herd")
+
+
+def _dawn_after_hires(money, **kw):
+    # Hour 1 with the crew already hired: land, seed and herd are the only buys,
+    # and with no shed there are no sells -- the list IS the buy order.
+    return fr.market_orders(day=12, hour=1, money=money, hands=9, quadrants=1, animals=0,
+                            shed={}, seeds={}, empty_plots=4, standing={}, **kw)
+
+
+def test_market_orders_emits_the_frozen_order_by_default():
+    """Golden pin, written BEFORE the body is split into steps and kept through it:
+    with cash for everything the frozen order is land, seed, then the herd (day 12
+    wants 8 head; every buy is a sheep at this budget). Exactly ten orders, so the
+    cap does not truncate the pin."""
+    assert _dawn_after_hires(50_000) == (
+        [["BUY_LAND"], ["BUY_SEED", "STRAWBERRY", 4]] + [["BUY_ANIMAL", "SHEEP", 1]] * 8)
+
+
+def test_market_orders_with_an_order_spends_the_same_cash_in_that_order():
+    """The seam: the blocks are the same, the budget is shared, only the order
+    moves. With 2,000 the frozen order buys land and seed and the herd starves;
+    herd-first with the frozen reserve buys one sheep, then land, then seed;
+    herd-first with no reserve buys four head and seed gets the change, and
+    BUY_LAND is dropped entirely."""
+    herd_first = ("hires", "herd", "land", "seed")
+    assert _dawn_after_hires(2_000) == [["BUY_LAND"], ["BUY_SEED", "STRAWBERRY", 4]]
+    assert _dawn_after_hires(2_000, order=herd_first) == (
+        [["BUY_ANIMAL", "SHEEP", 1], ["BUY_LAND"], ["BUY_SEED", "STRAWBERRY", 4]])
+    assert _dawn_after_hires(2_000, order=herd_first, reserve=0) == (
+        [["BUY_ANIMAL", "SHEEP", 1], ["BUY_ANIMAL", "SHEEP", 1],
+         ["BUY_ANIMAL", "COW", 1], ["BUY_ANIMAL", "COW", 1], ["BUY_SEED", "STRAWBERRY", 2]])
+
+
+def test_market_orders_refuses_an_unknown_block_name():
+    # A typo in a contender's order must not silently skip a block.
+    import pytest
+    with pytest.raises(KeyError):
+        _dawn_after_hires(2_000, order=("hires", "herds"))
+
+
+def test_market_orders_refuses_a_repeated_block_name():
+    # A repeated name would run its block twice on the same stale shed and buy
+    # the ramp again; the likelier slip in a four-element tuple than a typo.
+    import pytest
+    with pytest.raises(ValueError, match="repeats"):
+        _dawn_after_hires(2_000, order=("hires", "herd", "herd", "land", "seed"))

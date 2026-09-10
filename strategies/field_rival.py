@@ -340,9 +340,16 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
     return ["PASS"]
 
 
+#: The frozen buy order: the crew, the land ramp, seed for every empty tile, and
+#: the herd last out of the surplus. A contender may run the same four blocks in
+#: another order through the `buy_order` seam (#254); sells stay first and feed
+#: last either way.
+BUY_ORDER = ("hires", "land", "seed", "herd")
+
+
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
                   empty_plots, standing=None, caps=None, prefer=None, target=None,
-                  land=None, hire=None, reserve=None, pivot=None):
+                  land=None, hire=None, reserve=None, pivot=None, order=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -361,6 +368,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     `hire`: hands to have working today, or ``None`` for the frozen `hire_target` ramp (#252).
     `reserve`: cash held back from the herd, or ``None`` for `CAPITAL_RESERVE` (#252).
     `pivot`: the crop swing day, or ``None`` for the frozen `PIVOT_DAY` (#252).
+    `order`: the buy blocks to run and their order, or ``None`` for the frozen `BUY_ORDER` (#254).
     """
     sells: list = []
     buys: list = []
@@ -379,7 +387,13 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         if sell > 0:
             sells.append(["SELL", item, sell])
 
-    if hour == 0:
+    standing = standing or {}
+    caps = CROP_CAP if caps is None else caps
+
+    def hires():
+        nonlocal budget
+        if hour != 0:
+            return
         want = max(0, (hire_target(day) if hire is None else hire) - hands)
         for k in range(1, want + 1):
             wage = hh.hand_wage(hands + k)
@@ -388,51 +402,64 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             buys.append(["HIRE"])
             budget -= wage
 
-    want_land = land_target(day) if land is None else land
-    if quadrants < want_land and quadrants - 1 < len(economy.LAND_COSTS):
-        cost = economy.LAND_COSTS[quadrants - 1]
-        if budget >= cost:
-            buys.append(["BUY_LAND"])
+    def land_step():
+        nonlocal budget
+        want_land = land_target(day) if land is None else land
+        if quadrants < want_land and quadrants - 1 < len(economy.LAND_COSTS):
+            cost = economy.LAND_COSTS[quadrants - 1]
+            if budget >= cost:
+                buys.append(["BUY_LAND"])
+                budget -= cost
+
+    def seed():
+        nonlocal budget
+        crop = crop_for_plot(day, standing, caps=caps, pivot=pivot)
+        if crop and empty_plots > 0:
+            # Never stock more seed of a capped crop than its remaining headroom:
+            # buying 25 strawberry seeds to fill 25 tiles is how the price we sell
+            # into gets crashed.
+            cap = caps.get(crop)
+            room = empty_plots if cap is None else max(0, cap - standing.get(crop, 0))
+            want = max(0, min(empty_plots, room) - seeds.get(crop, 0))
+            seed_cost = CROPS[crop]["seed"]
+            buy = min(want, int(budget // seed_cost))
+            if buy > 0:
+                buys.append(["BUY_SEED", crop, buy])
+                budget -= buy * seed_cost
+
+    def herd():
+        nonlocal budget
+        # The herd comes out of surplus only. Melon does not pay until day 10,
+        # so a ramp that spends the opening bankroll leaves nothing for seed and
+        # the farm never starts -- measured at 30 reward before this reserve
+        # existed.
+        #
+        # An animal bought lands in the shed and only becomes livestock when a
+        # herder walks it out to a pasture. Counting placed head alone re-buys
+        # the whole ramp on every one of the day's 24 turns -- measured at 79
+        # sheep filling a 100-item shed, which then silently discarded every
+        # harvest.
+        pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
+        want_head = animal_target(day) if target is None else target
+        cash_floor = CAPITAL_RESERVE if reserve is None else reserve
+        for _ in range(max(0, want_head - animals - pending)):
+            kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
+                              else HERD_MIX[0])
+            cost = economy.ANIMALS[kind]["cost"]
+            if budget - cost < cash_floor:
+                break
+            # The count is not optional: the sim's `_parse_order` rejects a
+            # BUY_ANIMAL of length 2 and drops it without a word, which is
+            # indistinguishable from having been unable to afford it.
+            buys.append(["BUY_ANIMAL", kind, 1])
             budget -= cost
 
-    standing = standing or {}
-    caps = CROP_CAP if caps is None else caps
-    crop = crop_for_plot(day, standing, caps=caps, pivot=pivot)
-    if crop and empty_plots > 0:
-        # Never stock more seed of a capped crop than its remaining headroom:
-        # buying 25 strawberry seeds to fill 25 tiles is how the price we sell
-        # into gets crashed.
-        cap = caps.get(crop)
-        room = empty_plots if cap is None else max(0, cap - standing.get(crop, 0))
-        want = max(0, min(empty_plots, room) - seeds.get(crop, 0))
-        seed_cost = CROPS[crop]["seed"]
-        buy = min(want, int(budget // seed_cost))
-        if buy > 0:
-            buys.append(["BUY_SEED", crop, buy])
-            budget -= buy * seed_cost
-
-    # The herd comes out of surplus only. Melon does not pay until day 10, so a
-    # ramp that spends the opening bankroll leaves nothing for seed and the farm
-    # never starts -- measured at 30 reward before this reserve existed.
-    #
-    # An animal bought lands in the shed and only becomes livestock when a herder
-    # walks it out to a pasture. Counting placed head alone re-buys the whole
-    # ramp on every one of the day's 24 turns -- measured at 79 sheep filling a
-    # 100-item shed, which then silently discarded every harvest.
-    pending = sum(shed.get(kind, 0) for kind in HERD_MIX)
-    want_head = animal_target(day) if target is None else target
-    cash_floor = CAPITAL_RESERVE if reserve is None else reserve
-    for _ in range(max(0, want_head - animals - pending)):
-        kind = prefer or (HERD_MIX[1] if budget >= 3 * economy.ANIMALS[HERD_MIX[1]]["cost"]
-                          else HERD_MIX[0])
-        cost = economy.ANIMALS[kind]["cost"]
-        if budget - cost < cash_floor:
-            break
-        # The count is not optional: the sim's `_parse_order` rejects a
-        # BUY_ANIMAL of length 2 and drops it without a word, which is
-        # indistinguishable from having been unable to afford it.
-        buys.append(["BUY_ANIMAL", kind, 1])
-        budget -= cost
+    steps = {"hires": hires, "land": land_step, "seed": seed, "herd": herd}
+    names = BUY_ORDER if order is None else tuple(order)
+    if len(set(names)) != len(names):
+        raise ValueError(f"buy order repeats a block: {names}")
+    for name in names:
+        steps[name]()
 
     # Feed wheat for the herd -- bought, never grown, so the crop plan stays the
     # measured melon/strawberry pair.
@@ -671,6 +698,11 @@ class FieldRivalStrategy(Strategy):
         for contenders (#252); never fires on the benchmark."""
         return None
 
+    def buy_order(self):
+        """The buy blocks to run and their order, or ``None`` for the frozen
+        `BUY_ORDER`. A seam for contenders (#254); never fires on the benchmark."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -731,7 +763,7 @@ class FieldRivalStrategy(Strategy):
                                caps=self.CAPS, prefer=self.herd_preference(obs),
                                target=self.herd_target(day), land=self.land_target(day),
                                hire=self.hire_target(day), reserve=self.capital_reserve(),
-                               pivot=pivot)
+                               pivot=pivot, order=self.buy_order())
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
