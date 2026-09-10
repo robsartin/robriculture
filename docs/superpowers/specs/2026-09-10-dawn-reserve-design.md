@@ -91,3 +91,31 @@ PROMOTE → PR closes #256; designation is a separate step on Rob's say-so
 (`python -m harness.promotion --succeed dawn_reserve --issue 256 --pr N …`). REJECTED → record
 and root cause on #256, closed `not_planned`; the PR carries the seam change and the bench as a
 record. VOID → the control that failed and the census, on #256.
+
+## Result and corrections, 2026-09-10 (the run, then the whole-branch review)
+
+**VOID on the crew bar.** Controls: identity PASS (41,064 both sides); mechanism FAIL — hands
+**2** at day 8 (bar 8), head placed 8 (bar 8); crop gap 0 against herd_first. Criterion and arm
+B not scored; only seed 928 played. Record: #256's result comment.
+
+**The premise at "The change" above is false for this base.** `capital_reserve` is applied as
+`cash_floor` inside the herd block only. Under the frozen `BUY_ORDER` the herd is the last
+spender, so a herd floor is a day floor; under `herd_first`'s order the land and seed blocks
+run after the herd and spend the reserved cash, so dusk still ends near zero and dawn hires
+two hands. The two contenders played the same board (23 planted, 8 head, 48 at day 12); the
+reserve only moved where the money sat at day 12 (3,220 against 876). Predictable from one
+grep before the run — a lesson for the next declaration: trace the seam to every use site.
+
+**Two more corrections from the review, for the next contender:**
+1. `feed_cost` prices wheat at the seed price (10); the feed block emits `BUY_PRODUCT` at the
+   market price, which starts at 25 and climbs as the farm's own buying drains it. The feed leg
+   under-reserves by roughly 2.5-3×.
+2. The feed leg is reserved in full, ignoring wheat already in the shed; the sell sweep already
+   keeps `feed_buffer(animals)`, so the honest quantity is the shortfall, which needs the seam
+   to see the shed.
+
+**The next single decision.** A turn-wide floor under a new seam — applied by land, seed and
+herd alike, hires exempt, 0 on the benchmark (`reserve=` must stay herd-only or the frozen
+1,200 leaks into land and seed and breaks identity) — carrying dawn's wage bill plus the feed
+shortfall at the market price. Once the floor is real, the crop-gap bar becomes the binding
+control.
