@@ -682,9 +682,11 @@ class FieldRivalStrategy(Strategy):
         never fires, so its crew schedule stays frozen (#181)."""
         return None
 
-    def capital_reserve(self):
+    def capital_reserve(self, day=None, animals=None):
         """Cash held back from the herd, or ``None`` for `CAPITAL_RESERVE`. A
-        seam for contenders (#252); never fires on the benchmark."""
+        seam for contenders (#252); `day` and `animals` (head placed) let a
+        floor follow tomorrow's crew and today's herd (#256). Never fires on
+        the benchmark."""
         return None
 
     def pivot_day(self):
@@ -762,7 +764,7 @@ class FieldRivalStrategy(Strategy):
                                animals, shed, seeds, empty, standing,
                                caps=self.CAPS, prefer=self.herd_preference(obs),
                                target=self.herd_target(day), land=self.land_target(day),
-                               hire=self.hire_target(day), reserve=self.capital_reserve(),
+                               hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order())
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}

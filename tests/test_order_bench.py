@@ -91,3 +91,16 @@ def test_format_order_shape_prints_held_and_free_beside_placed():
     text = ob.format_order_shape([("herd_first", r)])
     assert "held@8" in text.splitlines()[0] and "free@8" in text.splitlines()[0]
     assert text.splitlines()[1].startswith("herd_first")
+
+
+def test_the_identity_stub_switches_every_seam_off_and_survives_a_turn():
+    """The identity control's Off class must answer every hook the contender's
+    bases define with the frozen None -- with the hook's CURRENT arity. #256
+    gave `capital_reserve` two arguments and the old one-argument lambda raised
+    TypeError inside `act`; a real reset observation catches the next such drift."""
+    from kaggle_environments import make
+    off = ob.off_class()()
+    assert off.capital_reserve(8, 4) is None and off.capital_reserve() is None
+    assert off.buy_order() is None and off.layout() is None and off.hire_target(8) is None
+    obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
+    assert set(off.act(obs)) == {"farmer", "hands", "market"}

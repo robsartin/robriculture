@@ -75,7 +75,7 @@ class FieldPaceStrategy(ThirdHerderStrategy):
     def cluster_size(self):
         return self.CLUSTER_F
 
-    def capital_reserve(self):
+    def capital_reserve(self, day=None, animals=None):
         return self.RESERVE_F
 
     def herd_target(self, day):

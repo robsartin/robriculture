@@ -853,3 +853,27 @@ def test_market_orders_refuses_a_repeated_block_name():
     import pytest
     with pytest.raises(ValueError, match="repeats"):
         _dawn_after_hires(2_000, order=("hires", "herd", "herd", "land", "seed"))
+
+# --- #256: the reserve hook learns the day and the placed head ---
+
+def test_the_benchmarks_reserve_hook_takes_the_day_and_the_head_and_still_defers():
+    # A contender's floor may depend on tomorrow's crew and today's herd; the
+    # benchmark's answer is still `None` -- the frozen CAPITAL_RESERVE (#181).
+    assert fr.FieldRivalStrategy().capital_reserve(8, 4) is None
+    assert fr.FieldRivalStrategy().capital_reserve() is None
+
+
+def test_act_hands_the_reserve_hook_the_day_and_the_placed_head():
+    """The seam is only a seam if `act` feeds it: a recording subclass, run on
+    a real reset observation, must see day 0 and zero head placed."""
+    from kaggle_environments import make
+    seen = []
+
+    class Recording(fr.FieldRivalStrategy):
+        def capital_reserve(self, day=None, animals=None):
+            seen.append((day, animals))
+            return None
+
+    obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
+    Recording().act(obs)
+    assert seen == [(0, 0)]
