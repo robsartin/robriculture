@@ -877,3 +877,54 @@ def test_act_hands_the_reserve_hook_the_day_and_the_placed_head():
     obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
     Recording().act(obs)
     assert seen == [(0, 0)]
+
+# --- #258: the spend floor, a turn-wide floor on land, seed and herd ---
+
+def test_the_benchmarks_spend_floor_hook_asks_for_no_floor():
+    # `None` means "no floor" -- the benchmark keeps every decision it makes today (#181).
+    assert fr.FieldRivalStrategy().spend_floor() is None
+    assert fr.FieldRivalStrategy().spend_floor(8, 4, {"WHEAT": 3}, {"WHEAT": 25}) is None
+
+
+def test_market_orders_with_no_floor_and_a_zero_floor_emit_the_frozen_list():
+    # The golden pin (#254) must survive the new keyword: None and 0 are the same, frozen, list.
+    frozen = [["BUY_LAND"], ["BUY_SEED", "STRAWBERRY", 4]] + [["BUY_ANIMAL", "SHEEP", 1]] * 8
+    assert _dawn_after_hires(50_000) == frozen
+    assert _dawn_after_hires(50_000, floor=0) == frozen
+
+
+def test_a_floor_is_left_unspent_across_land_seed_and_herd_on_the_frozen_order():
+    """The positive control for the seam: with 1,500 and a floor of 600 the land
+    buy (1,000) would breach it and is skipped, seed buys from the 900 above it,
+    and the herd stops at the frozen reserve. Without the floor the same cash
+    buys land and seed and ends at 100."""
+    assert _dawn_after_hires(1_500) == [["BUY_LAND"], ["BUY_SEED", "STRAWBERRY", 4]]
+    assert _dawn_after_hires(1_500, floor=600) == [["BUY_SEED", "STRAWBERRY", 4]]
+
+
+def test_a_floor_is_left_unspent_on_herd_firsts_order_too():
+    """#256's defect, pinned: on herd_first's order with no reserve, the herd
+    stops at the floor AND land and seed respect it -- 2,000 with a floor of 700
+    buys two sheep (2,000 -> 1,500 -> 1,000), skips land (1,000 - 1,000 < 700)
+    and buys three seed from the 300 above the floor; 700 survives."""
+    herd_first = ("hires", "herd", "land", "seed")
+    assert _dawn_after_hires(2_000, order=herd_first, reserve=0, floor=700) == (
+        [["BUY_ANIMAL", "SHEEP", 1], ["BUY_ANIMAL", "SHEEP", 1], ["BUY_SEED", "STRAWBERRY", 3]])
+
+
+def test_act_hands_the_spend_floor_hook_the_day_the_head_the_shed_and_the_prices():
+    """The seam is only a seam if `act` feeds it: on a real reset observation the
+    hook sees day 0, no head placed, the (empty) shed and the market's prices."""
+    from kaggle_environments import make
+    seen = []
+
+    class Recording(fr.FieldRivalStrategy):
+        def spend_floor(self, day=None, animals=None, shed=None, prices=None):
+            seen.append((day, animals, shed, prices))
+            return None
+
+    obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
+    Recording().act(obs)
+    (day, animals, shed, prices), = seen
+    assert day == 0 and animals == 0 and isinstance(shed, dict)
+    assert prices["WHEAT"] == 25
