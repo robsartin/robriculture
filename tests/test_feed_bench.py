@@ -106,11 +106,25 @@ def test_feed_reading_takes_the_product_column_and_the_boards():
 
 
 def test_the_identity_stub_switches_every_seam_off_and_survives_a_turn():
-    """Thirteen hooks off, the two feed seams among them, at their current arity."""
+    """Every hook the frozen benchmark defines as a seam (a FieldRivalStrategy
+    method whose body is `return None`) must be overridden by the stub, at its
+    current arity, and the stub must survive a turn on a real reset
+    observation. Deriving the set from the benchmark means a fifteenth seam, or
+    a misspelled key in the stub, fails here instead of VOIDing a live run."""
+    import inspect
     from kaggle_environments import make
-    off = fdb.off_class()()
-    assert off.feed_carry(4, 3) is None and off.feed_stock(4) is None and off.spend_floor() is None
-    assert off.buy_order() is None and off.layout() is None and off.capital_reserve(8, 4) is None
+    from strategies.field_rival import FieldRivalStrategy
+    seams = {name for name, fn in vars(FieldRivalStrategy).items()
+             if callable(fn) and not name.startswith("_") and name != "act"
+             and inspect.getsource(fn).rstrip().endswith("return None")}
+    assert seams >= {"feed_carry", "feed_stock", "spend_floor", "buy_order", "layout"}   # the set is real
+    cls = fdb.off_class()
+    assert seams <= set(vars(cls)), seams - set(vars(cls))
+    off = cls()
+    for name in seams:
+        params = inspect.signature(getattr(FieldRivalStrategy, name)).parameters
+        args = [None] * (len(params) - 1)
+        assert getattr(off, name)(*args) is None, name
     obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
     assert set(off.act(obs)) == {"farmer", "hands", "market"}
 
