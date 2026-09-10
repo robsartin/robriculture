@@ -455,7 +455,10 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
             budget -= cost
 
     steps = {"hires": hires, "land": land_step, "seed": seed, "herd": herd}
-    for name in (BUY_ORDER if order is None else order):
+    names = BUY_ORDER if order is None else tuple(order)
+    if len(set(names)) != len(names):
+        raise ValueError(f"buy order repeats a block: {names}")
+    for name in names:
         steps[name]()
 
     # Feed wheat for the herd -- bought, never grown, so the crop plan stays the

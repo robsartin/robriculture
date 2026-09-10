@@ -844,3 +844,11 @@ def test_market_orders_refuses_an_unknown_block_name():
     import pytest
     with pytest.raises(KeyError):
         _dawn_after_hires(2_000, order=("hires", "herds"))
+
+
+def test_market_orders_refuses_a_repeated_block_name():
+    # A repeated name would run its block twice on the same stale shed and buy
+    # the ramp again; the likelier slip in a four-element tuple than a typo.
+    import pytest
+    with pytest.raises(ValueError, match="repeats"):
+        _dawn_after_hires(2_000, order=("hires", "herd", "herd", "land", "seed"))
