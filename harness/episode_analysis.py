@@ -33,33 +33,48 @@ def _fib(n: int) -> int:
     return a
 
 
-def buy_product_cost(item, units, prices=None, inventory=None):
-    """Cost of buying `units` of `item` off the market, walked like the sim.
+def _product_unit_prices(item, units, prices=None, inventory=None):
+    """Per-unit BUY_PRODUCT price, walked like the sim, one unit at a time.
 
     A BUY drains market inventory, which moves the quote *up* against the buyer
     -- the mirror image of a big sell. The sim quotes each unit at the
     post-buy inventory (`market_price(item, inv - 1)`), so a buy/sell
-    round-trip against an unchanged market nets zero.
-
-    Estimated, not exact: the sim aborts the rest of an order the moment money
-    or shed space runs out, and this cannot see either. It is therefore an
-    upper bound on a truncated order -- which is the honest direction, because
-    the alternative already cost us a 55%-of-final-money residual that read as
-    a sell-side mystery.
+    round-trip against an unchanged market nets zero. Falls back to the flat
+    quoted price, `units` times, when inventory is unknown -- degrade rather
+    than disappear.
     """
     price = (prices or {}).get(item)
     inv = (inventory or {}).get(item)
     if inv is None:
-        return units * int(price) if price else 0
-    total = 0
+        if price:
+            for _ in range(units):
+                yield int(price)
+        return
     inv = int(inv)
     for _ in range(units):
-        total += market_price(item, inv - 1)
+        yield market_price(item, inv - 1)
         inv -= 1
-    return total
 
 
-def order_spend(orders, hires_before, quadrants, prices=None, inventory=None):
+def buy_product_cost(item, units, prices=None, inventory=None):
+    """Cost of buying `units` of `item` off the market, walked like the sim.
+
+    Sums `_product_unit_prices`, the per-unit walk `spend_by_category` also
+    pays unit by unit, so the two can never disagree.
+
+    Estimated, not exact: the sim aborts the rest of an order the moment money
+    or shed space runs out, and this cannot see shed space. It is therefore an
+    upper bound on a truncated order -- which is the honest direction, because
+    the alternative already cost us a 55%-of-final-money residual that read as
+    a sell-side mystery. `spend_by_category`'s `money` argument corrects the
+    money side of that truncation; this function stays the uncapped upper
+    bound for callers that do not have `money` to give it.
+    """
+    return sum(_product_unit_prices(item, units, prices, inventory))
+
+
+def order_spend(orders, hires_before, quadrants, prices=None, inventory=None, money=None,
+                 shed=None, banked=None):
     """Exact cost of one turn's market orders.
 
     Seed cost, animal cost, the quadrant ladder and the n-th hire of the day at
@@ -69,55 +84,96 @@ def order_spend(orders, hires_before, quadrants, prices=None, inventory=None):
     therefore covers both sides of the ledger -- which is what it was already
     doing silently, since dropping BUY_PRODUCT entirely booked a -19,000
     residual on a 35,000 game as a sell-side mystery (#146).
+
+    One walker with `spend_by_category` -- this is simply that function's
+    buckets summed, so the two can never drift apart. See `spend_by_category`
+    for what `money`, `shed` and `banked` do.
     """
-    spend = 0
-    hires = hires_before
-    owned = quadrants
-    for order in orders:
-        if not isinstance(order, list) or not order:
-            continue
-        op = order[0]
-        if op == "HIRE":
-            spend += _fib(hires)
-            hires += 1
-        elif op == "BUY_LAND":
-            if owned - 1 < len(LAND_COSTS):
-                spend += LAND_COSTS[owned - 1]
-                owned += 1
-        elif op == "BUY_SEED" and len(order) >= 3 and order[1] in CROPS:
-            spend += CROPS[order[1]]["seed"] * int(order[2])
-        elif op == "BUY_ANIMAL" and len(order) >= 2 and order[1] in ANIMALS:
-            n = int(order[2]) if len(order) >= 3 else 1
-            spend += ANIMALS[order[1]]["cost"] * n
-        elif op == "BUY_PRODUCT" and len(order) >= 3:
-            spend += buy_product_cost(order[1], int(order[2]), prices, inventory)
-    return spend
+    return sum(spend_by_category(orders, hires_before, quadrants, prices, inventory, money,
+                                  shed, banked).values())
 
 
-def spend_by_category(orders, hires_before, quadrants, prices=None, inventory=None):
-    """`order_spend` split into named buckets, for the write-up."""
+def spend_by_category(orders, hires_before, quadrants, prices=None, inventory=None, money=None,
+                       shed=None, banked=None):
+    """`order_spend` split into named buckets, for the write-up.
+
+    `money` is what the farm held when it chose these orders; a SELL's
+    proceeds are credited at its place in the list, as the sim credits them,
+    so a buy that precedes a sell is paid from the pre-turn money alone. The
+    credit for the order at index `i` is the proceeds of every SELL in
+    `orders[:i]`, priced by `sell_revenue` -- the same walker the revenue side
+    uses, so the shed cap and the curve can never disagree between the two.
+    That prefix walk is recomputed once per BUY order (at most ten orders a
+    turn, so the repetition is cheap). With `money` given, an order is booked
+    only as far as the sim would have paid it (the sim drops the rest unit by
+    unit -- `kaggriculture.py` checks `farm["money"] < price` before every
+    buy). Without it the old upper bound stands, for replays read without
+    money.
+    """
     out = {"seed": 0, "hire": 0, "land": 0, "animal": 0, "product": 0}
     hires = hires_before
     owned = quadrants
-    for order in orders:
+    have_budget = money is not None
+    base_money = float(money) if have_budget else None
+    total_spent = 0
+    budget = None
+
+    def credit_through(i):
+        """Money available to the order at index i: pre-turn money plus every
+        SELL's proceeds strictly before it, minus everything already spent."""
+        prefix = orders[:i]
+        credited = base_money + sum(sell_revenue(prefix, prices, shed, banked, inventory).values())
+        return credited - total_spent
+
+    def pay(cost):
+        """Pays `cost` out of the walking budget, unit by unit. Returns
+        `(amount_booked, paid)`; with no budget, every cost is paid."""
+        nonlocal budget, total_spent
+        if budget is None or budget >= cost:
+            if budget is not None:
+                budget -= cost
+                total_spent += cost
+            return cost, True
+        return 0, False
+
+    for i, order in enumerate(orders):
         if not isinstance(order, list) or not order:
             continue
+        if have_budget:
+            budget = credit_through(i)
         op = order[0]
         if op == "HIRE":
-            out["hire"] += _fib(hires)
-            hires += 1
+            spent, paid = pay(_fib(hires))
+            out["hire"] += spent
+            if paid:
+                hires += 1
         elif op == "BUY_LAND":
             if owned - 1 < len(LAND_COSTS):
-                out["land"] += LAND_COSTS[owned - 1]
-                owned += 1
+                spent, paid = pay(LAND_COSTS[owned - 1])
+                out["land"] += spent
+                if paid:
+                    owned += 1
         elif op == "BUY_SEED" and len(order) >= 3 and order[1] in CROPS:
-            out["seed"] += CROPS[order[1]]["seed"] * int(order[2])
+            unit_cost = CROPS[order[1]]["seed"]
+            for _ in range(int(order[2])):
+                spent, paid = pay(unit_cost)
+                out["seed"] += spent
+                if not paid:
+                    break
         elif op == "BUY_ANIMAL" and len(order) >= 2 and order[1] in ANIMALS:
             n = int(order[2]) if len(order) >= 3 else 1
-            out["animal"] += ANIMALS[order[1]]["cost"] * n
+            unit_cost = ANIMALS[order[1]]["cost"]
+            for _ in range(n):
+                spent, paid = pay(unit_cost)
+                out["animal"] += spent
+                if not paid:
+                    break
         elif op == "BUY_PRODUCT" and len(order) >= 3:
-            out["product"] += buy_product_cost(order[1], int(order[2]),
-                                               prices, inventory)
+            for unit_cost in _product_unit_prices(order[1], int(order[2]), prices, inventory):
+                spent, paid = pay(unit_cost)
+                out["product"] += spent
+                if not paid:
+                    break
     return out
 
 
@@ -299,8 +355,9 @@ def _turns(steps, player):
             sheds = (obs.get("private") or {}).get("shed") or {}
             prices = (obs.get("market") or {}).get("prices") or {}
             inv_levels = (obs.get("market") or {}).get("inventory") or None
+            money = float(me.get("money", 0))
         else:
-            quadrants, sheds, prices, inv_levels = 1, {}, {}, None
+            quadrants, sheds, prices, inv_levels, money = 1, {}, {}, None, None
 
         action = slot.get("action")
         if not isinstance(action, dict):
@@ -312,6 +369,7 @@ def _turns(steps, player):
             "shed": sheds,
             "prices": prices,
             "inv_levels": inv_levels,
+            "money": money,
             "action": action,
             "orders": action.get("market") or [],
             "banked": banked_this_turn(
@@ -358,12 +416,16 @@ def decompose(steps, player):
                 actions[act[0]] = actions.get(act[0], 0) + 1
 
         orders = turn["orders"]
-        for item, amount in sell_revenue(orders, turn["prices"], turn["shed"],
-                                         turn["banked"], turn["inv_levels"]).items():
+        revenue_this_turn = sell_revenue(orders, turn["prices"], turn["shed"],
+                                         turn["banked"], turn["inv_levels"])
+        for item, amount in revenue_this_turn.items():
             revenue[item] = revenue.get(item, 0) + amount
+        # A SELL's proceeds are credited at its place in the order list, as
+        # the sim credits them -- spend_by_category walks that prefix itself.
         for bucket, amount in spend_by_category(orders, hires_today,
                                                 turn["quadrants"], turn["prices"],
-                                                turn["inv_levels"]).items():
+                                                turn["inv_levels"], money=turn["money"],
+                                                shed=turn["shed"], banked=turn["banked"]).items():
             spend[bucket] += amount
         hires_today += sum(1 for o in orders
                            if isinstance(o, list) and o and o[0] == "HIRE")

@@ -349,7 +349,8 @@ BUY_ORDER = ("hires", "land", "seed", "herd")
 
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
                   empty_plots, standing=None, caps=None, prefer=None, target=None,
-                  land=None, hire=None, reserve=None, pivot=None, order=None, floor=None):
+                  land=None, hire=None, reserve=None, pivot=None, order=None, floor=None,
+                  feed=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -371,12 +372,15 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     `order`: the buy blocks to run and their order, or ``None`` for the frozen `BUY_ORDER` (#254).
     `floor`: cash every spending block after hires leaves unspent this turn -- land, seed and the herd alike -- or ``None`` for no floor (#258). Independent of `reserve`, which is the herd's own;
     hires (dawn, before anything else) and the feed top-up (what the floor is kept for) are exempt.
+
+    `feed`: wheat the shed keeps for the herd, or ``None`` for the frozen `feed_buffer(animals)` (#262).
     """
     sells: list = []
     buys: list = []
     budget = money
 
-    reserved = feed_buffer(animals) if animals else 0
+    buffer = feed_buffer(animals) if feed is None else feed
+    reserved = buffer if animals else 0
     for item, n in sorted(shed.items()):
         # Fertilizer has no market bid and livestock is not a tradable product,
         # so a SELL for either is a dead order burning one of the ten slots. The
@@ -466,7 +470,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
 
     # Feed wheat for the herd -- bought, never grown, so the crop plan stays the
     # measured melon/strawberry pair.
-    want_feed = feed_buffer(animals) if animals else 0
+    want_feed = buffer if animals else 0
     if want_feed and shed.get("WHEAT", 0) < want_feed:
         short = want_feed - shed.get("WHEAT", 0)
         buy = min(short, int(budget // CROPS["WHEAT"]["seed"]))
@@ -481,13 +485,16 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     return ordered[:MAX_ORDERS]
 
 
-def _pasture_chore(tile_xy, tile, pos, inv, shed):
+def _pasture_chore(tile_xy, tile, pos, inv, shed, carry=FEED_CARRY):
     """The chore one pasture tile wants, or ``None`` when it is fully tended.
 
     A pure state machine over the tile's own fields: build it, stock it, then
     keep it harvested, fed and cared for. Feeding is the one that kills -- an
     animal escapes at ``consecutive_unfed >= 2`` -- and FEED spends wheat from
     the worker's own inventory, so the shed trip is part of the loop.
+
+    `carry` is the wheat one shed trip takes (#262); the module default is the
+    frozen `FEED_CARRY`.
     """
     on_it = [pos[0], pos[1]] == [tile_xy[0], tile_xy[1]]
     shed_tile = nearest_shed(pos)
@@ -529,7 +536,7 @@ def _pasture_chore(tile_xy, tile, pos, inv, shed):
             return ["FEED"] if on_it else hh.step_toward(pos, tile_xy)
         if shed.get("WHEAT", 0) > 0:
             if at_shed:
-                return ["PICKUP", "WHEAT", min(shed["WHEAT"], FEED_CARRY)]
+                return ["PICKUP", "WHEAT", min(shed["WHEAT"], carry)]
             return hh.step_toward(pos, shed_tile)
         return None  # no feed anywhere; the market will buy some
     if not tile.get("cared_today", False) and on_it:
@@ -543,10 +550,10 @@ def _pasture_chore(tile_xy, tile, pos, inv, shed):
     return None
 
 
-def herd_worker_action(pastures, tiles, pos, inv, shed, hour):
+def herd_worker_action(pastures, tiles, pos, inv, shed, hour, carry=FEED_CARRY):
     """One herder's action: the first pasture wanting something, else bank."""
     for tile_xy in pastures:
-        chore = _pasture_chore(tile_xy, _tile_at(tiles, tile_xy), pos, inv, shed)
+        chore = _pasture_chore(tile_xy, _tile_at(tiles, tile_xy), pos, inv, shed, carry)
         if chore is not None:
             return chore
 
@@ -715,6 +722,19 @@ class FieldRivalStrategy(Strategy):
         and today's feed. Never fires on the benchmark."""
         return None
 
+    def feed_carry(self, animals=None, herders=None):
+        """Wheat a herder takes from the shed per trip, or ``None`` for the
+        frozen `FEED_CARRY`. A seam for contenders (#262): `animals` is the head
+        placed and `herders` how many workers run the livestock line. Never
+        fires on the benchmark."""
+        return None
+
+    def feed_stock(self, animals=None):
+        """Wheat the shed keeps for the herd -- held back from the sell sweep
+        and topped up by the feed block -- or ``None`` for the frozen
+        `feed_buffer`. A seam for contenders (#262); never fires on the benchmark."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -737,6 +757,9 @@ class FieldRivalStrategy(Strategy):
                                    count=self.pasture_count(day, animals), block=block)
         workers = self.livestock_workers(day) or LIVESTOCK_WORKERS
         herders = {worker: slot for slot, worker in enumerate(workers)}
+        chosen_carry = self.feed_carry(animals, len(workers))
+        carry = FEED_CARRY if chosen_carry is None else chosen_carry
+        feed = self.feed_stock(animals)
 
         positions = [me["farmer"], *hands]
         used: dict = {}
@@ -745,7 +768,7 @@ class FieldRivalStrategy(Strategy):
             inv = inventories[i] if i < len(inventories) else {}
             if i in herders:
                 mine = pastures[herders[i]::len(workers)]
-                actions.append(herd_worker_action(mine, tiles, pos, inv, shed, hour))
+                actions.append(herd_worker_action(mine, tiles, pos, inv, shed, hour, carry=carry))
                 continue
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
@@ -777,7 +800,7 @@ class FieldRivalStrategy(Strategy):
                                target=self.herd_target(day), land=self.land_target(day),
                                hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order(),
-                               floor=self.spend_floor(day, animals, shed, prices))
+                               floor=self.spend_floor(day, animals, shed, prices), feed=feed)
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

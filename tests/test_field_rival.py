@@ -928,3 +928,62 @@ def test_act_hands_the_spend_floor_hook_the_day_the_head_the_shed_and_the_prices
     (day, animals, shed, prices), = seen
     assert day == 0 and animals == 0 and isinstance(shed, dict)
     assert prices["WHEAT"] == 25
+
+
+# --- #262: the feed seams -- carry per shed trip, and the shed's feed stock ---
+
+def test_the_benchmarks_feed_hooks_ask_for_the_frozen_numbers():
+    # `None` means "the benchmark's own numbers" (FEED_CARRY 8, feed_buffer), so field_rival stays frozen (#181).
+    assert fr.FieldRivalStrategy().feed_carry(4, 3) is None
+    assert fr.FieldRivalStrategy().feed_carry() is None
+    assert fr.FieldRivalStrategy().feed_stock(4) is None
+    assert fr.FieldRivalStrategy().feed_stock() is None
+
+
+def test_a_herder_picks_up_the_carry_it_is_given_and_the_frozen_carry_by_default():
+    # The seam: a contender's carry replaces FEED_CARRY at the shed; the default is untouched.
+    tiles = _blank_board()
+    tiles[4][3] = {"kind": "PASTURE", "animal": "COW", "yield_units": 0,
+                   "fed_today": False, "cared_today": False}
+    assert fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {"WHEAT": 9}, 9, carry=3) == ["PICKUP", "WHEAT", 3]
+    assert fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {"WHEAT": 9}, 9) == ["PICKUP", "WHEAT", fr.FEED_CARRY]
+    assert fr.herd_worker_action(((3, 4),), tiles, (4, 4), {}, {"WHEAT": 2}, 9, carry=3) == ["PICKUP", "WHEAT", 2]
+
+
+def _feed_orders(shed, **kw):
+    return fr.market_orders(day=20, hour=6, money=5_000, hands=10, quadrants=3, animals=8,
+                            shed=shed, seeds={}, empty_plots=0, standing={}, **kw)
+
+
+def test_market_orders_with_a_feed_stock_holds_back_and_tops_up_to_that_number():
+    """The seam: the sweep sells wheat above the stock and the feed block buys
+    up to it. With eight head the frozen buffer is 16; a stock of 4 sells five
+    of nine and buys three on top of one."""
+    frozen = _feed_orders({"WHEAT": 9})
+    assert not [o for o in frozen if o[:2] == ["SELL", "WHEAT"]]                     # 9 < 16: nothing to sell
+    assert [o for o in frozen if o[:2] == ["BUY_PRODUCT", "WHEAT"]] == [["BUY_PRODUCT", "WHEAT", 7]]
+    lean = _feed_orders({"WHEAT": 9}, feed=4)
+    assert [o for o in lean if o[:2] == ["SELL", "WHEAT"]] == [["SELL", "WHEAT", 5]]
+    assert not [o for o in lean if o[:2] == ["BUY_PRODUCT", "WHEAT"]]
+    assert [o for o in _feed_orders({"WHEAT": 1}, feed=4) if o[:2] == ["BUY_PRODUCT", "WHEAT"]] == [["BUY_PRODUCT", "WHEAT", 3]]
+
+
+def test_act_hands_the_feed_hooks_the_head_the_herder_count_and_threads_them():
+    """The seams are only seams if `act` feeds them: on a real reset observation
+    the carry hook sees no head and the frozen pair of herders, the stock hook
+    sees no head."""
+    from kaggle_environments import make
+    seen = []
+
+    class Recording(fr.FieldRivalStrategy):
+        def feed_carry(self, animals=None, herders=None):
+            seen.append(("carry", animals, herders))
+            return None
+
+        def feed_stock(self, animals=None):
+            seen.append(("stock", animals))
+            return None
+
+    obs = make("kaggriculture", configuration={"seed": 1}).state[0].observation
+    Recording().act(obs)
+    assert ("carry", 0, len(fr.LIVESTOCK_WORKERS)) in seen and ("stock", 0) in seen

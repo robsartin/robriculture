@@ -51,11 +51,15 @@ def daily_cashflow(steps, player):
         if day != last_day:
             hires_today, last_day = 0, day
         row = table.setdefault(day, {"spend": {c: 0 for c in CATEGORIES}, "revenue": {}, "close": None})
-        for item, amount in sell_revenue(turn["orders"], turn["prices"], turn["shed"],
-                                         turn["banked"], turn["inv_levels"]).items():
+        revenue_this_turn = sell_revenue(turn["orders"], turn["prices"], turn["shed"],
+                                         turn["banked"], turn["inv_levels"])
+        for item, amount in revenue_this_turn.items():
             row["revenue"][item] = row["revenue"].get(item, 0) + amount
+        # A SELL's proceeds are credited at its place in the order list, as
+        # the sim credits them -- spend_by_category walks that prefix itself.
         for bucket, amount in spend_by_category(turn["orders"], hires_today, turn["quadrants"],
-                                                turn["prices"], turn["inv_levels"]).items():
+                                                turn["prices"], turn["inv_levels"], money=turn["money"],
+                                                shed=turn["shed"], banked=turn["banked"]).items():
             row["spend"][bucket] += amount
         hires_today += sum(1 for o in turn["orders"] if isinstance(o, list) and o and o[0] == "HIRE")
 
