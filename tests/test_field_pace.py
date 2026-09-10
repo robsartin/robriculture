@@ -114,3 +114,8 @@ def test_the_crew_works_fewer_tiles_than_the_schedule_names_in_every_window():
     assert _worked(8, 10) == 30       # third herder takes worker 6 -> slot 4 idles; slots 6-8 in locked SW
     assert _worked(11, 10) == 48      # SW bought: every held tile plantable
     assert _worked(15, 10) == 48      # the twelfth hand is never hired (C1)
+
+def test_field_pace_ignores_the_day_and_the_head_and_keeps_its_zero_reserve():
+    # #256 gives the hook arguments; field_pace's declared RESERVE_F is unchanged.
+    s = fp.FieldPaceStrategy()
+    assert s.capital_reserve(8, 4) == 0 and s.capital_reserve() == 0
