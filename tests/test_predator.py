@@ -102,3 +102,14 @@ def test_a_mutant_genome_drives_every_seam():
 def test_the_predator_is_registered_as_a_benchmark():
     from strategies import load
     assert load("predator") is pr.PredatorStrategy
+
+
+def test_zero_herders_is_inexpressible_on_the_benchmark():
+    """The seam returns `()` for herders=0, and `field_rival.act` reads an empty
+    tuple as "no override" (`self.livestock_workers(day) or LIVESTOCK_WORKERS`),
+    so a genome with herders=0 actually runs the frozen pair. Recorded, not fixed:
+    changing the genome layout mid-search would re-decode the checkpoint."""
+    import dataclasses
+    p = pr.PredatorStrategy(pr.encode(dataclasses.replace(pr.Schedule.frozen(), herders=0)))
+    assert p.livestock_workers(0) == ()
+    assert (p.livestock_workers(0) or fr.LIVESTOCK_WORKERS) == fr.LIVESTOCK_WORKERS

@@ -99,6 +99,8 @@ def write_checkpoint(path, genome, meta) -> bool:
 
 def search(generations, pop_size, games, sigma, seed, champion, out,
            rewards_fn=play_rewards, log=print) -> dict:
+    """Breed against `champion` for `generations`; return the final checkpoint
+    (the last generation's best, re-measured on that generation's seeds)."""
     rng = random.Random(seed)
     champion_cls = load(champion)
     champion_fn = lambda: make_agent(champion_cls())  # noqa: E731

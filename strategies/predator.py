@@ -60,7 +60,8 @@ class Schedule:
     head: tuple           # head at HEAD_DAYS, non-decreasing
     nw_pasture: int       # NW pasture tiles (nearest-to-shed order, after tile 0)
     ne_pasture: int       # NE pasture tiles
-    herders: int          # workers (1, 2, 3)[:herders] run the livestock line
+    herders: int          # workers (1, 2, 3)[:herders] run the livestock line;
+                          # 0 is inexpressible: `act` reads `()` as the frozen pair (review, #199)
     cap_melon: int
     cap_straw: int
     cap_wheat: int

@@ -159,10 +159,14 @@ def run_criterion(seeds=SEEDS):  # pragma: no cover
     loose_games = play_games(genome, seeds, strict=False)
     os.environ["ROBRICULTURE_STRICT"] = "1"
     rec = record(strict_games)
+    # `baseline`: the benchmark itself (the frozen genome) on the same seeds, so the
+    # predator's record can be read against where the search started. Recorded, never
+    # gated (whole-branch review, #199).
     parity = strict_parity(strict_games, loose_games)
     pred16 = profile(strict_games, "predator", PROFILE_DAY)
     out = {"record": rec, "parity": parity, "profile": pred16, "failures": profile_failures(pred16),
-           "recorded": {"predator_day8": profile(strict_games, "predator", RECORD_DAY),
+           "recorded": {"baseline": record(play_games(list(pr.FROZEN), seeds, strict=True)),
+                        "predator_day8": profile(strict_games, "predator", RECORD_DAY),
                         "champion_day16": profile(strict_games, "champion", PROFILE_DAY),
                         "champion_day8": profile(strict_games, "champion", RECORD_DAY)},
            "games": [(g["seed"], g["seat"], g["rewards"]) for g in strict_games]}
@@ -197,7 +201,8 @@ def main(argv=None):  # pragma: no cover
         print(f"limb A strict parity: {'OK' if res['parity']['ok'] else 'FAIL'}  {res['parity']['reason'] or ''}")
         print(f"limb B profile day {PROFILE_DAY}: {res['profile']}  bounds {PROFILE_BOUNDS}  "
               f"{'OK' if not res['failures'] else 'FAIL ' + str(res['failures'])}")
-        print(f"recorded, not gated: {res['recorded']}")
+        print(f"recorded, not gated: baseline {REFERENCE} vs {CHAMPION} on the same seeds "
+              f"{res['recorded']['baseline']}; profiles {dict((k, v) for k, v in res['recorded'].items() if k != 'baseline')}")
         name, code = verdict(rec["wins"], res["parity"]["ok"], res["failures"])
         print(f"-> {name}")
         return code
