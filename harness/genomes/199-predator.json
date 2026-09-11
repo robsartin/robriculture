@@ -1,0 +1,1054 @@
+{
+  "genome": [
+    0.7347031720706084,
+    0.4163937213403143,
+    0.0,
+    0.05649133718059417,
+    0.10238166751974223,
+    0.0,
+    0.17206843648994863,
+    0.20029533993873694,
+    0.8601118865703529,
+    0.041846208667526266,
+    0.6553741372588212,
+    0.578816108544791,
+    0.7516633588586613,
+    0.5766388542905467,
+    1.0,
+    0.5691187539674059,
+    0.8834652903427663,
+    0.362955696983817,
+    0.8298392103015169,
+    0.8249947441827481,
+    0.17143492420004255,
+    0.31034854183361466,
+    0.35011085251996454,
+    0.8041394552523221,
+    0.8798473237512872,
+    1.0
+  ],
+  "meta": {
+    "fitness": 0.608092839791537,
+    "win_rate": 0.5,
+    "wins": 2,
+    "ties": 0,
+    "games": 4,
+    "schedule": {
+      "hands": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "ne_day": 3,
+      "sw_day": 3,
+      "head": [
+        2,
+        2,
+        10,
+        10,
+        10,
+        10
+      ],
+      "nw_pasture": 6,
+      "ne_pasture": 5,
+      "herders": 3,
+      "cap_melon": 14,
+      "cap_straw": 35,
+      "cap_wheat": 9,
+      "pivot": 14,
+      "cluster": 7,
+      "order": 4,
+      "reserve": 931,
+      "floor": 700,
+      "carry": 7,
+      "stock": 14,
+      "prefer": 2
+    },
+    "reference": {
+      "fitness": 0.2880610076620941,
+      "win_rate": 0.0,
+      "wins": 0,
+      "ties": 0,
+      "games": 4
+    },
+    "generation": 39,
+    "generations_completed": 40,
+    "seeds": [
+      13900,
+      13901,
+      13902,
+      13903
+    ],
+    "settings": {
+      "generations": 40,
+      "pop": 16,
+      "games": 4,
+      "sigma": 0.15,
+      "seed": 0,
+      "champion": "lean_feed"
+    },
+    "history": [
+      {
+        "generation": 0,
+        "seeds": [
+          10000,
+          10001,
+          10002,
+          10003
+        ],
+        "best": {
+          "fitness": 0.41585308274354793,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.34788864686269644,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.2941307620059432
+      },
+      {
+        "generation": 1,
+        "seeds": [
+          10100,
+          10101,
+          10102,
+          10103
+        ],
+        "best": {
+          "fitness": 0.4296215885462242,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3262662032846366,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.32665497558046314
+      },
+      {
+        "generation": 2,
+        "seeds": [
+          10200,
+          10201,
+          10202,
+          10203
+        ],
+        "best": {
+          "fitness": 0.4679060719680284,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.30016511215852815,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3592277571787081
+      },
+      {
+        "generation": 3,
+        "seeds": [
+          10300,
+          10301,
+          10302,
+          10303
+        ],
+        "best": {
+          "fitness": 0.569093615652213,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.2904421044289005,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.38393060453651867
+      },
+      {
+        "generation": 4,
+        "seeds": [
+          10400,
+          10401,
+          10402,
+          10403
+        ],
+        "best": {
+          "fitness": 0.5601809276049218,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.32972059300259116,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4007085895887589
+      },
+      {
+        "generation": 5,
+        "seeds": [
+          10500,
+          10501,
+          10502,
+          10503
+        ],
+        "best": {
+          "fitness": 0.5860022766327583,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3365258283915775,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.37037751492532184
+      },
+      {
+        "generation": 6,
+        "seeds": [
+          10600,
+          10601,
+          10602,
+          10603
+        ],
+        "best": {
+          "fitness": 0.7164338017236334,
+          "win_rate": 1.0,
+          "wins": 4,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.30148159084764636,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4065705275393377
+      },
+      {
+        "generation": 7,
+        "seeds": [
+          10700,
+          10701,
+          10702,
+          10703
+        ],
+        "best": {
+          "fitness": 0.6317777979097605,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.2815372418468592,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.41394717051237423
+      },
+      {
+        "generation": 8,
+        "seeds": [
+          10800,
+          10801,
+          10802,
+          10803
+        ],
+        "best": {
+          "fitness": 0.6334232974129771,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3669706321633521,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3976061660610602
+      },
+      {
+        "generation": 9,
+        "seeds": [
+          10900,
+          10901,
+          10902,
+          10903
+        ],
+        "best": {
+          "fitness": 0.674208139199519,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.26436639021625363,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.410430666343554
+      },
+      {
+        "generation": 10,
+        "seeds": [
+          11000,
+          11001,
+          11002,
+          11003
+        ],
+        "best": {
+          "fitness": 0.4923832908149374,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3362768470245694,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.39210396827212834
+      },
+      {
+        "generation": 11,
+        "seeds": [
+          11100,
+          11101,
+          11102,
+          11103
+        ],
+        "best": {
+          "fitness": 0.6180128691362566,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3325338817217022,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.41059334253749735
+      },
+      {
+        "generation": 12,
+        "seeds": [
+          11200,
+          11201,
+          11202,
+          11203
+        ],
+        "best": {
+          "fitness": 0.7622000920787324,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3209289523797684,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.41028585759723607
+      },
+      {
+        "generation": 13,
+        "seeds": [
+          11300,
+          11301,
+          11302,
+          11303
+        ],
+        "best": {
+          "fitness": 0.6319971446708411,
+          "win_rate": 1.0,
+          "wins": 4,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.4251079589380359,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.40131128290654466
+      },
+      {
+        "generation": 14,
+        "seeds": [
+          11400,
+          11401,
+          11402,
+          11403
+        ],
+        "best": {
+          "fitness": 0.6109626246303128,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.30512920274333677,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.407844922394802
+      },
+      {
+        "generation": 15,
+        "seeds": [
+          11500,
+          11501,
+          11502,
+          11503
+        ],
+        "best": {
+          "fitness": 0.5478953634593914,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.37387332525877726,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.395833637328817
+      },
+      {
+        "generation": 16,
+        "seeds": [
+          11600,
+          11601,
+          11602,
+          11603
+        ],
+        "best": {
+          "fitness": 0.810656736779322,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.2582769642810636,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4372875338338238
+      },
+      {
+        "generation": 17,
+        "seeds": [
+          11700,
+          11701,
+          11702,
+          11703
+        ],
+        "best": {
+          "fitness": 0.7056847160420852,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3552470718362972,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4277026478069317
+      },
+      {
+        "generation": 18,
+        "seeds": [
+          11800,
+          11801,
+          11802,
+          11803
+        ],
+        "best": {
+          "fitness": 0.6185193336091803,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.34364927578806825,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.371919200766595
+      },
+      {
+        "generation": 19,
+        "seeds": [
+          11900,
+          11901,
+          11902,
+          11903
+        ],
+        "best": {
+          "fitness": 0.48734609879456287,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.34887011013247493,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3871970699191276
+      },
+      {
+        "generation": 20,
+        "seeds": [
+          12000,
+          12001,
+          12002,
+          12003
+        ],
+        "best": {
+          "fitness": 0.7141796380134957,
+          "win_rate": 1.0,
+          "wins": 4,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3654349760763284,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.43907428660785314
+      },
+      {
+        "generation": 21,
+        "seeds": [
+          12100,
+          12101,
+          12102,
+          12103
+        ],
+        "best": {
+          "fitness": 0.600195166255296,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.370031860493894,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.43940626644626163
+      },
+      {
+        "generation": 22,
+        "seeds": [
+          12200,
+          12201,
+          12202,
+          12203
+        ],
+        "best": {
+          "fitness": 0.5273869022892583,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3324462242639297,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4166880649038026
+      },
+      {
+        "generation": 23,
+        "seeds": [
+          12300,
+          12301,
+          12302,
+          12303
+        ],
+        "best": {
+          "fitness": 0.6607534689836569,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.4085328752856939,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.45165084564718055
+      },
+      {
+        "generation": 24,
+        "seeds": [
+          12400,
+          12401,
+          12402,
+          12403
+        ],
+        "best": {
+          "fitness": 0.5304756022317441,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3589832799942807,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.41263985710229734
+      },
+      {
+        "generation": 25,
+        "seeds": [
+          12500,
+          12501,
+          12502,
+          12503
+        ],
+        "best": {
+          "fitness": 0.5007722295394995,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.33731379026362557,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.42795660366733684
+      },
+      {
+        "generation": 26,
+        "seeds": [
+          12600,
+          12601,
+          12602,
+          12603
+        ],
+        "best": {
+          "fitness": 0.5930025411909288,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3698012808821532,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.44640942001158296
+      },
+      {
+        "generation": 27,
+        "seeds": [
+          12700,
+          12701,
+          12702,
+          12703
+        ],
+        "best": {
+          "fitness": 0.5294624210914036,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.30955019934348355,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.41521406423862683
+      },
+      {
+        "generation": 28,
+        "seeds": [
+          12800,
+          12801,
+          12802,
+          12803
+        ],
+        "best": {
+          "fitness": 0.4879558325389982,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3530271856967903,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4236598298612523
+      },
+      {
+        "generation": 29,
+        "seeds": [
+          12900,
+          12901,
+          12902,
+          12903
+        ],
+        "best": {
+          "fitness": 0.5476689763387913,
+          "win_rate": 1.0,
+          "wins": 4,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3634326931844245,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3840852323086817
+      },
+      {
+        "generation": 30,
+        "seeds": [
+          13000,
+          13001,
+          13002,
+          13003
+        ],
+        "best": {
+          "fitness": 0.6372121131304764,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3283882154953161,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.38595457537563677
+      },
+      {
+        "generation": 31,
+        "seeds": [
+          13100,
+          13101,
+          13102,
+          13103
+        ],
+        "best": {
+          "fitness": 0.49752525368955197,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3020260031366099,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.4068030743013204
+      },
+      {
+        "generation": 32,
+        "seeds": [
+          13200,
+          13201,
+          13202,
+          13203
+        ],
+        "best": {
+          "fitness": 0.5818731037441058,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.23429588287057823,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3625563536317188
+      },
+      {
+        "generation": 33,
+        "seeds": [
+          13300,
+          13301,
+          13302,
+          13303
+        ],
+        "best": {
+          "fitness": 0.5466607131172919,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3877030926019242,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3861912545011343
+      },
+      {
+        "generation": 34,
+        "seeds": [
+          13400,
+          13401,
+          13402,
+          13403
+        ],
+        "best": {
+          "fitness": 0.5012560720527408,
+          "win_rate": 0.25,
+          "wins": 1,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.39390893919863956,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.40135052601648763
+      },
+      {
+        "generation": 35,
+        "seeds": [
+          13500,
+          13501,
+          13502,
+          13503
+        ],
+        "best": {
+          "fitness": 0.6702949015328556,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3593231878536649,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.40401482054556065
+      },
+      {
+        "generation": 36,
+        "seeds": [
+          13600,
+          13601,
+          13602,
+          13603
+        ],
+        "best": {
+          "fitness": 0.6820203271219505,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.3776610102300427,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.399591159774878
+      },
+      {
+        "generation": 37,
+        "seeds": [
+          13700,
+          13701,
+          13702,
+          13703
+        ],
+        "best": {
+          "fitness": 0.5427626092998123,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.2876040882315458,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3960819071262665
+      },
+      {
+        "generation": 38,
+        "seeds": [
+          13800,
+          13801,
+          13802,
+          13803
+        ],
+        "best": {
+          "fitness": 0.5135438739480593,
+          "win_rate": 0.75,
+          "wins": 3,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.35501153525231244,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.3969512642620128
+      },
+      {
+        "generation": 39,
+        "seeds": [
+          13900,
+          13901,
+          13902,
+          13903
+        ],
+        "best": {
+          "fitness": 0.608092839791537,
+          "win_rate": 0.5,
+          "wins": 2,
+          "ties": 0,
+          "games": 4
+        },
+        "reference": {
+          "fitness": 0.2880610076620941,
+          "win_rate": 0.0,
+          "wins": 0,
+          "ties": 0,
+          "games": 4
+        },
+        "mean_fitness": 0.41959841444755513
+      }
+    ]
+  }
+}
