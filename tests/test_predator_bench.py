@@ -87,3 +87,18 @@ def test_verdict_pass_reject_degenerate():
     assert pb.verdict(9, False, []) == ("DEGENERATE: strict parity", 1)
     assert pb.verdict(9, True, ["hands"]) == ("DEGENERATE: profile hands", 1)
     assert pb.verdict(7, False, ["hands"]) == ("REJECT", 1)
+
+
+def test_profile_for_the_champion_reads_the_other_seat(monkeypatch):
+    seen = []
+    monkeypatch.setattr(pb, "board_on_day", lambda steps, seat, day: (seen.append(("board", seat)), {"tiles": seat})[1])
+    monkeypatch.setattr(pb, "hands_on_day", lambda steps, seat, day: (seen.append(("hands", seat)), 7)[1])
+    monkeypatch.setattr(pb, "planted_by_crop", lambda tiles: {"MELON": 10 + tiles})
+    monkeypatch.setattr(pb, "animals_placed", lambda tiles: {"COW": 2 + tiles})
+    games = [{"seed": 1, "seat": 0, "rewards": (1, 0), "done": True, "steps": None},
+             {"seed": 2, "seat": 1, "rewards": (1, 0), "done": True, "steps": None}]
+    # predator seat 0 on the first game -> champion is seat 1 there; predator seat 1 on the second -> champion seat 0
+    assert pb.profile(games, "champion", day=16) == {"planted": 10.5, "animals": 2.5, "hands": 7}
+    assert seen == [("board", 1), ("hands", 1), ("board", 0), ("hands", 0)]
+    assert pb.profile(games, "predator", day=16) == {"planted": 10.5, "animals": 2.5, "hands": 7}
+    assert seen[4:] == [("board", 0), ("hands", 0), ("board", 1), ("hands", 1)]
