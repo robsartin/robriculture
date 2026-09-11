@@ -103,3 +103,12 @@ def test_search_uses_the_champion_by_name(monkeypatch):
     ps.search(generations=1, pop_size=2, games=1, sigma=0.1, seed=0, champion="lean_feed",
               out=None, rewards_fn=_predator_share(None), log=lambda *_: None)
     assert seen and set(seen) == {"lean_feed"}
+
+
+def test_write_checkpoint_survives_a_write_failure(tmp_path):
+    """A disk hiccup must not kill a 100-minute run -- warn and carry on."""
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("i am a file, not a directory")
+    bad = blocker / "sub" / "ck.json"
+    assert ps.write_checkpoint(str(bad), list(pr.FROZEN), {"fitness": 0.5}) is False
+    assert ps.write_checkpoint(None, list(pr.FROZEN), {}) is False
