@@ -91,8 +91,8 @@ def test_side_reading_reads_day_boards_and_the_decomposition(monkeypatch):
         "revenue": {"MELON": 30000, "MILK": 5000}, "spend": {"seed": 800, "hire": 4000, "land": 1000, "animal": 1900, "product": 600},
         "actions": {"WATER": 100}, "final_money": 40000.0, "residual": -12.0})
     r = le.side_reading("steps", 1)
-    assert r["day8"] == {"planted": 1, "animals": 1, "hands": 6}
-    assert r["day16"] == {"planted": 2, "animals": 2, "hands": 9}
+    assert r["day8"] == {"planted": 1, "animals": 1, "cows": 1, "sheep": 0, "hands": 6}
+    assert r["day16"] == {"planted": 2, "animals": 2, "cows": 1, "sheep": 1, "hands": 9}
     assert r["revenue"] == {"MELON": 30000, "MILK": 5000} and r["revenue_total"] == 35000
     assert r["spend"]["hire"] == 4000 and r["spend_total"] == 8300
     assert r["final_money"] == 40000.0 and r["residual"] == -12.0
@@ -119,7 +119,7 @@ def test_summarise_takes_medians_over_readings():
     ]
     s = le.summarise(readings)
     assert s["games"] == 2
-    assert s["ours"]["day8"] == {"planted": 21, "animals": 4, "hands": 6}
+    assert s["ours"]["day8"] == {"planted": 21, "animals": 4, "hands": 6}  # medians over the keys present
     assert s["theirs"]["day16"] == {"planted": 13, "animals": 13, "hands": 8}
     assert s["ours"]["revenue_total"] == 12000 and s["theirs"]["revenue_total"] == 45000
     assert s["theirs"]["revenue"] == {"MILK": 45000} and s["ours"]["spend"] == {"hire": 3100}
@@ -132,3 +132,26 @@ def test_formatters_render_tables():
     assert "21W" not in out and "2W 1L 1T" in out and "0.500" in out
     assert "Sergey Kutepov" in le.format_opponents(le.by_opponent(rows))
     assert "90-100K" in le.format_bands(le.by_reward_band(rows))
+
+
+def test_episode_rows_skips_a_finished_game_that_does_not_contain_the_submission():
+    stranger = _ep(9, [_ag(701, 1000, "A", 1), _ag(702, 2000, "B", 2)])
+    assert le.episode_rows([stranger], ME) == []
+
+
+def test_summarise_and_formatters_survive_no_games():
+    s = le.summarise([])
+    assert s["games"] == 0 and s["ours"] is None and s["theirs"] is None
+    assert "n=0" in le.format_readings("losses", s)
+    assert le.format_opponents([]).count("\n") == 1 and le.format_bands([]).count("\n") == 1
+
+
+def test_side_reading_splits_the_herd_by_kind(monkeypatch):
+    boards = {8: {"tiles": [[_tile(animal="COW"), _tile(animal="SHEEP"), _tile(animal="SHEEP")]]},
+              16: {"tiles": [[_tile(animal="GOOSE")]]}}
+    monkeypatch.setattr(le, "board_on_day", lambda steps, seat, day: boards.get(day))
+    monkeypatch.setattr(le, "hands_on_day", lambda steps, seat, day: 5)
+    monkeypatch.setattr(le, "decompose", lambda steps, seat: {"revenue": {}, "spend": {}, "actions": {}, "final_money": 0.0, "residual": 0.0})
+    r = le.side_reading("steps", 0)
+    assert r["day8"] == {"planted": 0, "animals": 3, "cows": 1, "sheep": 2, "hands": 5}
+    assert r["day16"] == {"planted": 0, "animals": 1, "cows": 0, "sheep": 0, "hands": 5}

@@ -32,7 +32,10 @@ def episode_rows(episodes, submission_id) -> list:
         agents = e.get("agents") or []
         if e.get("state") != "COMPLETED" or len({a.get("submissionId") for a in agents}) < 2:
             continue
-        seat = next(i for i, a in enumerate(agents) if a.get("submissionId") == submission_id)
+        seats = [i for i, a in enumerate(agents) if a.get("submissionId") == submission_id]
+        if not seats or len(agents) < 2:
+            continue
+        seat = seats[0]
         me, them = agents[seat], agents[1 - seat]
         ours, theirs = me.get("reward"), them.get("reward")
         if ours is None or theirs is None:
@@ -103,9 +106,12 @@ def replay_path(directory, episode_id) -> str:
 def _board(steps, seat, day) -> dict:
     board = board_on_day(steps, seat, day)
     if board is None:
-        return {"planted": None, "animals": None, "hands": hands_on_day(steps, seat, day)}
+        return {"planted": None, "animals": None, "cows": None, "sheep": None,
+                "hands": hands_on_day(steps, seat, day)}
+    animals = animals_placed(board["tiles"])
     return {"planted": sum(planted_by_crop(board["tiles"]).values()),
-            "animals": sum(animals_placed(board["tiles"]).values()),
+            "animals": sum(animals.values()),
+            "cows": animals.get("COW", 0), "sheep": animals.get("SHEEP", 0),
             "hands": hands_on_day(steps, seat, day)}
 
 
@@ -123,6 +129,8 @@ def episode_reading(steps, row) -> dict:
 
 
 def _median_dict(dicts) -> dict:
+    """Median per key over the dicts; a key absent from a dict counts as 0
+    (a game that sold no MILK sold 0 MILK)."""
     keys = sorted({k for d in dicts for k in d})
     return {k: statistics.median(d.get(k, 0) for d in dicts) for k in keys}
 
@@ -139,6 +147,8 @@ def _median_side(sides) -> dict:
 
 
 def summarise(readings) -> dict:
+    if not readings:
+        return {"games": 0, "ours": None, "theirs": None}
     return {"games": len(readings),
             "ours": _median_side([r["ours"] for r in readings]),
             "theirs": _median_side([r["theirs"] for r in readings])}
@@ -166,14 +176,17 @@ def format_bands(bands) -> str:
 def _fmt_side(s) -> str:
     d8, d16 = s["day8"], s["day16"]
     top = sorted(s["revenue"].items(), key=lambda kv: -kv[1])[:4]
-    return (f"day8 {d8['planted']}/{d8['animals']}/{d8['hands']}  day16 {d16['planted']}/{d16['animals']}/{d16['hands']}  "
+    return (f"day8 {d8['planted']}/{d8['animals']}/{d8['hands']} ({d8.get('cows')}c+{d8.get('sheep')}s)  "
+            f"day16 {d16['planted']}/{d16['animals']}/{d16['hands']} ({d16.get('cows')}c+{d16.get('sheep')}s)  "
             f"revenue {s['revenue_total']:.0f} ({', '.join(f'{k} {v:.0f}' for k, v in top)})  "
             f"spend {s['spend_total']:.0f} ({', '.join(f'{k} {v:.0f}' for k, v in s['spend'].items() if v)})  "
             f"final {s['final_money']:.0f}  residual {s['residual']:.0f}")
 
 
 def format_readings(label, summary) -> str:
-    return (f"{label} (n={summary['games']}; planted/animals/hands)\n"
+    if not summary["games"]:
+        return f"{label} (n=0)"
+    return (f"{label} (n={summary['games']}; planted/animals/hands, cows+sheep)\n"
             f"  ours:   {_fmt_side(summary['ours'])}\n"
             f"  theirs: {_fmt_side(summary['theirs'])}")
 
