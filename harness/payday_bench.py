@@ -20,7 +20,7 @@ import os
 from harness.cashflow import play  # noqa: F401  -- pinned by the tests
 from harness.evolve import DEFAULT_ANCHORS
 from harness.fed_bench import census_summary, head_by_day, head_lost
-from harness.feed_bench import board_on_day, hands_on_day  # noqa: F401  -- board_on_day pinned by the tests
+from harness.feed_bench import hands_on_day
 from harness.reserve_bench import MADHUR, PILKWANG, REFERENCE  # noqa: F401  -- pinned by the tests
 from harness.rival_bench import (  # noqa: F401  -- pinned by the tests to rival_bench's own
     criterion,
