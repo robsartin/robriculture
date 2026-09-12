@@ -39,11 +39,12 @@ def test_herd_preference_degrades_to_sheep_on_a_malformed_observation():
 
 
 def test_every_other_seam_is_lean_feeds():
+    """The contender defines exactly one seam of the fourteen; the rest are inherited."""
+    from harness import sheep_bench as sb
+    assert set(sf.SheepFirstStrategy.__dict__) & set(sb._seam_names()) == {"herd_preference"}
+    assert set(sb._seam_names()) >= {"herd_target", "hire_target", "buy_order", "feed_carry", "layout"}
     p, q = sf.SheepFirstStrategy(), LeanFeedStrategy()
-    for day in (0, 6, 8, 12, 16):
-        assert p.herd_target(day) == q.herd_target(day) and p.hire_target(day) == q.hire_target(day)
-    assert p.buy_order() == q.buy_order() and p.feed_carry(8, 3) == q.feed_carry(8, 3) and p.layout() == q.layout()
-    assert fr.FieldRivalStrategy.herd_preference(p, {}) is None
+    assert p.herd_target(8) == q.herd_target(8) == 13 and p.buy_order() == q.buy_order()
 
 
 def test_registered():

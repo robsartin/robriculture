@@ -44,7 +44,10 @@ SHEEP_DAY = 8
 SHEEP_BAR = 4
 SHEEP_DAY_16 = 16
 SHEEP_BAR_16 = 6
-LONESPEAR = "lonespear_kaggriculture_v21"
+from harness.external_pool import EXTERNAL_ANCHORS
+
+LONESPEAR = EXTERNAL_ANCHORS[1]
+assert LONESPEAR.startswith("lonespear"), LONESPEAR  # the pool order is the pin (review)
 
 
 def load_reference():
