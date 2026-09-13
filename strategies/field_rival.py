@@ -262,6 +262,10 @@ def nearest_shed(pos):
 #: whose harvest never reaches the market.
 CARRY_LIMIT = 6
 
+#: Fertilizer a crop worker takes from the shed per visit when a contender
+#: fertilizes (#277); the frozen benchmark never does.
+FERT_CARRY = 3
+
 #: The sim accepts at most this many market orders in a single turn. Hires, the
 #: land buy, animals, seed and sells all compete for the same ten slots, so the
 #: order they are appended below IS the priority.
@@ -307,24 +311,56 @@ def _tile_at(tiles, tile):
     return tiles[y][x]
 
 
-def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
+def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour, shed=None,
+                       fertilize=None, fert_carry=FERT_CARRY):
     """One crop worker's action: bank a full load, else tend the first tile in
     its cluster that wants something, else walk any leftovers back to the shed.
+
+    `fertilize`: crops to fertilize before watering, or ``None`` for never
+    (#277). When set, fertilizer in hand is a tool rather than a load; a tile
+    due for WATER whose crop is in the set and whose fertilizer has lapsed gets
+    FERTILIZE first (the next turn's WATER earns the bonus); a worker already
+    at the shed with nothing to do there and none in hand takes from `shed`
+    exactly as many units as tiles in its own cluster can take, at most
+    `fert_carry`; and fertilizer no tile of the cluster can take goes back to
+    the shed with the leftovers. Never a trip for fertilizer, never in place
+    of a chore, never hoarded -- the first cut of this seam let idle workers
+    parked at the shed take every unit the herders banked, and the farm,
+    whose days 1-5 run on fertilizer sales, died by day 3 (#277). The frozen
+    benchmark never fertilizes, so with `fertilize` ``None`` nothing here moves.
     """
+    inv = inv or {}
+    if isinstance(fertilize, str):
+        fertilize = (fertilize,)
     shed_tile = nearest_shed(pos)
     at_shed = [pos[0], pos[1]] == [shed_tile[0], shed_tile[1]]
-    carrying = sum(inv.values()) if inv else 0
+    fert_in_hand = inv.get("FERTILIZER", 0) if fertilize is not None else 0
+    carrying = sum(n for item, n in inv.items()
+                   if fertilize is None or item != "FERTILIZER")
 
     if carrying >= CARRY_LIMIT:
         return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
+
+    def wants_fertilizer(plot):
+        return (fertilize is not None and isinstance(plot, dict)
+                and hh._is_live_plant(plot) and plot.get("crop") in fertilize
+                and plot.get("fertilized_until_day", -1) < day)
 
     # Nearest first, not cluster order: the cluster is sorted by distance from
     # the shed, which says nothing about where this worker is standing. Serving
     # the first tile in the list instead of the closest one put 52% of all
     # worker-turns into walking.
     best = None
+    takers = 0
     for tile in cluster:
-        action = plot_action(_tile_at(tiles, tile), crop, day, hour)
+        plot = _tile_at(tiles, tile)
+        if wants_fertilizer(plot):
+            takers += 1
+        action = plot_action(plot, crop, day, hour)
+        if fert_in_hand > 0 and wants_fertilizer(plot) and action in (["PASS"], ["WATER"]):
+            # A lapsed tile takes fertilizer whether or not it is watered yet:
+            # it lasts three days, and the next WATER earns the bonus.
+            action = ["FERTILIZE"]
         if action == ["PASS"]:
             continue
         dist = abs(tile[0] - pos[0]) + abs(tile[1] - pos[1])
@@ -332,10 +368,22 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour):
             return action
         if best is None or dist < best[0]:
             best = (dist, tile)
+
+    if fertilize is not None and at_shed and not fert_in_hand and takers:
+        # One turn at the shed, only when standing there already with a tile
+        # to fertilize, and only as many units as the cluster can take.
+        stock = int((shed or {}).get("FERTILIZER", 0) or 0)
+        if stock > 0:
+            return ["PICKUP", "FERTILIZER", min(stock, fert_carry, takers)]
+
     if best is not None:
+        if fert_in_hand and not takers:
+            # Nothing in the cluster can take what is in hand: return it on the
+            # way, rather than tend with a pocket the sweep can never sell.
+            return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
         return hh.step_toward(pos, best[1])
 
-    if carrying:
+    if carrying or (fert_in_hand and not takers):
         return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
     return ["PASS"]
 
@@ -350,7 +398,7 @@ BUY_ORDER = ("hires", "land", "seed", "herd")
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
                   empty_plots, standing=None, caps=None, prefer=None, target=None,
                   land=None, hire=None, reserve=None, pivot=None, order=None, floor=None,
-                  feed=None):
+                  feed=None, fert=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -374,6 +422,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     hires (dawn, before anything else) and the feed top-up (what the floor is kept for) are exempt.
 
     `feed`: wheat the shed keeps for the herd, or ``None`` for the frozen `feed_buffer(animals)` (#262).
+
+    `fert`: fertilizer the shed keeps back from the sweep for the crop line, or ``None`` for none (#277).
     """
     sells: list = []
     buys: list = []
@@ -388,7 +438,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
         # just buy it again next turn.
         if item not in TRADABLE:
             continue
-        keep = reserved if item == "WHEAT" else 0
+        keep = reserved if item == "WHEAT" else (0 if fert is None else int(fert)) if item == "FERTILIZER" else 0
         sell = int(n) - keep
         if sell > 0:
             sells.append(["SELL", item, sell])
@@ -735,6 +785,17 @@ class FieldRivalStrategy(Strategy):
         `feed_buffer`. A seam for contenders (#262); never fires on the benchmark."""
         return None
 
+    def fertilizer_stock(self):
+        """Fertilizer the shed keeps back from the sell sweep for the crop
+        line, or ``None`` for none. A seam for contenders (#277); never fires
+        on the benchmark, which sells every unit."""
+        return None
+
+    def fertilize_crops(self):
+        """Crops a worker fertilizes before watering, or ``None`` for never. A
+        seam for contenders (#277); never fires on the benchmark."""
+        return None
+
     def act(self, obs) -> dict:
         player = obs["player"]
         me = obs["farms"][player]
@@ -760,6 +821,7 @@ class FieldRivalStrategy(Strategy):
         chosen_carry = self.feed_carry(animals, len(workers))
         carry = FEED_CARRY if chosen_carry is None else chosen_carry
         feed = self.feed_stock(animals)
+        fertilize = self.fertilize_crops()
 
         positions = [me["farmer"], *hands]
         used: dict = {}
@@ -774,7 +836,8 @@ class FieldRivalStrategy(Strategy):
             # the cap immediately, so the crew cannot collectively overshoot it.
             crop = crop_for_plot(day, standing, caps=self.CAPS, pivot=pivot)
             mine = crop_cluster(i, workers, crops=crops, cluster=cluster)
-            action = crop_worker_action(mine, tiles, pos, inv, crop, day, hour)
+            action = crop_worker_action(mine, tiles, pos, inv, crop, day, hour,
+                                        shed=shed, fertilize=fertilize)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
                 # cannot pay for -- so a worker past the seed count would just
@@ -800,7 +863,8 @@ class FieldRivalStrategy(Strategy):
                                target=self.herd_target(day), land=self.land_target(day),
                                hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order(),
-                               floor=self.spend_floor(day, animals, shed, prices), feed=feed)
+                               floor=self.spend_floor(day, animals, shed, prices), feed=feed,
+                               fert=self.fertilizer_stock())
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

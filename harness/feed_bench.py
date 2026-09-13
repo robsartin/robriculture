@@ -167,6 +167,8 @@ def off_class():
         "spend_floor": lambda self, day=None, animals=None, shed=None, prices=None: None,
         "feed_carry": lambda self, animals=None, herders=None: None,
         "feed_stock": lambda self, animals=None: None,
+        "fertilizer_stock": lambda self: None,
+        "fertilize_crops": lambda self: None,
         "CAPS": load(REFERENCE).CAPS,
     })
 
