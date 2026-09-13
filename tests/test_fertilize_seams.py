@@ -35,22 +35,24 @@ def test_frozen_path_never_picks_up_or_fertilizes_even_with_fertilizer_everywher
 
 def test_pickup_at_the_shed_only_when_active_empty_handed_and_stocked():
     tiles = _blank()
-    tiles[0][0] = _plant()
+    for x in range(3):
+        tiles[0][x] = _plant()          # three lapsed, unwatered strawberry tiles (board is [y][x])
+    cluster = ((0, 0), (1, 0), (2, 0))
     on = ("STRAWBERRY", "MELON")
-    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
+    assert fr.crop_worker_action(cluster, tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
                                  shed={"FERTILIZER": 10}, fertilize=on) == ["PICKUP", "FERTILIZER", 3]
-    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
+    assert fr.crop_worker_action(cluster, tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
                                  shed={"FERTILIZER": 2}, fertilize=on) == ["PICKUP", "FERTILIZER", 2]
-    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
+    assert fr.crop_worker_action(cluster, tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
                                  shed={"FERTILIZER": 10}, fertilize=on, fert_carry=1) == ["PICKUP", "FERTILIZER", 1]
     # already holding some: no pickup, go tend
-    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), {"FERTILIZER": 1}, "STRAWBERRY", 12, 3,
+    assert fr.crop_worker_action(cluster, tiles, (4, 4), {"FERTILIZER": 1}, "STRAWBERRY", 12, 3,
                                  shed={"FERTILIZER": 10}, fertilize=on) in (["WEST"], ["NORTH"])
     # shed empty: go tend
-    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
+    assert fr.crop_worker_action(cluster, tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
                                  shed={}, fertilize=on) in (["WEST"], ["NORTH"])
     # away from the shed: never a trip for fertilizer
-    assert fr.crop_worker_action(((0, 0),), tiles, (1, 0), {}, "STRAWBERRY", 12, 3,
+    assert fr.crop_worker_action(cluster, tiles, (3, 0), {}, "STRAWBERRY", 12, 3,
                                  shed={"FERTILIZER": 10}, fertilize=on) == ["WEST"]
 
 
@@ -93,13 +95,13 @@ def test_harvest_is_never_displaced_by_fertilizing(monkeypatch):
 
 def test_fertilizer_in_hand_is_not_a_load_only_when_the_seam_is_on():
     tiles = _blank()
-    tiles[0][0] = _plant()
+    tiles[0][0] = _plant(crop="MELON")
     inv = {"MELON": fr.CARRY_LIMIT - 1, "FERTILIZER": 3}
     # seam off: 8 items >= the limit -> head for the shed
     assert fr.crop_worker_action(((0, 0),), tiles, (0, 0), inv, "MELON", 12, 3) in (["EAST"], ["SOUTH"])
     # seam on: 5 produce < the limit -> tend the tile it stands on
     assert fr.crop_worker_action(((0, 0),), tiles, (0, 0), inv, "MELON", 12, 3,
-                                 shed={}, fertilize=("MELON",)) in (["FERTILIZE"], ["WATER"])
+                                 shed={}, fertilize=("MELON",)) == ["FERTILIZE"]
 
 
 def test_the_sweep_keeps_fert_units_of_fertilizer_and_sells_all_by_default():
@@ -126,3 +128,63 @@ def test_a_contender_with_the_seams_on_survives_a_turn():
     env = make("kaggriculture", configuration={"seed": 1056, "episodeSteps": 3})
     out = cls().act(parse(env.reset()[0].observation))
     assert set(out) >= {"farmer", "hands", "market"}
+
+
+# --- the hoarding fix (#277 VOID): pickup needs a target, never displaces a chore, and
+# --- fertilizer with nowhere to go is returned to the shed
+
+def test_pickup_never_displaces_the_chore_on_the_tile_the_worker_stands_on(monkeypatch):
+    tiles = _blank()
+    tiles[4][4] = _plant(crop="MELON")
+    tiles[0][0] = _plant(crop="MELON")
+    monkeypatch.setattr(fr.hh, "harvest_ready", lambda tile, day: True)
+    assert fr.crop_worker_action(((4, 4), (0, 0)), tiles, (4, 4), {}, "MELON", 12, 3,
+                                 shed={"FERTILIZER": 10}, fertilize=("MELON",)) == ["HARVEST"]
+
+
+def test_pickup_only_when_a_cluster_tile_can_take_fertilizer_and_only_that_many():
+    on = ("STRAWBERRY", "MELON")
+    tiles = _blank()
+    # an idle worker at the shed with an empty cluster: no pickup, PASS
+    assert fr.crop_worker_action((), tiles, (4, 4), {}, "MELON", 12, 3,
+                                 shed={"FERTILIZER": 10}, fertilize=on) == ["PASS"]
+    # cluster of unplanted tiles and a wheat tile: nothing wants fertilizer -> no pickup
+    tiles[0][0] = _plant(crop="WHEAT")
+    assert fr.crop_worker_action(((0, 0), (1, 0)), tiles, (4, 4), {}, "MELON", 12, 23,
+                                 shed={"FERTILIZER": 10}, fertilize=on)[0] != "PICKUP"
+    # two lapsed strawberry tiles, everything else fertilized: pick up exactly two
+    tiles[0][0] = _plant(watered=True)
+    tiles[0][1] = _plant(watered=True)
+    tiles[0][2] = _plant(watered=True, fert_until=14)
+    assert fr.crop_worker_action(((0, 0), (1, 0), (2, 0)), tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
+                                 shed={"FERTILIZER": 10}, fertilize=on) == ["PICKUP", "FERTILIZER", 2]
+    # five lapsed tiles: capped at fert_carry
+    for x in range(5):
+        tiles[0][x] = _plant(watered=True)
+    assert fr.crop_worker_action(tuple((x, 0) for x in range(5)), tiles, (4, 4), {}, "STRAWBERRY", 12, 3,
+                                 shed={"FERTILIZER": 10}, fertilize=on) == ["PICKUP", "FERTILIZER", 3]
+
+
+def test_fertilizer_with_nowhere_to_go_is_returned_to_the_shed():
+    on = ("STRAWBERRY",)
+    tiles = _blank()
+    tiles[0][0] = _plant(watered=True, fert_until=14)   # fertilized and watered: wants nothing
+    inv = {"FERTILIZER": 2}
+    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), inv, "STRAWBERRY", 12, 3,
+                                 shed={}, fertilize=on) == ["DROP"]
+    assert fr.crop_worker_action(((0, 0),), tiles, (2, 4), inv, "STRAWBERRY", 12, 3,
+                                 shed={}, fertilize=on) == ["EAST"]
+    # but while a tile still wants it, the worker keeps it and goes there
+    tiles[0][0] = _plant(watered=True)
+    assert fr.crop_worker_action(((0, 0),), tiles, (4, 4), inv, "STRAWBERRY", 12, 3,
+                                 shed={}, fertilize=on) in (["WEST"], ["NORTH"])
+
+
+def test_a_bare_crop_string_is_one_crop_not_its_letters():
+    tiles = _blank()
+    tiles[4][4] = _plant(crop="MELON")
+    assert fr.crop_worker_action(((4, 4),), tiles, (4, 4), {"FERTILIZER": 1}, "MELON", 12, 3,
+                                 shed={}, fertilize="MELON") == ["FERTILIZE"]
+    tiles[4][4] = _plant(crop="M")
+    assert fr.crop_worker_action(((4, 4),), tiles, (4, 4), {"FERTILIZER": 1}, "MELON", 12, 3,
+                                 shed={}, fertilize="MELON") == ["WATER"]
