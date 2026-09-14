@@ -122,7 +122,7 @@ def test_the_two_hooks_return_none_on_the_benchmark_and_are_seams():
 
 def test_a_contender_with_the_seams_on_survives_a_turn():
     cls = type("Fert", (fr.FieldRivalStrategy,), {
-        "fertilizer_stock": lambda self: 5, "fertilize_crops": lambda self: ("MELON",)})
+        "fertilizer_stock": lambda self, day=None: 5, "fertilize_crops": lambda self, day=None: ("MELON",)})
     from kaggisim.state import parse
     from kaggle_environments import make
     env = make("kaggriculture", configuration={"seed": 1056, "episodeSteps": 3})
