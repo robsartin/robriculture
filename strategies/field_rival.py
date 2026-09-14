@@ -785,15 +785,16 @@ class FieldRivalStrategy(Strategy):
         `feed_buffer`. A seam for contenders (#262); never fires on the benchmark."""
         return None
 
-    def fertilizer_stock(self):
+    def fertilizer_stock(self, day=None):
         """Fertilizer the shed keeps back from the sell sweep for the crop
-        line, or ``None`` for none. A seam for contenders (#277); never fires
-        on the benchmark, which sells every unit."""
+        line on `day`, or ``None`` for none. A seam for contenders (#277,
+        `day` from #282); never fires on the benchmark, which sells every unit."""
         return None
 
-    def fertilize_crops(self):
-        """Crops a worker fertilizes before watering, or ``None`` for never. A
-        seam for contenders (#277); never fires on the benchmark."""
+    def fertilize_crops(self, day=None):
+        """Crops a worker fertilizes before watering on `day`, or ``None`` for
+        never. A seam for contenders (#277, `day` from #282); never fires on
+        the benchmark."""
         return None
 
     def act(self, obs) -> dict:
@@ -821,7 +822,7 @@ class FieldRivalStrategy(Strategy):
         chosen_carry = self.feed_carry(animals, len(workers))
         carry = FEED_CARRY if chosen_carry is None else chosen_carry
         feed = self.feed_stock(animals)
-        fertilize = self.fertilize_crops()
+        fertilize = self.fertilize_crops(day)
 
         positions = [me["farmer"], *hands]
         used: dict = {}
@@ -864,7 +865,7 @@ class FieldRivalStrategy(Strategy):
                                hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order(),
                                floor=self.spend_floor(day, animals, shed, prices), feed=feed,
-                               fert=self.fertilizer_stock())
+                               fert=self.fertilizer_stock(day))
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

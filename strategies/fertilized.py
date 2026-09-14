@@ -32,10 +32,10 @@ class FertilizedStrategy(PaydayHerdStrategy):
     name = "fertilized"
     benchmark = False
 
-    def fertilizer_stock(self):
+    def fertilizer_stock(self, day=None):
         return FERT_STOCK
 
-    def fertilize_crops(self):
+    def fertilize_crops(self, day=None):
         return FERT_CROPS
 
 
