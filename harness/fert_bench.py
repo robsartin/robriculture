@@ -102,7 +102,7 @@ def off_class():
 def arm_b_class():
     """`fertilized` on melon only. Never registered."""
     from strategies import load
-    return type("MelonOnly", (load(CONTENDER),), {"fertilize_crops": lambda self: ("MELON",)})
+    return type("MelonOnly", (load(CONTENDER),), {"fertilize_crops": lambda self, day=None: ("MELON",)})
 
 
 # --- live games -------------------------------------------------------------

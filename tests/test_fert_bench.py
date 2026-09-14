@@ -77,3 +77,15 @@ def test_arm_b_fertilizes_melon_only():
     b = fb.arm_b_class()()
     assert isinstance(b, FertilizedStrategy)
     assert b.fertilize_crops() == ("MELON",) and b.fertilizer_stock() == 24
+
+
+def test_arm_b_survives_a_turn_at_the_seams_new_arity():
+    """The seams take the day since #282; a stub with the old arity crashes the
+    moment `act` runs (found at review, #282)."""
+    from kaggisim.state import parse
+    from kaggle_environments import make
+    b = fb.arm_b_class()()
+    assert b.fertilize_crops(6) == ("MELON",) and b.fertilizer_stock(6) == 24
+    env = make("kaggriculture", configuration={"seed": 1088, "episodeSteps": 3})
+    out = b.act(parse(env.reset()[0].observation))
+    assert set(out) >= {"farmer", "hands", "market"}
