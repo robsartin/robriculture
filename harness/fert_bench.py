@@ -90,19 +90,24 @@ def mechanism_failures(contender, champion) -> list:
     return failed
 
 
+def _contender_class():
+    """`fertilized` is unregistered since #293 (it cannot beat `random`); the
+    bench reaches the class directly, for the record's sake."""
+    from strategies.fertilized import FertilizedStrategy
+    return FertilizedStrategy
+
+
 def off_class():
     """Every seam off (sixteen), the reference's caps, and the frozen herd ramp."""
-    from strategies import load
     body = {n: (lambda self, *a, **k: None) for n in _seam_names()}
     body["CAPS"] = load_reference().CAPS
     body["HERD_RAMP_F"] = fp.HERD_RAMP_F
-    return type("Off", (load(CONTENDER),), body)
+    return type("Off", (_contender_class(),), body)
 
 
 def arm_b_class():
     """`fertilized` on melon only. Never registered."""
-    from strategies import load
-    return type("MelonOnly", (load(CONTENDER),), {"fertilize_crops": lambda self, day=None: ("MELON",)})
+    return type("MelonOnly", (_contender_class(),), {"fertilize_crops": lambda self, day=None: ("MELON",)})
 
 
 # --- live games -------------------------------------------------------------
@@ -119,6 +124,8 @@ def _arm_b_agents(name):  # pragma: no cover
 
 
 def run_controls(seed=CONTROL_SEED):  # pragma: no cover
+    raise RuntimeError("fertilized is unregistered (#293): the #277 run is on the record; "
+                       "re-register the class to re-run this bench")
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
     from harness.tournament import play_rewards
     from kaggisim.strategy import make_agent
@@ -138,6 +145,8 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
 
 
 def run_criterion(seeds=SEEDS):  # pragma: no cover
+    raise RuntimeError("fertilized is unregistered (#293): the #277 run is on the record; "
+                       "re-register the class to re-run this bench")
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
     from harness.triage import head_to_head_rate
     champion_row = head_to_head_rate(CONTENDER, CHAMPION, seeds)
@@ -147,6 +156,8 @@ def run_criterion(seeds=SEEDS):  # pragma: no cover
 
 
 def run_recorded(seeds=SEEDS):  # pragma: no cover
+    raise RuntimeError("fertilized is unregistered (#293): the #277 run is on the record; "
+                       "re-register the class to re-run this bench")
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
     from harness.triage import head_to_head_rate
     return [head_to_head_rate(ARM_B, CHAMPION, seeds, agents=_arm_b_agents(ARM_B))]

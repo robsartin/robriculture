@@ -14,6 +14,11 @@ FERTILIZE first (the two seams of #277). Everything else is payday_herd's.
 
 Declared before measurement: FERT_CROPS and FERT_STOCK, and the controls and
 criterion in `harness/fert_bench.py` (posted to #277 before any code).
+
+VOID on its control and kept for the record only: the day-0 hold-back starves
+the farm of days 1-5's income and games end at a reward of 0, so this class is
+NOT registered (no module-level STRATEGY) -- a registered strategy must clear
+ADR-0006's sanity floor against `random`, and this one is a coin there (#293).
 """
 
 from __future__ import annotations
@@ -38,5 +43,3 @@ class FertilizedStrategy(PaydayHerdStrategy):
     def fertilize_crops(self, day=None):
         return FERT_CROPS
 
-
-STRATEGY = FertilizedStrategy
