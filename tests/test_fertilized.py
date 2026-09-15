@@ -20,6 +20,11 @@ def test_only_the_two_fertilizer_seams_are_overridden():
     assert p.herd_target(8) == q.herd_target(8) == 8 and p.feed_stock(animals=9) == q.feed_stock(animals=9)
 
 
-def test_registered():
-    from strategies import load
-    assert load("fertilized") is fz.FertilizedStrategy
+def test_not_registered_because_it_cannot_beat_random():
+    """The #277 contender starves its own farm (reward 0 by design of the
+    day-0 hold-back) and cannot clear ADR-0006's sanity floor against
+    `random`, so it is not a submittable strategy: no module-level STRATEGY,
+    no registry entry (#293). The class stays for the record and the bench."""
+    from strategies import REGISTRY
+    assert "fertilized" not in REGISTRY
+    assert not hasattr(fz, "STRATEGY")
