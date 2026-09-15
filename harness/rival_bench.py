@@ -56,13 +56,36 @@ def _rate(row):
     return row["wins"] / games if games else 0.0
 
 
+#: A champion row on the paired seeds at or below this many wins is at the
+#: floor: there, one game short is a coin, not a regression (ADR-0007
+#: amendment of 2026-09-15, #291). Two games short, or one short of a champion
+#: above the floor, still is.
+PAIRED_FLOOR_WINS = 1
+
+
+def regressed(ours: int, theirs: int) -> bool:
+    """Has the contender given up games against a paired external anchor?
+
+    Fewer wins than the champion on the same seeds, unless the champion is at
+    the floor (`PAIRED_FLOOR_WINS` or fewer) and the gap is a single game: at
+    a base rate of one in sixteen, (0, 1) is a coin flip the limb cannot tell
+    from a regression (#291), while (15, 16) against an anchor the champion
+    sweeps is exactly what the limb exists to catch (#152).
+    """
+    if ours >= theirs:
+        return False
+    return not (theirs <= PAIRED_FLOOR_WINS and theirs - ours == 1)
+
+
 def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
               anchor_bar=ANCHOR_BAR, *, external_pairs=()):
     """The declared verdict: the champion bar, each anchor's bar, and -- when
     `external_pairs` are given (#152) -- paired non-regression against each
     external anchor: the contender's wins on the seeds must be >= the
-    champion's wins on the *same* seeds in the same run. Ties never count as
-    wins on either side. With no pairs the verdict is exactly the pre-#152 one.
+    champion's wins on the *same* seeds in the same run, with one game of
+    slack when the champion is at the floor (`regressed`, ADR-0007 amendment
+    of 2026-09-15). Ties never count as wins on either side. With no pairs the
+    verdict is exactly the pre-#152 one.
 
     `external_pairs` is keyword-only so it can never capture a positional bar:
     `clock_bench`, `pasture_bench` and `herder_bench` all call
@@ -86,7 +109,7 @@ def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
         external[pair["opponent"]] = (contender["wins"], champion["wins"])
     failing = ([champion_row["opponent"]] if champion_rate < champion_bar else []) + \
               [n for n, rate in anchor_rates.items() if rate < anchor_bar] + \
-              [f"external:{n}" for n, (ours, theirs) in external.items() if ours < theirs]
+              [f"external:{n}" for n, (ours, theirs) in external.items() if regressed(ours, theirs)]
     return {"passed": not failing, "champion_rate": champion_rate,
             "anchor_rates": anchor_rates, "external": external, "failing": failing}
 
@@ -168,7 +191,7 @@ def format_external(pairs):
     lines = [f"{'external':<44} {'contender':>10} {'champion':>10}  verdict"]
     for p in pairs:
         c, k = p["contender"], p["champion"]
-        verdict = "ok" if c["wins"] >= k["wins"] else "REGRESSED"
+        verdict = "REGRESSED" if regressed(c["wins"], k["wins"]) else "ok"
         lines.append(f"{p['opponent']:<44} {c['wins']:>3}/{c['games']:<6} "
                      f"{k['wins']:>3}/{k['games']:<6}  {verdict}")
     return "\n".join(lines)
