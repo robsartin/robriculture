@@ -385,7 +385,7 @@ refuses to load an anchor that is missing, unpinned or mismatched.
 **Cost.** Five anchors × 16 seeds × two strategies = 160 games per gate run, on
 top of the 112 the first two limbs cost.
 
-### 2026-09-15 — the paired external limb gains a floor (#291, #295)
+### 2026-09-15 — the paired external limb gains a floor (#291, PR #298)
 
 **What this corrects.** The limb of 2026-09-07 reads "the contender's win count
 must be at least the champion's" on the same seeds. On #291 that rejected a

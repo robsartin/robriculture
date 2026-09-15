@@ -156,7 +156,7 @@ def test_criterion_fails_an_external_where_the_contender_wins_fewer_than_the_cha
 
 
 def test_a_single_game_below_a_champion_at_the_floor_is_not_a_regression():
-    """ADR-0007 amendment of 2026-09-15 (#291, #295): with the champion at
+    """ADR-0007 amendment of 2026-09-15 (#291, PR #298): with the champion at
     PAIRED_FLOOR_WINS or fewer wins on the seeds, one game is a coin, not a
     regression. Above the floor, or two games short, it still is."""
     assert rb.PAIRED_FLOOR_WINS == 1
