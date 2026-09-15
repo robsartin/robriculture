@@ -384,3 +384,36 @@ refuses to load an anchor that is missing, unpinned or mismatched.
 
 **Cost.** Five anchors × 16 seeds × two strategies = 160 games per gate run, on
 top of the 112 the first two limbs cost.
+
+### 2026-09-15 — the paired external limb gains a floor (#291, #295)
+
+**What this corrects.** The limb of 2026-09-07 reads "the contender's win count
+must be at least the champion's" on the same seeds. On #291 that rejected a
+contender that beat the champion 12/16, held every anchor, and was up or level
+on four of the five externals — because against `lonespear` the champion won
+one game of sixteen and the contender none. At a base rate of one in sixteen,
+a pair of (0, 1) is a coin flip; the limb was written to catch a contender
+buying its champion-row wins by giving up games against the strong externals,
+and it cannot tell that from a coin.
+
+**The rule.** A paired external limb regresses when the contender wins fewer
+games than the champion on the same seeds, **unless the champion is at the
+floor and the gap is one game**. The floor and the test are the code:
+`harness.rival_bench.PAIRED_FLOOR_WINS` and `harness.rival_bench.regressed`
+(cite them; do not copy the value here). Two games short of a champion at the
+floor, or one game short of a champion above it, is still a regression — (15,
+16) against an anchor the champion sweeps is exactly the case the limb exists
+for.
+
+**Alternatives rejected.**
+- *Leave the limb as written.* It calls a coin a regression whenever a strong
+  external is near zero for both sides, which is most of the strong externals
+  most of the time; #291 was rejected on it with the rest of the gate clean.
+- *One game of slack on every pair.* Would let a contender give up a game
+  against `madhur` at 16/16 unnoticed — the case the limb was added for.
+- *A significance test per pair.* Sixteen seeds cannot power one; it would
+  pass everything or nothing.
+
+**What it does not do.** It does not re-read #291: that run was declared and
+rejected under the rule of the day and stays rejected. A contender wanting the
+amended rule is declared again on fresh seeds.

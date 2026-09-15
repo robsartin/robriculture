@@ -147,12 +147,28 @@ def test_criterion_with_no_pairs_is_unchanged_and_reports_an_empty_external_map(
 
 
 def test_criterion_fails_an_external_where_the_contender_wins_fewer_than_the_champion():
-    pairs = [_pair("lonespear_kaggriculture_v21", 0, 1), _pair("pilkwang_structured_economic_policy", 2, 2)]
+    pairs = [_pair("lonespear_kaggriculture_v21", 1, 3), _pair("pilkwang_structured_economic_policy", 2, 2)]
     verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
     assert verdict["passed"] is False
     assert verdict["failing"] == ["external:lonespear_kaggriculture_v21"]
-    assert verdict["external"] == {"lonespear_kaggriculture_v21": (0, 1),
+    assert verdict["external"] == {"lonespear_kaggriculture_v21": (1, 3),
                                    "pilkwang_structured_economic_policy": (2, 2)}
+
+
+def test_a_single_game_below_a_champion_at_the_floor_is_not_a_regression():
+    """ADR-0007 amendment of 2026-09-15 (#291, #295): with the champion at
+    PAIRED_FLOOR_WINS or fewer wins on the seeds, one game is a coin, not a
+    regression. Above the floor, or two games short, it still is."""
+    assert rb.PAIRED_FLOOR_WINS == 1
+    assert rb.regressed(0, 1) is False and rb.regressed(0, 0) is False and rb.regressed(1, 1) is False
+    assert rb.regressed(0, 2) is True                 # two games short of a champion at the floor
+    assert rb.regressed(1, 2) is True                 # one short, but the champion is above the floor
+    assert rb.regressed(15, 16) is True               # madhur-style: the limb this exists for
+    pairs = [_pair("lonespear_kaggriculture_v21", 0, 1), _pair("shashank", 15, 16)]
+    verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
+    assert verdict["failing"] == ["external:shashank"]
+    out = rb.format_external(pairs)
+    assert "lonespear_kaggriculture_v21" in out.split("REGRESSED")[0] and out.count("REGRESSED") == 1
 
 
 def test_criterion_passes_an_external_on_equal_wins_and_a_tie_is_not_a_win():
