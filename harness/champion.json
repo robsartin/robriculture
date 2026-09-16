@@ -1,17 +1,17 @@
 {
   "criterion": "gate_succession",
-  "gate_opponent": "ten_melon",
-  "submit_default": "ten_melon",
+  "gate_opponent": "four_at_eight",
+  "submit_default": "four_at_eight",
   "succession": {
-    "predecessor": "payday_herd",
-    "issue": 279,
-    "pr": 280,
-    "date": "2026-09-13",
+    "predecessor": "ten_melon",
+    "issue": 299,
+    "pr": 300,
+    "date": "2026-09-15",
     "record": {
       "wins": 12,
       "ties": 0,
       "games": 16,
-      "seeds": "1072-1087",
+      "seeds": "1154-1169",
       "p": 0.0384063720703125
     }
   }
