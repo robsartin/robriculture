@@ -56,6 +56,47 @@ def _rate(row):
     return row["wins"] / games if games else 0.0
 
 
+#: Games a champion row must *decide* -- play that differs from the champion's
+#: own in the same seat -- before its rate is read (ADR-0007 amendment of
+#: 2026-09-16, #302). Fewer is an under-powered run: VOID, not a verdict.
+MIN_DECIDED = 8
+
+
+def seat_actions(steps, seat) -> list:
+    """One seat's actions over a game, in step order."""
+    from harness.episode_analysis import _slot
+    return [(_slot(steps, t, seat) or {}).get("action") for t in range(len(steps))]
+
+
+def _default_steps():  # pragma: no cover
+    from kaggle_environments import make
+
+    def steps(agent_a, agent_b, seed):
+        env = make("kaggriculture", configuration={"episodeSteps": 720, "seed": seed})
+        return env.run([agent_a, agent_b])
+    return steps
+
+
+def identical_games(contender, champion, seeds, steps=None, agents=None) -> int:
+    """How many `seeds` the contender played exactly as the champion would have
+    in its seat. Sides alternate by list position as in `head_to_head_rate`;
+    the champion is replayed against itself on the same seed and the two
+    action streams in the contender's seat compared. Such a game is not a
+    measurement of the contender (ADR-0007 amendment of 2026-09-16): a tie at
+    equal reward from identical play says nothing about the change."""
+    from harness.triage import _default_agents
+    steps = steps or _default_steps()
+    agents = agents or _default_agents()
+    n = 0
+    for i, seed in enumerate(seeds):
+        seat = i % 2
+        pair = [agents(contender), agents(champion)] if seat == 0 else [agents(champion), agents(contender)]
+        ours = steps(pair[0], pair[1], seed)
+        theirs = steps(agents(champion), agents(champion), seed)
+        n += seat_actions(ours, seat) == seat_actions(theirs, seat)
+    return n
+
+
 #: A champion row on the paired seeds at or below this many wins is at the
 #: floor: there, one game short is a coin, not a regression (ADR-0007
 #: amendment of 2026-09-15, #291). Two games short, or one short of a champion
@@ -78,7 +119,7 @@ def regressed(ours: int, theirs: int) -> bool:
 
 
 def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
-              anchor_bar=ANCHOR_BAR, *, external_pairs=()):
+              anchor_bar=ANCHOR_BAR, *, external_pairs=(), identical=0, min_decided=MIN_DECIDED):
     """The declared verdict: the champion bar, each anchor's bar, and -- when
     `external_pairs` are given (#152) -- paired non-regression against each
     external anchor: the contender's wins on the seeds must be >= the
@@ -87,11 +128,21 @@ def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
     of 2026-09-15). Ties never count as wins on either side. With no pairs the
     verdict is exactly the pre-#152 one.
 
+    `identical` (ADR-0007 amendment of 2026-09-16, #302): games on the
+    champion row in which the contender played the champion's own game
+    (`identical_games`). They leave the denominator -- the champion rate is
+    wins over the *decided* games -- and fewer than `min_decided` decided games
+    is `void`: not a verdict, an under-powered run. The anchor rows and the
+    external pairs are unchanged. With `identical=0` the verdict is exactly
+    the one before the amendment.
+
     `external_pairs` is keyword-only so it can never capture a positional bar:
     `clock_bench`, `pasture_bench` and `herder_bench` all call
     `criterion(row, anchors, CHAMPION_BAR, ANCHOR_BAR)` positionally.
     """
-    champion_rate = _rate(champion_row)
+    decided = champion_row["games"] - identical
+    champion_rate = champion_row["wins"] / decided if decided > 0 else 0.0
+    void = decided < min_decided
     anchor_rates = {r["opponent"]: _rate(r) for r in anchor_rows}
     external = {}
     for pair in external_pairs:
@@ -107,10 +158,13 @@ def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
                 f"{champion['seeds']} ({champion['games']} games)"
             )
         external[pair["opponent"]] = (contender["wins"], champion["wins"])
-    failing = ([champion_row["opponent"]] if champion_rate < champion_bar else []) + \
+    champion_limb = ["under-powered"] if void else \
+        ([champion_row["opponent"]] if champion_rate < champion_bar else [])
+    failing = champion_limb + \
               [n for n, rate in anchor_rates.items() if rate < anchor_bar] + \
               [f"external:{n}" for n, (ours, theirs) in external.items() if regressed(ours, theirs)]
-    return {"passed": not failing, "champion_rate": champion_rate,
+    return {"passed": not failing, "champion_rate": champion_rate, "decided": decided,
+            "identical": identical, "void": void,
             "anchor_rates": anchor_rates, "external": external, "failing": failing}
 
 

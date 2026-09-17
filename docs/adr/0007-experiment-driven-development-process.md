@@ -417,3 +417,52 @@ for.
 **What it does not do.** It does not re-read #291: that run was declared and
 rejected under the rule of the day and stays rejected. A contender wanting the
 amended rule is declared again on fresh seeds.
+
+### 2026-09-16 — identical play is not a measurement (#302, PR #304)
+
+**What this corrects.** The champion limb reads "≥ 60% of the declared seeds,
+ties are not wins". That was written for ties at nearly equal reward, where
+the sign is noise. It also counts a game in which the contender made the
+champion's every move — a contender whose one changed decision never fired on
+that seed's draw. Such a game is the champion playing itself; it measures
+nothing about the change, and a limb that counts it as a loss can never
+promote a contender that acts on a minority of draws. #225 (`cows_from_day_8`,
+3/16 with 12 ties) and #302 (`town_herd`, 6/16 with 7 ties) both ran into
+it; on #302 the change fired on 4 of 16 seeds, and the other 12 were the
+champion's own action stream to the step. Worse, five of those twelve were
+scored as wins and losses of 2–119 reward: the two seats' farms are not
+symmetric, so identical play does not even guarantee a tie. The row read
+6/16; the measurement was 2 of 4.
+
+**The rule.** For each seed on the champion row the champion is also played
+against itself, and a game in which the contender's action stream in its
+seat equals the champion's own in that seat is **identical play**: it leaves
+the denominator. The 60% bar applies over the *decided* games, and fewer
+than `MIN_DECIDED` decided games is **VOID** — an under-powered run, not a
+verdict; the bench extends its seeds and runs again. The count, the floor and
+the test are the code: `harness.rival_bench.identical_games`,
+`harness.rival_bench.MIN_DECIDED` and `criterion(..., identical=)` (cite
+them; do not copy the value here). The anchor rows and the paired external
+limb are unchanged: there the contender plays whoever it plays, and a tie is
+still not a win. A bench that does not pass `identical=` gets exactly the
+verdict it got before this amendment.
+
+**Alternatives rejected.**
+- *Leave the limb as written.* Any contender whose change is conditioned on
+  a draw the champion does not read — the town's shops, the rival's herd — is
+  rejected by construction at ≤ 40%, and #302 shows the counted "wins" and
+  "losses" on identical play are seat asymmetry, not evidence.
+- *Count a tie as half a win.* Still counts the champion's own game as
+  evidence about the contender, and says nothing about the near-ties.
+- *Pick seeds whose draw makes the change fire.* The draw depends on both
+  boards (the end-of-day RNG is consumed by the weed roll), so it is only
+  known by playing the contender — running the experiment to choose its own
+  sample.
+- *Lower the bar.* A lower bar over a denominator padded with the champion's
+  own games is a weaker test, not a fairer one.
+
+**What it does not do.** It does not re-read #302: that run was declared and
+rejected under the rule of its day and stays rejected; its reading on the
+issue records what the amended count would have said. A contender wanting
+the amended rule is declared again on fresh seeds, with enough of them that
+the decided count can reach the floor.
