@@ -77,24 +77,44 @@ def _default_steps():  # pragma: no cover
     return steps
 
 
-def identical_games(contender, champion, seeds, steps=None, agents=None) -> int:
-    """How many `seeds` the contender played exactly as the champion would have
-    in its seat. Sides alternate by list position as in `head_to_head_rate`;
-    the champion is replayed against itself on the same seed and the two
-    action streams in the contender's seat compared. Such a game is not a
-    measurement of the contender (ADR-0007 amendment of 2026-09-16): a tie at
-    equal reward from identical play says nothing about the change."""
-    from harness.triage import _default_agents
+def decided_row(contender, champion, seeds, steps=None, agents=None) -> dict:
+    """The champion row with identical play left out of *both* counts
+    (ADR-0007 amendment of 2026-09-16, corrected 2026-09-17). Sides alternate
+    by list position as in `head_to_head_rate`; the champion is replayed
+    against itself on each seed and the contender's seat compared. A seed is
+    identical when the two action streams match; the champion's self-play
+    scores its two seats differently, so such a game can look like a win or a
+    loss and must leave the numerator with the denominator. `wins`, `ties`
+    and `losses` count decided games only; `games` is every seed."""
+    from harness.triage import _default_agents, _seed_range
+    seeds = list(seeds)
     steps = steps or _default_steps()
     agents = agents or _default_agents()
-    n = 0
+    wins = ties = losses = identical = 0
     for i, seed in enumerate(seeds):
         seat = i % 2
         pair = [agents(contender), agents(champion)] if seat == 0 else [agents(champion), agents(contender)]
         ours = steps(pair[0], pair[1], seed)
         theirs = steps(agents(champion), agents(champion), seed)
-        n += seat_actions(ours, seat) == seat_actions(theirs, seat)
-    return n
+        if seat_actions(ours, seat) == seat_actions(theirs, seat):
+            identical += 1
+            continue
+        last = ours[-1]
+        mine, its = (last[seat] or {}).get("reward") or 0, (last[1 - seat] or {}).get("reward") or 0
+        if mine == its:
+            ties += 1
+        elif mine > its:
+            wins += 1
+        else:
+            losses += 1
+    return {"name": contender, "opponent": champion, "wins": wins, "ties": ties, "losses": losses,
+            "games": len(seeds), "identical": identical, "seeds": _seed_range(seeds) if seeds else ""}
+
+
+def identical_games(contender, champion, seeds, steps=None, agents=None) -> int:
+    """How many `seeds` the contender played exactly as the champion would have
+    in its seat (`decided_row`'s count)."""
+    return decided_row(contender, champion, seeds, steps, agents)["identical"]
 
 
 #: A champion row on the paired seeds at or below this many wins is at the
