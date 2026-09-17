@@ -466,3 +466,29 @@ rejected under the rule of its day and stays rejected; its reading on the
 issue records what the amended count would have said. A contender wanting
 the amended rule is declared again on fresh seeds, with enough of them that
 the decided count can reach the floor.
+
+### 2026-09-17 — correction to the amendment of 2026-09-16 (#305, PR #307)
+
+**What this corrects.** The amendment says an identical-play game "leaves
+the denominator". The code behind it did exactly that and no more: it
+subtracted the identical count from the games but read the wins from
+`head_to_head_rate`, which had already scored those games. The champion's
+self-play scores its two seats differently, so an identical game in seat 0
+is a "win" and in seat 1 a "loss"; on #305 the first verdict line read 18
+wins over 16 decided games. The amendment's own text explains why those
+wins are not wins; the code did not follow it.
+
+**The rule, restated.** An identical-play game leaves **both** counts: it
+is neither a win, a tie nor a loss, and it is not a game. The champion row
+is read by `harness.rival_bench.decided_row`, which plays each seed once
+against the champion and once as the champion against itself, and counts
+wins, ties and losses on the decided games only; `identical_games` is its
+identical count. `criterion(..., identical=)` is unchanged and now receives
+a numerator that agrees with its denominator. A bench that reads the
+champion row with `head_to_head_rate` and passes `identical=` separately is
+wrong by construction and must use `decided_row`.
+
+**What it does not do.** It does not change the rule of 2026-09-16, the
+floor, the anchor rows or the external limb. #305's run stands: its games
+are deterministic and its row is re-read with `decided_row` on the same
+seeds; the anchor and external rows of that run are unaffected.

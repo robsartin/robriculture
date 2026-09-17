@@ -310,3 +310,45 @@ def test_criterion_keeps_identical_keyword_only():
     p = inspect.signature(rb.criterion).parameters
     assert p["identical"].kind is inspect.Parameter.KEYWORD_ONLY and p["identical"].default == 0
     assert p["min_decided"].kind is inspect.Parameter.KEYWORD_ONLY and p["min_decided"].default is rb.MIN_DECIDED
+
+
+# --- 2026-09-17 correction: identical play leaves the numerator too (#305) ---
+
+def _game(actions_a, actions_b, reward_a, reward_b):
+    steps = [[{"action": a, "reward": 0}, {"action": b, "reward": 0}] for a, b in zip(actions_a, actions_b)]
+    steps[-1][0]["reward"], steps[-1][1]["reward"] = reward_a, reward_b
+    return steps
+
+
+def test_decided_row_counts_wins_and_ties_on_decided_games_only():
+    """Seat asymmetry: the champion playing itself scores its two seats
+    differently, so an identical game can look like a win or a loss. Those
+    games leave the numerator with the denominator."""
+    champ = ["c"] * 3
+
+    def steps(a, b, seed):
+        cont = champ if seed % 2 == 0 else ["x"] * 3           # identical on even seeds
+        actions = [cont if a == "cont" else champ, cont if b == "cont" else champ]
+        # every game scores seat 0 at 100 and seat 1 at 98, self-play included: the
+        # contender "wins" whenever it sits in seat 0, identical play or not
+        return _game(actions[0], actions[1], 100, 98)
+
+    row = rb.decided_row("cont", "champ", [848, 849, 850, 851, 852, 853], steps=steps, agents=lambda n: n)
+    # even seeds sit in seat 0 and are identical: three spurious "wins" head_to_head_rate would count;
+    # odd seeds sit in seat 1 and are decided: three real losses
+    assert row["identical"] == 3 and row["games"] == 6 and row["seeds"] == "848-853"
+    assert row["wins"] == 0 and row["ties"] == 0 and row["losses"] == 3
+    from harness.triage import head_to_head_rate
+    raw = head_to_head_rate("cont", "champ", [848, 849, 850, 851, 852, 853],
+                            play=lambda a, b, seed: tuple(s["reward"] for s in steps(a, b, seed)[-1]),
+                            agents=lambda n: n)
+    assert raw["wins"] == 3                                   # the count the correction removes
+    assert row["name"] == "cont" and row["opponent"] == "champ"
+    assert rb.identical_games("cont", "champ", [848, 849, 850, 851, 852, 853], steps=steps, agents=lambda n: n) == 3
+
+
+def test_decided_row_feeds_criterion_over_decided_games():
+    row = {"name": "x", "opponent": "dense_farm", "wins": 10, "ties": 1, "losses": 5, "games": 32,
+           "identical": 16, "seeds": "1191-1222"}
+    v = rb.criterion(row, _six_anchors(), identical=row["identical"])
+    assert v["decided"] == 16 and v["champion_rate"] == 10 / 16 and v["passed"] is True
