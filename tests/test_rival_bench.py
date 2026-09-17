@@ -253,3 +253,60 @@ def test_gate_agents_serves_a_fresh_external_per_call_and_registry_names_from_th
     hook = rb._gate_agents(paths={"ext": str(tmp_path / "ext.py")}, registry=lambda name: f"registry:{name}")
     assert hook("ext") is not hook("ext")
     assert callable(hook("ext")) and hook("third_herder") == "registry:third_herder"
+
+
+# --- ADR-0007 amendment of 2026-09-16: identical play is not a measurement (#302) ---
+
+def _steps(*actions_by_seat):
+    """A fake game: step t holds each seat's action dict."""
+    return [[{"action": a} for a in step] for step in zip(*actions_by_seat)]
+
+
+def test_seat_actions_reads_one_seats_actions_in_step_order():
+    steps = _steps(["a0", "a1", "a2"], ["b0", "b1", "b2"])
+    assert rb.seat_actions(steps, 0) == ["a0", "a1", "a2"]
+    assert rb.seat_actions(steps, 1) == ["b0", "b1", "b2"]
+    assert rb.seat_actions([], 1) == []
+
+
+def test_identical_games_counts_seeds_where_the_contender_played_the_champions_own_game():
+    """Sides alternate by list position as in head_to_head_rate; the champion is
+    replayed against itself on the same seed and the contender's seat compared."""
+    played = []
+
+    def steps(a, b, seed):
+        played.append((a, b, seed))
+        # the champion's own stream is the seed number repeated; the contender
+        # copies it on even seeds and departs on odd ones
+        champ = [f"c{seed}"] * 3
+        cont = champ if seed % 2 == 0 else [f"x{seed}"] * 3
+        return _steps(cont if a == "cont" else champ, cont if b == "cont" else champ)
+
+    assert rb.identical_games("cont", "champ", [848, 849, 850, 851], steps=steps, agents=lambda n: n) == 2
+    assert ("cont", "champ", 848) in played and ("champ", "champ", 848) in played      # seat 0 on the 1st seed
+    assert ("champ", "cont", 849) in played and ("champ", "champ", 849) in played      # seat 1 on the 2nd
+    assert rb.identical_games("cont", "champ", [], steps=steps, agents=lambda n: n) == 0
+
+
+def test_criterion_reads_the_champion_rate_over_decided_games_and_voids_an_under_powered_run():
+    assert rb.MIN_DECIDED == 8
+    anchors = _six_anchors()
+    unchanged = rb.criterion(_row("dense_farm", 9), anchors)                      # 9/16 as before
+    assert unchanged["champion_rate"] == 9 / 16 and unchanged["decided"] == 16 and unchanged["void"] is False
+    decided = rb.criterion(_row("dense_farm", 6), anchors, identical=7)          # 6 of 9 decided games
+    assert decided["decided"] == 9 and decided["identical"] == 7
+    assert decided["champion_rate"] == 6 / 9 and decided["passed"] is True and decided["failing"] == []
+    short = rb.criterion(_row("dense_farm", 5), anchors, identical=7)            # 5/9 = 55.6% < 60%
+    assert short["passed"] is False and short["failing"] == ["dense_farm"]
+    void = rb.criterion(_row("dense_farm", 7), anchors, identical=9)             # 7 decided < 8
+    assert void["void"] is True and void["passed"] is False and void["failing"] == ["under-powered"]
+    assert void["decided"] == 7 and void["champion_rate"] == 1.0                 # the rate is still reported
+    none = rb.criterion(_row("dense_farm", 0), anchors, identical=16)
+    assert none["void"] is True and none["champion_rate"] == 0.0
+
+
+def test_criterion_keeps_identical_keyword_only():
+    import inspect
+    p = inspect.signature(rb.criterion).parameters
+    assert p["identical"].kind is inspect.Parameter.KEYWORD_ONLY and p["identical"].default == 0
+    assert p["min_decided"].kind is inspect.Parameter.KEYWORD_ONLY and p["min_decided"].default is rb.MIN_DECIDED
