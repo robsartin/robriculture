@@ -7,8 +7,8 @@ depends on both boards, so the control game is the first seed in SEEDS whose
 contender-vs-champion game has a split town on day 12 (both a wool and a milk
 drain); on it the contender holds more sheep than the champion at day 14,
 keeps at least COWS_BAR cows, and earns more wool. No split town, or a bar
-missed, is a VOID run (exit 2). Then rival_bench's criterion with the
-identical-play count: >= 60% of the *decided* games vs four_at_eight (VOID if
+missed, is a VOID run (exit 2). Then rival_bench's criterion on the
+decided row (`rival_bench.decided_row`, wins on decided games only): >= 60% of the *decided* games vs four_at_eight (VOID if
 fewer than MIN_DECIDED are decided), >= 90% vs each anchor, paired external
 non-regression. Arm B (`even_split`) is recorded, never gated.
 
@@ -32,9 +32,9 @@ from harness.four8_bench import escapes
 from harness.reserve_bench import MADHUR, PILKWANG, REFERENCE  # noqa: F401  -- pinned by the tests
 from harness.rival_bench import (  # noqa: F401  -- pinned by the tests to rival_bench's own
     criterion,
+    decided_row,
     format_external,
     format_rows,
-    identical_games,
     paired_external_rows,
 )
 from harness.sheep_bench import _seam_names
@@ -182,8 +182,8 @@ def run_controls(seed=IDENTITY_SEED):  # pragma: no cover
 def run_criterion(seeds=SEEDS):  # pragma: no cover
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
     from harness.triage import head_to_head_rate
-    champion_row = head_to_head_rate(CONTENDER, CHAMPION, seeds)
-    identical = identical_games(CONTENDER, CHAMPION, seeds)
+    champion_row = decided_row(CONTENDER, CHAMPION, seeds)   # wins on decided games only (2026-09-17 correction)
+    identical = champion_row["identical"]
     anchor_rows = [head_to_head_rate(CONTENDER, a, seeds) for a in DEFAULT_ANCHORS]
     pairs = paired_external_rows(CONTENDER, CHAMPION, seeds)
     return champion_row, identical, anchor_rows, pairs
@@ -191,11 +191,9 @@ def run_criterion(seeds=SEEDS):  # pragma: no cover
 
 def run_recorded(seeds=SEEDS):  # pragma: no cover
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
-    from harness.triage import head_to_head_rate
     agents = _arm_b_agents(ARM_B)
-    row = head_to_head_rate(ARM_B, CHAMPION, seeds, agents=agents)
-    identical = identical_games(ARM_B, CHAMPION, seeds, agents=agents)
-    return row, identical
+    row = decided_row(ARM_B, CHAMPION, seeds, agents=agents)
+    return row, row["identical"]
 
 
 def main(argv=None):  # pragma: no cover

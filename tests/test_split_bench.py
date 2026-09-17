@@ -15,7 +15,7 @@ def test_the_declared_constants():
     assert sb.CHAMPION_BAR == 0.60 and sb.ANCHOR_BAR == 0.90
     assert (sb.KIND_DAY, sb.HEAD_DAY, sb.COWS_BAR) == (12, 14, 3)
     assert sb.LONESPEAR.startswith("lonespear")
-    assert sb.criterion is rb.criterion and sb.identical_games is rb.identical_games and rb.MIN_DECIDED == 8
+    assert sb.criterion is rb.criterion and sb.decided_row is rb.decided_row and rb.MIN_DECIDED == 8
 
 
 def test_the_seeds_are_fresh_against_every_range_already_spent():
