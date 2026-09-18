@@ -1,18 +1,18 @@
 {
   "criterion": "gate_succession",
-  "gate_opponent": "four_at_eight",
-  "submit_default": "four_at_eight",
+  "gate_opponent": "town_split",
+  "submit_default": "town_split",
   "succession": {
-    "predecessor": "ten_melon",
-    "issue": 299,
-    "pr": 300,
-    "date": "2026-09-15",
+    "predecessor": "four_at_eight",
+    "issue": 305,
+    "pr": 306,
+    "date": "2026-09-17",
     "record": {
-      "wins": 12,
+      "wins": 13,
       "ties": 0,
       "games": 16,
-      "seeds": "1154-1169",
-      "p": 0.0384063720703125
+      "seeds": "1191-1222",
+      "p": 0.0106353759765625
     }
   }
 }
