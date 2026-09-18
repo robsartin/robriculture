@@ -107,8 +107,10 @@ def test_arm_b_uses_the_even_share():
     b = cls()
     assert b.sheep_share(["YARN_STORE", "PIZZA_SHOP", "PIZZA_SHOP", "PIZZA_SHOP"]) == 0.5
     assert ts.TownSplitStrategy().sheep_share(["YARN_STORE", "PIZZA_SHOP", "PIZZA_SHOP", "PIZZA_SHOP"]) == pytest.approx(0.4)
-    from strategies import REGISTRY
-    assert "even_split" not in REGISTRY
+    # #310 promoted this arm to a registered contender of the same name; the
+    # bench's arm B stays its own class, not the registry's
+    from strategies import load
+    assert load("even_split") is not cls and load("even_split").name == "even_split"
 
 
 def test_play_and_the_reference_are_pinned():
