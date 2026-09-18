@@ -292,7 +292,7 @@
       "kernel_ref": "xuantianfengwu/kaggriculture-terminal-logistics",
       "url": "https://www.kaggle.com/code/xuantianfengwu/kaggriculture-terminal-logistics",
       "license": "Apache-2.0",
-      "attribution": "xuantianfengwu, kaggriculture-terminal-logistics (https://www.kaggle.com/code/xuantianfengwu/kaggriculture-terminal-logistics), Apache License 2.0.",
+      "attribution": "xuantianfengwu, \"Kaggriculture Terminal Logistics\" (https://www.kaggle.com/code/xuantianfengwu/kaggriculture-terminal-logistics), Apache License 2.0.",
       "dest_filename": "xuantianfengwu_terminal_logistics.py",
       "cell_file": "submission.py",
       "notes": "2026-09-15 re-survey (#295). Quadrant-staggered crop plan with market-aware sell floors and per-product caps. DO NOT also fetch this author's adaptive-land-allocator-r10 or hour-4-financing-allocator -- one lineage (a shared \"melon v3\" base plus per-version overrides); only this entry is vendored, to avoid inflating the pool's count without adding a voice.",
