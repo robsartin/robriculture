@@ -110,3 +110,44 @@ covered by the tests above:
 
 `EXTERNAL_ANCHORS` changes (#152); any strategy change; committing third-party
 code. The survey's dedup gap is #296; the `driw0x_chi7` replayer audit is #297.
+
+## Amendments
+
+### 2026-09-18 — the 23-with-no-shortfall criterion is not met (#317)
+
+**What this corrects.** The "Verification that is not unit-testable" section
+above states that `harness.external_pool.resolve_opponents` must load 23 with
+no shortfall under the #153 guard. That criterion is **not met** as of this
+date, and will not be until #317 is resolved. The original decision above is
+unchanged — this records the current state of an outstanding verification
+step, not a change to what was decided.
+
+**The error, reproduced against `main` today:**
+
+```
+RuntimeError: include_external was requested but the external pool is missing
+1 of 23 manifest agent(s): georgymamarin_visualized_what_every_crop_pays.
+```
+
+**The cause is entirely in the original nineteen entries, not the four added
+by this change:**
+
+- `premaananda108_ecobot_v7`'s Kaggle kernel now returns 404.
+- `pilkwang_structured_economic_policy`'s notebook no longer contains a
+  `%%agentfile`/`%%writefile` cell.
+- `georgymamarin_visualized_what_every_crop_pays` changed upstream and
+  correctly failed its pin — the fetch script deletes the file on a sha256
+  mismatch (#152), so it is absent from the local pool rather than silently
+  stale. It is the one the RuntimeError above names as missing; the other two
+  above are pinned-but-unreachable at fetch time.
+
+**The four entries added here are not implicated.** Each was pinned from its
+own freshly fetched bytes and verified `ok`, and all four completed 16 full
+720-turn episodes against `ten_melon` without crashing — which is the
+correctness question this criterion existed to answer (see "Verification
+that is not unit-testable" above and the table recorded on #295).
+
+**What this costs.** Two of the five `EXTERNAL_ANCHORS` —
+`pilkwang_structured_economic_policy` and `premaananda108_ecobot_v7` — are
+among the unfetchable entries, so this also affects the ADR-0007 gate's
+external limb, not just this pool's own 23-count criterion. Tracked as #317.

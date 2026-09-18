@@ -109,10 +109,17 @@ def test_manifest_takes_only_the_one_measured_xuantianfengwu_rung():
     # terminal-logistics, adaptive-land-allocator-r10 and
     # hour-4-financing-allocator are one lineage -- a shared "melon v3" base
     # plus per-version overrides -- so more than one would inflate the pool's
-    # count without adding a voice (#295).
+    # count without adding a voice (#295). Checked across kernel_ref, repo and
+    # name -- not kernel_ref alone -- so a future entry from this author added
+    # as a github_file (no kernel_ref) can't slip past the guard.
     entries = fea.load_manifest()
-    kernel_refs = [e.get("kernel_ref", "") for e in entries]
-    assert sum(1 for k in kernel_refs if "xuantianfengwu" in k) == 1
+    count = sum(
+        1 for e in entries
+        if "xuantianfengwu" in e.get("kernel_ref", "")
+        or "xuantianfengwu" in e.get("repo", "")
+        or "xuantianfengwu" in e.get("name", "")
+    )
+    assert count == 1
 
 
 def test_manifest_excludes_the_rejected_driw0x_jet1_and_agent1_variants():
