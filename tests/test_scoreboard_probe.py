@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 
 from harness import scoreboard_probe as sp
-from harness.external_pool import EXTERNAL_ANCHORS
 
 
 def test_the_declared_constants():
@@ -17,7 +16,18 @@ def test_the_declared_constants():
     assert sp.SEEDS == tuple(range(864, 880))
     assert sp.DAYS == (12, 15, 18, 21) and sp.MARGINS == (10, 20, 30)
     assert sp.FIRE_BAR == 0.25 and sp.HARM_BAR == 0.20
-    assert sp.OPPONENTS == ("third_herder",) + tuple(EXTERNAL_ANCHORS)
+    # Frozen, not the live EXTERNAL_ANCHORS (#317): OPPONENTS must keep matching
+    # the committed record on spent seeds 864-879, so this pins the actual five
+    # names rather than re-deriving them from whatever the pool holds today --
+    # a check against the live tuple would be a tautology that can never fail.
+    assert sp.OPPONENTS == (
+        "third_herder",
+        "pilkwang_structured_economic_policy",
+        "lonespear_kaggriculture_v21",
+        "premaananda108_ecobot_v7",
+        "shashankjangid_agent_v1000_sovereign_prime",
+        "madhur_sabherwal_hub_geometry_agent",
+    )
     assert sp.RECORD.endswith("harness/scoreboard/trigger_readings.json")
 
 

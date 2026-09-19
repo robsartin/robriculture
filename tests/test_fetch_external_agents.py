@@ -37,8 +37,10 @@ def test_load_manifest_reads_the_committed_manifest():
     assert len(names) == len(set(names)), f"duplicate agent names: {names}"
     # A count floor alone would let any one of the four original entries be
     # deleted (leaving >= 4 via later additions) without the suite noticing.
-    # Pin them by name too.
-    assert {"pilkwang_structured_economic_policy", "madhur_sabherwal_hub_geometry_agent",
+    # Pin them by name too. pilkwang_structured_economic_policy was one of the
+    # four but left the manifest in #317 (its notebook lost its %%agentfile
+    # cell) -- pinned here separately, not in this survivors set.
+    assert {"madhur_sabherwal_hub_geometry_agent",
             "seyamalam_candidate_v6_adaptive_livestock",
             "alexandergremyakov_harvest_pulse_goose_dividend_v2"} <= set(names)
     for entry in entries:
@@ -57,12 +59,9 @@ def test_manifest_excludes_the_rejected_candidate_v7_plus_variants():
     assert not any("v7" in p or "v18" in p or "v19" in p or "v20" in p or "v21" in p for p in paths)
 
 
-def test_manifest_pins_the_premaananda_agent_cell():
-    # Its notebook tags both main.py (the agent) and arena.py (a harness);
-    # without cell_file the fetch depends on cell order (#151).
-    entries = fea.load_manifest()
-    entry = next(e for e in entries if e["name"] == "premaananda108_ecobot_v7")
-    assert entry["cell_file"] == "main.py"
+# premaananda108_ecobot_v7's cell_file pin test was removed in #317: the
+# entry itself left the manifest (its kernel 404s and can no longer be
+# fetched), so there is no longer a cell_file to pin.
 
 
 def test_manifest_takes_only_the_three_measured_shashankjangid_rungs():
@@ -87,6 +86,21 @@ def test_manifest_contains_the_pool_four_entries():
         "rinkaname_apex_grandmaster",
         "xuantianfengwu_terminal_logistics",
     } <= names
+
+
+def test_manifest_excludes_the_three_unfetchable_entries():
+    # #317: an entry nobody can fetch breaks the manifest's own contract -- the
+    # rule ADR-0008 already used to remove adilshamim8 for a permanent 404.
+    # premaananda108's kernel 404s; pilkwang's notebook lost its %%agentfile
+    # cell; georgymamarin republished and failed its pin. A future survey will
+    # report all three as NEW, which is why this guard exists.
+    names = {e["name"] for e in fea.load_manifest()}
+    removed = {
+        "pilkwang_structured_economic_policy",
+        "premaananda108_ecobot_v7",
+        "georgymamarin_visualized_what_every_crop_pays",
+    }
+    assert not (names & removed), f"unfetchable entries are back: {sorted(names & removed)}"
 
 
 def test_manifest_takes_only_main_py_for_rinkaname_apex_grandmaster():

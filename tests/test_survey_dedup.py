@@ -79,15 +79,17 @@ def test_repo_case_does_not_hide_a_held_entry():
 # --- the CLI the scheduled task calls ---
 
 def test_main_reports_a_status_per_candidate(capsys):
+    # pilkwang_structured_economic_policy stood in here until #317 removed it
+    # from the manifest (unfetchable); alexandergremyakov's entry is still held.
     code = sd.main(
         [
-            "pilkwang/kaggriculture-structured-economic-policy",
+            "alexandergremyakov/harvest-pulse-goose-dividend-v2",
             "adilshamim8/kaggriculture-101",
         ]
     )
     out = capsys.readouterr().out
     assert code == 0
-    assert "HAVE\tpilkwang/kaggriculture-structured-economic-policy" in out
+    assert "HAVE\talexandergremyakov/harvest-pulse-goose-dividend-v2" in out
     assert "NEW\tadilshamim8/kaggriculture-101" in out
 
 
@@ -100,11 +102,25 @@ def test_main_splits_a_repo_and_path_candidate_on_the_colon(capsys):
 
 def test_the_2026_09_18_survey_duplicates_are_caught_against_the_real_manifest():
     held = [
-        ("georgymamarin/kaggriculture-visualized-what-every-crop-pays", None),
         ("loubaliber/kaggriculture-loubal", "submission.py"),
     ]
+    # Guards against `held` silently shrinking to empty (the loop below would
+    # then pass having checked nothing).
+    assert held
     for ref, path in held:
         assert sd.classify(ref, path=path, entries=sd.load_manifest()).status == "HAVE", ref
+
+    # georgymamarin/kaggriculture-visualized-what-every-crop-pays was HAVE here
+    # until #317 removed it from the manifest (republished, failed its pin) --
+    # it is genuinely NEW again now. Kept as its own assertion, verdict changed
+    # rather than the row deleted: a case that changed verdict is more
+    # informative than one that's simply gone.
+    verdict = sd.classify(
+        "georgymamarin/kaggriculture-visualized-what-every-crop-pays",
+        path=None,
+        entries=sd.load_manifest(),
+    )
+    assert verdict.status == "NEW"
 
 
 def test_a_second_rung_from_a_held_repo_is_flagged_for_review_not_proposed():

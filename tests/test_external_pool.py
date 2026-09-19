@@ -283,8 +283,22 @@ def _sha(text):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def test_external_anchors_are_the_five_declared_gate_anchors_in_order():
+def test_external_anchors_holds_only_the_three_that_still_verify():
+    # #317: pilkwang and premaananda108 cannot be fetched from source any more,
+    # so they cannot be gate anchors. Changing this tuple is a dated ADR-0007
+    # amendment (#152's own rule).
     assert external_pool.EXTERNAL_ANCHORS == (
+        "lonespear_kaggriculture_v21",
+        "shashankjangid_agent_v1000_sovereign_prime",
+        "madhur_sabherwal_hub_geometry_agent",
+    )
+
+
+def test_anchors_2026_09_07_is_frozen_for_the_historical_benches():
+    # #317: a bench is a dated record of a run against a dated anchor set, so it
+    # indexes this frozen tuple, not the live EXTERNAL_ANCHORS. Its ORDER is
+    # load-bearing -- every bench's `assert LONESPEAR.startswith(...)` pins it.
+    assert external_pool.ANCHORS_2026_09_07 == (
         "pilkwang_structured_economic_policy",
         "lonespear_kaggriculture_v21",
         "premaananda108_ecobot_v7",
@@ -348,6 +362,21 @@ def test_resolve_opponents_warns_and_merges_an_unpinned_agent(tmp_path):
         manifest_path=manifest, directory=str(tmp_path), warn=warnings.append)
     assert set(agents) == {"meta_bot", "x"}
     assert any("unpinned" in w and "x" in w and "--pin" in w for w in warnings)
+
+
+def test_resolve_opponents_warns_about_an_agent_absent_from_the_manifest(tmp_path):
+    # #317: discovery reads the directory, not the manifest, so a file whose
+    # entry was removed keeps playing -- unpinned and, until now, unannounced.
+    (tmp_path / "x.py").write_text(_GOOD)
+    (tmp_path / "orphan.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    warnings = []
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest, directory=str(tmp_path), warn=warnings.append)
+    assert set(agents) == {"meta_bot", "x", "orphan"}   # still merged in
+    assert any("orphan" in w and "not in the manifest" in w for w in warnings)
 
 
 def test_resolve_opponents_is_silent_when_every_pin_verifies(tmp_path):

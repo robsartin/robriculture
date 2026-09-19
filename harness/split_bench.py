@@ -25,7 +25,7 @@ import os
 from harness.cashflow import play  # noqa: F401  -- pinned by the tests
 from harness.episode_analysis import decompose
 from harness.evolve import DEFAULT_ANCHORS
-from harness.external_pool import EXTERNAL_ANCHORS
+from harness.external_pool import ANCHORS_2026_09_07
 from harness.farm_census import animals_placed
 from harness.feed_bench import board_on_day
 from harness.four8_bench import escapes
@@ -53,7 +53,7 @@ KIND_DAY = 12
 HEAD_DAY = 14
 COWS_BAR = 3
 ARM_B = "even_split"
-LONESPEAR = EXTERNAL_ANCHORS[1]
+LONESPEAR = ANCHORS_2026_09_07[1]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR  # the pool order is the pin (review)
 
 

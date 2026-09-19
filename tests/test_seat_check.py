@@ -8,7 +8,7 @@ from harness.external_pool import EXTERNAL_ANCHORS
 
 def test_the_declared_constants():
     assert sc.SUBJECT == "lean_feed"
-    assert sc.OPPONENTS == tuple(EXTERNAL_ANCHORS) + ("field_rival", "third_herder") and len(sc.OPPONENTS) == 7
+    assert sc.OPPONENTS == tuple(EXTERNAL_ANCHORS) + ("field_rival", "third_herder") and len(sc.OPPONENTS) == 5
     assert sc.SEEDS == tuple(range(1024, 1040)) and sc.ALPHA == 0.05 and sc.ABSENT_GAP == 2
 
 

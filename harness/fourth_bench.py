@@ -21,7 +21,7 @@ import os
 from harness.cashflow import play  # noqa: F401  -- pinned by the tests
 from harness.episode_analysis import _slot
 from harness.evolve import DEFAULT_ANCHORS
-from harness.external_pool import EXTERNAL_ANCHORS
+from harness.external_pool import ANCHORS_2026_09_07
 from harness.farm_census import animals_placed, planted_by_crop
 from harness.feed_bench import board_on_day
 from harness.fert_bench import units_sold
@@ -47,7 +47,7 @@ PENDING_DAYS = (14, 20)
 PLANTED_DAY = 16
 ARM_B = "from_eight"
 ARM_B_FROM = 8
-LONESPEAR = EXTERNAL_ANCHORS[1]
+LONESPEAR = ANCHORS_2026_09_07[1]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR
 
 

@@ -55,7 +55,7 @@ CHAMPION = "third_herder"
 BASELINE = "herd_first"
 
 #: The reading the hypothesis lives on: herd_first regressed here, 5/16 vs 11/16.
-MADHUR = external_pool.EXTERNAL_ANCHORS[4]
+MADHUR = external_pool.ANCHORS_2026_09_07[4]
 assert MADHUR.startswith("madhur")
 
 #: Fresh. Everything through 927 is spent (912-927 were #254's).

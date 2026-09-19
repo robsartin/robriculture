@@ -10,17 +10,6 @@
   ],
   "agents": [
     {
-      "name": "pilkwang_structured_economic_policy",
-      "source_type": "kaggle_kernel",
-      "kernel_ref": "pilkwang/kaggriculture-structured-economic-policy",
-      "url": "https://www.kaggle.com/code/pilkwang/kaggriculture-structured-economic-policy",
-      "license": "Apache-2.0",
-      "attribution": "pilkwang, \"Kaggriculture: Structured Economic Policy\" (https://www.kaggle.com/code/pilkwang/kaggriculture-structured-economic-policy), Apache License 2.0.",
-      "dest_filename": "pilkwang_structured_economic_policy.py",
-      "notes": "Kaggle notebook; the submittable agent lives in the single code cell tagged with the `%%agentfile` cell magic (writes kaggle's main.py). The fetch script extracts that cell only -- the rest of the notebook is narrative/plotting for the writeup and is not fetched or executed.",
-      "sha256": "17c45f1cc1966161631f4a9de6ddb987825ec24b3eef25ff065f837fa142a3a8"
-    },
-    {
       "name": "madhur_sabherwal_hub_geometry_agent",
       "source_type": "github_file",
       "repo": "Madhur-Sabherwal/kaggriculture-hub-geometry-agent",
@@ -56,18 +45,6 @@
       "dest_filename": "alexandergremyakov_harvest_pulse_goose_dividend_v2.py",
       "notes": "Kaggle notebook; single code cell tagged `%%writefile /kaggle/working/main.py`. The fetch script extracts that cell only.",
       "sha256": "8f3f216a39d5ce0c383d19c31f317dbad85422fc5b86d3c311eee756f3fb15e9"
-    },
-    {
-      "name": "premaananda108_ecobot_v7",
-      "source_type": "kaggle_kernel",
-      "kernel_ref": "premaananda108/economics-driven-rule-agent-ecobot-v7-arena",
-      "url": "https://www.kaggle.com/code/premaananda108/economics-driven-rule-agent-ecobot-v7-arena",
-      "license": "Apache-2.0",
-      "attribution": "premaananda108, \"Economics-Driven Rule Agent (EcoBot v7) + Arena\" (https://www.kaggle.com/code/premaananda108/economics-driven-rule-agent-ecobot-v7-arena), Apache License 2.0.",
-      "dest_filename": "premaananda108_ecobot_v7.py",
-      "cell_file": "main.py",
-      "notes": "Public 819.0 / best 995.2 -- the strongest agent in this pool, and well above our own ~520-535. Its notebook tags TWO cells: main.py (the agent) and arena.py (a self-play harness); cell_file pins the former, so do not remove it (#151). Measured share ~0.792 vs DEFAULT_ANCHORS. Roughly 2.5x slower per game than the other externals.",
-      "sha256": "0dc02e03c94ef60c06b5093efc2e2fd0530aa6eea20df507a90b90d6651bd067"
     },
     {
       "name": "shashankjangid_agent_v300_champion",
@@ -130,18 +107,6 @@
       "entrypoint": "apex_agent",
       "notes": "2026-09-06 re-survey (#229). Kaggle notebook; no `%%agentfile`/`%%writefile` magic anywhere, so `cell_index` selects the agent-definition code cell directly. The submittable callable is named `apex_agent(obs)`, not `agent` -- `entrypoint: \"apex_agent\"` (#229) has the fetch script append `agent = apex_agent` so the file still resolves under harness.external_pool's fixed `agent` contract. Self-contained, 3.1KB.",
       "sha256": "576b198fa69a63b4fef0ebea694d23ed2902fdcd43380259577cbe2c3bb6ad47"
-    },
-    {
-      "name": "georgymamarin_visualized_what_every_crop_pays",
-      "source_type": "kaggle_kernel",
-      "kernel_ref": "georgymamarin/kaggriculture-visualized-what-every-crop-pays",
-      "url": "https://www.kaggle.com/code/georgymamarin/kaggriculture-visualized-what-every-crop-pays",
-      "license": "Apache-2.0",
-      "attribution": "georgymamarin, \"Kaggriculture, Visualized: A Beginner's Guide to Every Mechanic (and What Every Crop Pays)\" (https://www.kaggle.com/code/georgymamarin/kaggriculture-visualized-what-every-crop-pays), Apache License 2.0.",
-      "dest_filename": "georgymamarin_visualized_what_every_crop_pays.py",
-      "cell_file": "main.py",
-      "notes": "2026-09-06 re-survey (#229). Kaggle notebook; single code cell tagged `%%writefile main.py`. \"Carrot Crew\" -- the survey's own naming for this agent -- is deliberately simple; vendored as a **floor anchor**, not a ceiling voice. 3.7KB.",
-      "sha256": "8df88e304782741d251af9a691c6cb217bd651d1475a23b3fda7a9b638c41cef"
     },
     {
       "name": "paiky1995_inside_the_market_machine",
