@@ -372,6 +372,14 @@ def resolve_opponents(anchor_names, include_external=False, discover_fn=None, bu
                 f"gate anchor): {', '.join(unpinned)}. Pin with: python -m "
                 "scripts.fetch_external_agents --pin"
             )
+        orphans = sorted(set(external) - set(expected))
+        if orphans:
+            warn(
+                f"external agent(s) on disk but not in the manifest (merged in, "
+                f"unverified -- no pin vouches for these bytes): {', '.join(orphans)}. "
+                "Remove the file, or add and pin an entry with: python -m "
+                "scripts.fetch_external_agents --pin"
+            )
         agents.update(external)
     return agents
 

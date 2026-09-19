@@ -364,6 +364,21 @@ def test_resolve_opponents_warns_and_merges_an_unpinned_agent(tmp_path):
     assert any("unpinned" in w and "x" in w and "--pin" in w for w in warnings)
 
 
+def test_resolve_opponents_warns_about_an_agent_absent_from_the_manifest(tmp_path):
+    # #317: discovery reads the directory, not the manifest, so a file whose
+    # entry was removed keeps playing -- unpinned and, until now, unannounced.
+    (tmp_path / "x.py").write_text(_GOOD)
+    (tmp_path / "orphan.py").write_text(_GOOD)
+    manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
+    warnings = []
+    agents = external_pool.resolve_opponents(
+        ["meta_bot"], include_external=True,
+        build=lambda names: {n: _stub(n) for n in names},
+        manifest_path=manifest, directory=str(tmp_path), warn=warnings.append)
+    assert set(agents) == {"meta_bot", "x", "orphan"}   # still merged in
+    assert any("orphan" in w and "not in the manifest" in w for w in warnings)
+
+
 def test_resolve_opponents_is_silent_when_every_pin_verifies(tmp_path):
     (tmp_path / "x.py").write_text(_GOOD)
     manifest = _write_pinned_manifest(tmp_path, {"x": _sha(_GOOD)})
