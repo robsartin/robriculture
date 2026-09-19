@@ -501,9 +501,8 @@ five, `pilkwang_structured_economic_policy` and `premaananda108_ecobot_v7`,
 leave it: neither can be fetched from source any longer (ADR-0008's
 2026-09-18 finding has the detail), and #152's own rule is that every pool
 member is pinned in the manifest before the gate will load it — an anchor
-that cannot be pinned cannot be an anchor. `EXTERNAL_ANCHORS` is now
-`("lonespear_kaggriculture_v21", "shashankjangid_agent_v1000_sovereign_prime",
-"madhur_sabherwal_hub_geometry_agent")`.
+that cannot be pinned cannot be an anchor. `EXTERNAL_ANCHORS` (cite the code,
+not a copy) is now a three-name tuple.
 
 **The cost, undiluted.** Of the five agents #152 recorded as beating
 `third_herder` on seeds 700-701, this drops the strongest — our reward share
