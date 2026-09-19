@@ -492,3 +492,35 @@ wrong by construction and must use `decided_row`.
 floor, the anchor rows or the external limb. #305's run stands: its games
 are deterministic and its row is re-read with `decided_row` on the same
 seeds; the anchor and external rows of that run are unaffected.
+
+### 2026-09-19 — the external anchor set shrinks to three (#317)
+
+**What this corrects.** The 2026-09-07 amendment declared
+`harness.external_pool.EXTERNAL_ANCHORS` as a five-name tuple. Two of those
+five, `pilkwang_structured_economic_policy` and `premaananda108_ecobot_v7`,
+leave it: neither can be fetched from source any longer (ADR-0008's
+2026-09-18 finding has the detail), and #152's own rule is that every pool
+member is pinned in the manifest before the gate will load it — an anchor
+that cannot be pinned cannot be an anchor. `EXTERNAL_ANCHORS` is now
+`("lonespear_kaggriculture_v21", "shashankjangid_agent_v1000_sovereign_prime",
+"madhur_sabherwal_hub_geometry_agent")`.
+
+**The cost, undiluted.** Of the five agents #152 recorded as beating
+`third_herder` on seeds 700-701, this drops the strongest — our reward share
+0.197 against `pilkwang` — and the third — 0.411 against `premaananda108` —
+keeping only 0.362, 0.475 and 0.488. The limb is easier: two of the field's
+harder opponents are gone from it, not because they were re-measured as
+weak, but because they can no longer be run at all. Paired external rows
+recorded before 2026-09-19 are not comparable with rows recorded after it —
+they were measured against a five-anchor limb that no longer exists.
+
+**The partial mitigation, as mitigation and not excuse.** `pilkwang` is a
+ten-tape route-portfolio replayer (#316): part of that 0.197 "hardest
+anchor" reading was the difficulty of a canned route, not of a policy. Its
+departure removes a benchmark whose strength was partly an artifact of what
+it was, not just how well it played.
+
+**What it does not do.** It does not replace the dropped anchors. Choosing
+new ones — from the widened #295 pool or elsewhere — is a measured decision
+in its own right and gets its own dated amendment here, not a side effect of
+this one.

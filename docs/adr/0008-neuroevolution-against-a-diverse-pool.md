@@ -162,6 +162,26 @@ harness; (3) the diverse external-opponent pool; (4) submission integration.
   recorded verdict; what to do about durability (#317) and about `pilkwang`
   (#316) are open, and each will be a dated amendment here and, if it
   touches the gate's set, in ADR-0007.
+- **The three unfetchable entries leave the manifest (#317, 2026-09-19).**
+  `pilkwang_structured_economic_policy`, `premaananda108_ecobot_v7` and
+  `georgymamarin_visualized_what_every_crop_pays` are removed, under the
+  same rule the 2026-09-07 amendment applied to
+  `adilshamim8_kaggriculture_grandmaster_starter`: an entry nobody can fetch
+  breaks the manifest's own contract. The manifest now holds twenty entries.
+  Their orphaned files were deleted from `external_agents/` — discovery
+  reads the directory, and a file with no manifest entry would keep being
+  played as an unverified opponent instead of being caught by the pin —
+  and `resolve_opponents` now warns when it finds a pool file with no
+  matching manifest entry. `georgymamarin` was **not** re-pinned to its new
+  upstream: the rule is that an entry that cannot be fetched *as pinned*
+  leaves, not that a changed entry is silently re-anchored to whatever it
+  became. Durability itself is **still open** — this bullet is the
+  manifest's contract repair, not the durability answer, and it does not
+  reopen vendoring (declined #78, #152). `pilkwang` leaving the pool closes
+  #316 as a side effect: it is no longer an opponent of any kind, so its
+  replayer status no longer needs a separate verdict. The gate's declared
+  anchor set shrank on the same date; see ADR-0007's amendment of
+  2026-09-19 for that decision and its cost.
 
 ## Alternatives considered
 
