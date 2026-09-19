@@ -21,7 +21,7 @@ import os
 from harness.cashflow import play  # noqa: F401  -- pinned by the tests
 from harness.episode_analysis import _slot
 from harness.evolve import DEFAULT_ANCHORS
-from harness.external_pool import EXTERNAL_ANCHORS
+from harness.external_pool import ANCHORS_2026_09_07
 from harness.reserve_bench import MADHUR, PILKWANG, REFERENCE  # noqa: F401  -- pinned by the tests
 from harness.rival_bench import (  # noqa: F401  -- pinned by the tests to rival_bench's own
     criterion,
@@ -41,7 +41,7 @@ ANCHOR_BAR = 0.90
 FERTILIZE_BAR = 30
 STRAWBERRY_FACTOR = 1.5
 ARM_B = "melon_only"
-LONESPEAR = EXTERNAL_ANCHORS[1]
+LONESPEAR = ANCHORS_2026_09_07[1]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR
 
 

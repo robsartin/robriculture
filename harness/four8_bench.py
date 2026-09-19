@@ -20,7 +20,7 @@ import os
 
 from harness.cashflow import play  # noqa: F401  -- pinned by the tests
 from harness.evolve import DEFAULT_ANCHORS
-from harness.external_pool import EXTERNAL_ANCHORS
+from harness.external_pool import ANCHORS_2026_09_07
 from harness.fed_bench import head_by_day, head_lost
 from harness.fourth_bench import (  # noqa: F401  -- the readings are the parent's, pinned by the tests
     ANCHOR_BAR,
@@ -42,7 +42,7 @@ SEEDS = tuple(range(1138, 1154))
 CONTROL_SEED = 1138
 ARM_B = "from_ten"
 ARM_B_FROM = 10
-LONESPEAR = EXTERNAL_ANCHORS[1]
+LONESPEAR = ANCHORS_2026_09_07[1]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR
 
 

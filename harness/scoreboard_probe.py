@@ -29,7 +29,7 @@ import json
 import os
 import statistics
 
-from harness.external_pool import EXTERNAL_ANCHORS
+from harness.external_pool import ANCHORS_2026_09_07
 from harness.herder_bench import last_census_on_day
 
 CHAMPION = "third_herder"
@@ -40,7 +40,11 @@ DAYS = (12, 15, 18, 21)
 MARGINS = (10, 20, 30)
 FIRE_BAR = 0.25
 HARM_BAR = 0.20
-OPPONENTS = (CHAMPION,) + tuple(EXTERNAL_ANCHORS)
+#: Dated probe with a committed record (`RECORD`, below) on spent seeds 864-879 --
+#: pinned to the frozen 2026-09-07 anchor set so this module keeps matching its own
+#: record, the same category as the dated bench modules (#317; ADR-0007 amendment
+#: 2026-09-19; spec Amendments, second entry).
+OPPONENTS = (CHAMPION,) + tuple(ANCHORS_2026_09_07)
 
 #: The raw per-game readings, committed so the tables re-derive without replaying.
 RECORD = os.path.join(os.path.dirname(__file__), "scoreboard", "trigger_readings.json")

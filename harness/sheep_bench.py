@@ -44,9 +44,9 @@ SHEEP_DAY = 8
 SHEEP_BAR = 4
 SHEEP_DAY_16 = 16
 SHEEP_BAR_16 = 6
-from harness.external_pool import EXTERNAL_ANCHORS
+from harness.external_pool import ANCHORS_2026_09_07
 
-LONESPEAR = EXTERNAL_ANCHORS[1]
+LONESPEAR = ANCHORS_2026_09_07[1]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR  # the pool order is the pin (review)
 
 

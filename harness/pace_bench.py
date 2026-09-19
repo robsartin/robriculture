@@ -51,9 +51,14 @@ CHAMPION = "third_herder"
 #: The identity/shape controls' reference agent -- declared once, `herder_bench`'s own name.
 REFERENCE = "dense_farm"
 
-#: The pinned gate external this module reports the paired row for. Asserted below to catch
-#: a rename in `external_pool` rather than silently printing ``None`` (#252 review M5).
-PILKWANG = external_pool.EXTERNAL_ANCHORS[0]
+#: The pinned gate external this module reports the paired row for. The assert below
+#: was added to catch a rename in `external_pool` rather than silently printing
+#: ``None`` (#252 review M5) -- but `ANCHORS_2026_09_07` is frozen (#317), so the
+#: prefix it checks can never change and the assert can never fire. ``None`` is
+#: exactly what the paired row now prints: `pilkwang_structured_economic_policy`
+#: left the live pool (`harness.external_pool.EXTERNAL_ANCHORS`), so the live external
+#: limb has no `pilkwang` game to report and `v.get(PILKWANG)` below finds no row.
+PILKWANG = external_pool.ANCHORS_2026_09_07[0]
 assert PILKWANG.startswith("pilkwang")
 
 #: Fresh. Everything through 895 is spent (see the module docstring).
