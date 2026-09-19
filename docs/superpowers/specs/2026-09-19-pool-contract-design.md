@@ -164,3 +164,62 @@ Both append; neither edits an original decision to match what the code became.
   plus its own ADR-0007 amendment; nothing here supplies that evidence. Three
   candidates are already unhomed from the 2026-09-18 survey if that is wanted later.
 - Any strategy change; `DEFAULT_ANCHORS`; `submit_default`.
+
+## Amendments
+
+### 2026-09-19 — the bench suite indexes `EXTERNAL_ANCHORS` positionally
+
+Found while writing the implementation plan, before any code was touched. The
+design above treats `EXTERNAL_ANCHORS` as if only the gate reads it. Fourteen
+bench modules also read it, **by position**:
+
+```
+harness/pace_bench.py:56     PILKWANG  = external_pool.EXTERNAL_ANCHORS[0]
+harness/reserve_bench.py:58  MADHUR    = external_pool.EXTERNAL_ANCHORS[4]
+harness/{split,town,eight,twelve,four8,melon,straw,fourth,even,fert,sheep,six}_bench.py
+                             LONESPEAR = EXTERNAL_ANCHORS[1]
+```
+
+`PILKWANG` and `MADHUR` are defined once and re-exported across the suite
+(`from harness.reserve_bench import MADHUR, PILKWANG, REFERENCE`), so the blast
+radius is wider than the fourteen definitions.
+
+Shrinking the tuple to three would make `reserve_bench` raise `IndexError` at
+import, `pace_bench` fail its own `assert PILKWANG.startswith("pilkwang")`, and
+the other twelve bind `LONESPEAR` to `shashankjangid_agent_v1000_sovereign_prime`.
+All fourteen have tests; the suite would go red at import.
+
+**Not a silent failure, to the credit of an earlier review.** Every positional
+binding already carries a module-level guard — `assert LONESPEAR.startswith(
+"lonespear"), LONESPEAR  # the pool order is the pin (review)`. The tuple's order
+was already understood to be load-bearing.
+
+**Decision: add a frozen tuple and point the benches at it.**
+
+```python
+#: The gate's external anchors as declared on 2026-09-07 (#152). Frozen: a bench
+#: is a dated record of a run against a dated anchor set, so it must not follow
+#: later changes to EXTERNAL_ANCHORS (#317).
+ANCHORS_2026_09_07 = (
+    "pilkwang_structured_economic_policy",
+    "lonespear_kaggriculture_v21",
+    "premaananda108_ecobot_v7",
+    "shashankjangid_agent_v1000_sovereign_prime",
+    "madhur_sabherwal_hub_geometry_agent",
+)
+```
+
+Each bench changes one reference; its positional index and its existing assert
+keep working unchanged, so no bench's meaning moves. `EXTERNAL_ANCHORS` then
+shrinks to three for the gate alone.
+
+**Consequence, recorded not hidden:** an old bench re-run today would ask the pool
+for `pilkwang` or `premaananda108` and be refused, because neither is in the
+manifest any more. That is correct and is #317's finding restated — those runs are
+not reproducible. Freezing the names keeps the record honest rather than silently
+re-pointing a historical bench at a different opponent.
+
+**Rejected:** literal name strings in all fourteen (duplicates the names across
+fourteen files and makes the existing asserts tautological); re-indexing the
+positions to fit a 3-tuple (keeps the positional fragility and breaks again on the
+next change).
