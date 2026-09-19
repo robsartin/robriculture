@@ -76,6 +76,67 @@ def test_manifest_takes_only_the_three_measured_shashankjangid_rungs():
     assert paths == {"agent_v300_champion.py", "agent_v1000_sovereign_prime.py", "agent_v9.py"}
 
 
+def test_manifest_contains_the_pool_four_entries():
+    # #295 widens the pool from 19 to 23 with the 2026-09-15 re-survey's four
+    # genuinely new entries.
+    entries = fea.load_manifest()
+    names = {e["name"] for e in entries}
+    assert {
+        "conchocon154_kaggriculture_agent",
+        "rangga_jakti_kaggriculture_agent",
+        "rinkaname_apex_grandmaster",
+        "xuantianfengwu_terminal_logistics",
+    } <= names
+
+
+def test_manifest_takes_only_main_py_for_rinkaname_apex_grandmaster():
+    # That repo also ships subin_an_tape.py, a 327KB tape replayer -- a path
+    # change here would swap a policy for a tape while looking like a
+    # harmless edit (#295).
+    entries = fea.load_manifest()
+    paths = {e.get("path") for e in entries if e.get("repo") == "RinKaname/kaggriculture-test2"}
+    assert paths == {"main.py"}
+
+
+def test_manifest_pins_the_xuantianfengwu_terminal_logistics_cell():
+    # Kaggle kernel; without cell_file the fetch depends on cell order (#295).
+    entries = fea.load_manifest()
+    entry = next(e for e in entries if e["name"] == "xuantianfengwu_terminal_logistics")
+    assert entry["cell_file"] == "submission.py"
+
+
+def test_manifest_takes_only_the_one_measured_xuantianfengwu_rung():
+    # terminal-logistics, adaptive-land-allocator-r10 and
+    # hour-4-financing-allocator are one lineage -- a shared "melon v3" base
+    # plus per-version overrides -- so more than one would inflate the pool's
+    # count without adding a voice (#295). Checked across kernel_ref, repo and
+    # name -- not kernel_ref alone -- so a future entry from this author added
+    # as a github_file (no kernel_ref) can't slip past the guard.
+    entries = fea.load_manifest()
+    count = sum(
+        1 for e in entries
+        if "xuantianfengwu" in e.get("kernel_ref", "")
+        or "xuantianfengwu" in e.get("repo", "")
+        or "xuantianfengwu" in e.get("name", "")
+    )
+    assert count == 1
+
+
+def test_manifest_excludes_the_rejected_driw0x_jet1_and_agent1_variants():
+    # Confirmed 2026-09-15 (#295): Driw0x/Kaggriculture's jet1.py and
+    # submissions/agent1.py are agent() returning _LEGACY_ACTIONS[step] with
+    # weed-repair patches applied on top -- readable, licensed, and passes a
+    # one-step smoke test, which is exactly why the exclusion needs to be
+    # written down. This passes immediately against today's manifest (only
+    # chi7.py is vendored from this repo) -- it is a regression guard, not a
+    # reproduced red. Scoped to this repo, not a substring search over every
+    # entry's path.
+    entries = fea.load_manifest()
+    paths = [e.get("path", "") for e in entries if e.get("repo") == "Driw0x/Kaggriculture"]
+    assert "jet1.py" not in paths
+    assert "submissions/agent1.py" not in paths
+
+
 # --- load_manifest: pure parsing ---
 
 def test_load_manifest_reads_the_agents_list(tmp_path):

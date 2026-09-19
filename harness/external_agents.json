@@ -246,6 +246,57 @@
       "dest_filename": "lonespear_kaggriculture_v21.py",
       "notes": "2026-09-06 re-survey (#229). Needs numpy + scipy (module-level `try: import numpy; from scipy.optimize import linear_sum_assignment` for a Hungarian-algorithm worker assignment, with a graceful stdlib fallback if unavailable). Taken despite the dependency: harness/external_pool.py's own docstring is explicit that externals are \"opponents and gate opponents only, never submission candidates\" (scripts/submit.py never packages one, per ADR-0005), and ADR-0008's stdlib-only citations (\"stdlib-only in the submitted artifact (ADR-0004)\") are all scoped to what WE submit, not to measurement opponents. 47KB, module-level `def agent(obs):`.",
       "sha256": "2b7bbac6e30178f12c97573e7556546918ecbfc88499916d83b39a54cabcac57"
+    },
+    {
+      "name": "conchocon154_kaggriculture_agent",
+      "source_type": "github_file",
+      "repo": "conchocon154/kaggriculture-agent",
+      "path": "main.py",
+      "ref": "8f4addee7a8db49678b748ac1cfd79c2f0d39518",
+      "url": "https://github.com/conchocon154/kaggriculture-agent/blob/main/main.py",
+      "license": "MIT",
+      "attribution": "conchocon154, kaggriculture-agent (https://github.com/conchocon154/kaggriculture-agent), main.py, MIT License.",
+      "dest_filename": "conchocon154_kaggriculture_agent.py",
+      "notes": "2026-09-15 re-survey (#295). Stdlib-only; derives a melon-then-flock season from the engine's own price curves, with BUY_LAND and cheap-hand reasoning made explicit in the docstring.",
+      "sha256": "a09e5e3a98ed12f054c84aea740c1274670468953210692c9754aa1c648fb520"
+    },
+    {
+      "name": "rangga_jakti_kaggriculture_agent",
+      "source_type": "github_file",
+      "repo": "rangga-jakti/kaggriculture-agent",
+      "path": "main.py",
+      "ref": "6184db0749a96db3ecbe48a488c109f241f461e9",
+      "url": "https://github.com/rangga-jakti/kaggriculture-agent/blob/main/main.py",
+      "license": "MIT",
+      "attribution": "rangga-jakti, kaggriculture-agent (https://github.com/rangga-jakti/kaggriculture-agent), main.py, MIT License.",
+      "dest_filename": "rangga_jakti_kaggriculture_agent.py",
+      "notes": "2026-09-15 re-survey (#295). Purely reactive: flat job list scored by priority tier then distance, no lookahead. A deliberately low-variance shape.",
+      "sha256": "0a93d59b4fc4d646c6dea17e608d1f5dfbbc488f456d4770febfe65389fa6201"
+    },
+    {
+      "name": "rinkaname_apex_grandmaster",
+      "source_type": "github_file",
+      "repo": "RinKaname/kaggriculture-test2",
+      "path": "main.py",
+      "ref": "a1106545dd5dd48513da3769a17f695b2bea197e",
+      "url": "https://github.com/RinKaname/kaggriculture-test2/blob/main/main.py",
+      "license": "Apache-2.0",
+      "attribution": "RinKaname, kaggriculture-test2 (https://github.com/RinKaname/kaggriculture-test2), main.py, Apache License 2.0.",
+      "dest_filename": "rinkaname_apex_grandmaster.py",
+      "notes": "2026-09-15 re-survey (#295). Class-based heuristic with hardcoded quadrant and pasture geometry. DO NOT fetch this repo's subin_an_tape.py -- a 327KB tape replayer, not a policy; only main.py is vendored here.",
+      "sha256": "e3f5ca7442cba0b672d5c263692b4bb7d712b0f23699b82362d8243032b3eb9b"
+    },
+    {
+      "name": "xuantianfengwu_terminal_logistics",
+      "source_type": "kaggle_kernel",
+      "kernel_ref": "xuantianfengwu/kaggriculture-terminal-logistics",
+      "url": "https://www.kaggle.com/code/xuantianfengwu/kaggriculture-terminal-logistics",
+      "license": "Apache-2.0",
+      "attribution": "xuantianfengwu, \"Kaggriculture Terminal Logistics\" (https://www.kaggle.com/code/xuantianfengwu/kaggriculture-terminal-logistics), Apache License 2.0.",
+      "dest_filename": "xuantianfengwu_terminal_logistics.py",
+      "cell_file": "submission.py",
+      "notes": "2026-09-15 re-survey (#295). Quadrant-staggered crop plan with market-aware sell floors and per-product caps. DO NOT also fetch this author's adaptive-land-allocator-r10 or hour-4-financing-allocator -- one lineage (a shared \"melon v3\" base plus per-version overrides); only this entry is vendored, to avoid inflating the pool's count without adding a voice.",
+      "sha256": "364ca885fee9c92aeee1069e83f44756d6082b489f54a6aea76565e74591442b"
     }
   ]
 }
