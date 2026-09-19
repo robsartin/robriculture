@@ -53,7 +53,7 @@ REFERENCE = "dense_farm"
 
 #: The pinned gate external this module reports the paired row for. Asserted below to catch
 #: a rename in `external_pool` rather than silently printing ``None`` (#252 review M5).
-PILKWANG = external_pool.EXTERNAL_ANCHORS[0]
+PILKWANG = external_pool.ANCHORS_2026_09_07[0]
 assert PILKWANG.startswith("pilkwang")
 
 #: Fresh. Everything through 895 is spent (see the module docstring).

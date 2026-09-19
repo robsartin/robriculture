@@ -283,8 +283,22 @@ def _sha(text):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def test_external_anchors_are_the_five_declared_gate_anchors_in_order():
+def test_external_anchors_holds_only_the_three_that_still_verify():
+    # #317: pilkwang and premaananda108 cannot be fetched from source any more,
+    # so they cannot be gate anchors. Changing this tuple is a dated ADR-0007
+    # amendment (#152's own rule).
     assert external_pool.EXTERNAL_ANCHORS == (
+        "lonespear_kaggriculture_v21",
+        "shashankjangid_agent_v1000_sovereign_prime",
+        "madhur_sabherwal_hub_geometry_agent",
+    )
+
+
+def test_anchors_2026_09_07_is_frozen_for_the_historical_benches():
+    # #317: a bench is a dated record of a run against a dated anchor set, so it
+    # indexes this frozen tuple, not the live EXTERNAL_ANCHORS. Its ORDER is
+    # load-bearing -- every bench's `assert LONESPEAR.startswith(...)` pins it.
+    assert external_pool.ANCHORS_2026_09_07 == (
         "pilkwang_structured_economic_policy",
         "lonespear_kaggriculture_v21",
         "premaananda108_ecobot_v7",

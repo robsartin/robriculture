@@ -79,15 +79,17 @@ def test_repo_case_does_not_hide_a_held_entry():
 # --- the CLI the scheduled task calls ---
 
 def test_main_reports_a_status_per_candidate(capsys):
+    # pilkwang_structured_economic_policy stood in here until #317 removed it
+    # from the manifest (unfetchable); alexandergremyakov's entry is still held.
     code = sd.main(
         [
-            "pilkwang/kaggriculture-structured-economic-policy",
+            "alexandergremyakov/harvest-pulse-goose-dividend-v2",
             "adilshamim8/kaggriculture-101",
         ]
     )
     out = capsys.readouterr().out
     assert code == 0
-    assert "HAVE\tpilkwang/kaggriculture-structured-economic-policy" in out
+    assert "HAVE\talexandergremyakov/harvest-pulse-goose-dividend-v2" in out
     assert "NEW\tadilshamim8/kaggriculture-101" in out
 
 
@@ -99,8 +101,10 @@ def test_main_splits_a_repo_and_path_candidate_on_the_colon(capsys):
 # --- regression: the duplicates the 2026-09-18 run re-proposed (#296) ---
 
 def test_the_2026_09_18_survey_duplicates_are_caught_against_the_real_manifest():
+    # georgymamarin/kaggriculture-visualized-what-every-crop-pays was HAVE here
+    # until #317 removed it from the manifest (republished, failed its pin) --
+    # it is genuinely NEW again now, so it is no longer part of this regression.
     held = [
-        ("georgymamarin/kaggriculture-visualized-what-every-crop-pays", None),
         ("loubaliber/kaggriculture-loubal", "submission.py"),
     ]
     for ref, path in held:
