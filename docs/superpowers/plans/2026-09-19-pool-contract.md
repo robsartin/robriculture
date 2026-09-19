@@ -298,16 +298,21 @@ It must say:
 - The partial mitigation, as mitigation and not excuse: `pilkwang` is a ten-tape route-portfolio replayer (#316), so part of that "hardest anchor" reading was a canned route's difficulty, not a policy's.
 - **What it does not do:** it does not replace the dropped anchors. Choosing new ones is a measured decision plus its own amendment.
 
-- [ ] **Step 2: Append the ADR-0008 amendment**
+- [ ] **Step 2: Append the ADR-0008 amendment — the DECISION, not the finding**
 
-A bullet under `## Consequences`, beginning `- **A pin detects drift; it does not preserve availability (#317, 2026-09-19).**`
+**Read ADR-0008's last Consequences bullet first (PR #319, merged 2026-09-18).** A parallel session already recorded the *finding* there: the three unfetchable entries, that two are gate anchors, that "reproducibility by pin gave detection … but not durability", and the `pilkwang` replayer. It closes with: "what to do about durability (#317) and about `pilkwang` (#316) are open, and each will be a dated amendment here."
 
-It must say:
-- What it corrects, quoted: the 2026-09-07 amendment's "The reproducibility objection is answered by a pin, not a vendoring."
-- The evidence: eleven days later, three of nineteen entries were unfetchable — `premaananda108` 404, `pilkwang` lost its `%%agentfile` cell, `georgymamarin` republished and failed its pin. Verified by re-fetching each from source.
-- That the entries were removed under the rule that amendment itself used for `adilshamim8`.
-- That it does **not** re-open vendoring (declined in #78 and #152). The pool is best-effort; a gate reading depends on artifacts the repo cannot reconstitute, and any claim that a promotion is reproducible should be qualified accordingly.
-- That two of the five gate anchors were among the unfetchable, so the ADR-0007 limb shrank on the same date.
+**Do not restate any of that.** Repeating a recorded finding in a second place is exactly the drift the single-source rule forbids. This amendment records only what #317 *decided*, and cites the existing bullet for the why.
+
+A bullet under `## Consequences`, beginning `- **The three unfetchable entries leave the manifest (#317, 2026-09-19).**`
+
+It must say, and little else:
+- The three names, removed under the rule the 2026-09-07 amendment itself applied to `adilshamim8`: an entry nobody can fetch breaks the manifest's contract. Manifest is now twenty entries.
+- The orphaned files were deleted from `external_agents/`, because discovery reads the directory and would otherwise keep playing them unverified; `resolve_opponents` now warns when it finds one.
+- `georgymamarin` was **not** re-pinned to its new upstream. One rule: an entry that cannot be fetched *as pinned* leaves.
+- Durability is **still open**. This is the contract repair, not the durability answer, and it does not re-open vendoring (declined #78, #152).
+- `pilkwang` leaving the pool closes #316 as a side effect — it is no longer an opponent of any kind, so its replayer status no longer needs a separate verdict.
+- The gate's set shrank on the same date; point at the ADR-0007 amendment from Step 1 rather than repeating its content.
 
 - [ ] **Step 3: Run the ADR integrity tests**
 

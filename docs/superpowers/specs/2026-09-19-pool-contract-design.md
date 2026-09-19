@@ -223,3 +223,22 @@ re-pointing a historical bench at a different opponent.
 fourteen files and makes the existing asserts tautological); re-indexing the
 positions to fit a 3-tuple (keeps the positional fragility and breaks again on the
 next change).
+
+### 2026-09-19 — the ADR-0008 finding is already recorded (PR #319)
+
+Found while planning. A parallel session merged an ADR-0008 Consequences bullet on
+2026-09-18 (PR #319) that already records the **finding** this spec is built on:
+the three unfetchable entries, that two of them are ADR-0007 gate anchors, that
+"reproducibility by pin gave detection, which worked, but not durability", and the
+`pilkwang` replayer (#316). It closes: "what to do about durability (#317) and
+about `pilkwang` (#316) are open, and each will be a dated amendment here."
+
+The spec's "ADR amendments" section above therefore overstates what ADR-0008 still
+needs. Corrected: this change's ADR-0008 amendment records the **decision** only —
+the three entries leave, the orphans are deleted, `georgymamarin` is not re-pinned,
+durability stays open, and #316 closes because `pilkwang` is no longer an opponent.
+It must **not** restate the finding; citing the existing bullet is the single-source
+rule working as intended.
+
+The ADR-0007 amendment is unaffected — PR #319 explicitly anticipates it ("if it
+touches the gate's set, in ADR-0007").
