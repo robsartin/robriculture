@@ -213,11 +213,21 @@ Each bench changes one reference; its positional index and its existing assert
 keep working unchanged, so no bench's meaning moves. `EXTERNAL_ANCHORS` then
 shrinks to three for the gate alone.
 
-**Consequence, recorded not hidden:** an old bench re-run today would ask the pool
-for `pilkwang` or `premaananda108` and be refused, because neither is in the
-manifest any more. That is correct and is #317's finding restated — those runs are
-not reproducible. Freezing the names keeps the record honest rather than silently
-re-pointing a historical bench at a different opponent.
+**Consequence, recorded not hidden — the paragraph originally here was wrong,
+corrected 2026-09-19 on this same branch (fix wave):** it claimed an old bench
+re-run today would ask the pool for `pilkwang` or `premaananda108` and be
+refused. It would not. `ANCHORS_2026_09_07` preserves each dated bench's
+**label** for the row it reports, not the opponent set it actually plays.
+`paired_external_rows` (`harness/rival_bench.py`) resolves `names=None` to the
+**live** `EXTERNAL_ANCHORS`, and every bench calls it with that default
+(e.g. `harness/pace_bench.py`) — so the external limb always played, and still
+plays, the live anchor set. Nothing is refused. What changes is only the
+lookup: each bench's `.get(FROZEN_NAME)` (`harness/pace_bench.py:247`, and the
+same pattern in the other thirteen mains) now finds no row for a departed
+anchor among the live games just played, so the bench prints `None` for it
+instead. Freezing the names keeps the *label* honest rather than silently
+re-pointing a historical bench's printed name at a different opponent; it does
+not, and never did, freeze who gets played.
 
 **Rejected:** literal name strings in all fourteen (duplicates the names across
 fourteen files and makes the existing asserts tautological); re-indexing the
@@ -242,3 +252,32 @@ rule working as intended.
 
 The ADR-0007 amendment is unaffected — PR #319 explicitly anticipates it ("if it
 touches the gate's set, in ADR-0007").
+
+### 2026-09-19 — `seat_check` stays live, `scoreboard_probe` freezes (fix wave)
+
+Found in a whole-branch review: `harness/seat_check.py` and
+`harness/scoreboard_probe.py` both import `external_pool`'s anchors, and #317
+had left them pointed two different ways without saying why that split is
+correct.
+
+**The criterion.** `seat_check` reads the live `EXTERNAL_ANCHORS`: it has no
+positional index into the tuple and asserts no anchor by name (`OPPONENTS =
+tuple(EXTERNAL_ANCHORS) + ("field_rival", "third_herder")`), and it runs on
+fresh seeds (1024-1039) — it tests a current phenomenon (`lean_feed`'s ladder
+seat split, #272), so a re-run should exercise whatever the pool holds today.
+`scoreboard_probe` is the opposite shape: a dated probe (#197 Stage 1) with a
+committed record (`harness/scoreboard/trigger_readings.json`) on spent seeds
+864-879, whose own docstring states the fixed opponent count ("the champion
+vs itself and the five pinned externals... 96 games"). Reading it were it live
+would silently change the number of opponents underneath a record that
+already exists, the same failure mode #317 found in the fourteen dated
+benches. It is pinned to `ANCHORS_2026_09_07` for the same reason they are.
+
+**The rule, for reuse.** Whether a module reading `external_pool`'s anchors
+should follow the live tuple or freeze to a dated one is not a property of
+the module's *name* or *age* — it is whether it has a committed record made
+against a specific anchor set. No record and no positional/name pin → live.
+A committed record on spent seeds → frozen to the anchor set that produced
+it. The same question will recur for any future module that reads the tuple;
+answer it by this criterion, not by analogy to whichever of these two it
+resembles more.

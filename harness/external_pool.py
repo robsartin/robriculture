@@ -49,10 +49,13 @@ DEFAULT_DIR = os.path.join(
 #: contain (scripts/fetch_external_agents.py reads the same file).
 MANIFEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "external_agents.json")
 
-#: The gate's external anchors as declared on 2026-09-07 (#152). Frozen: a bench
-#: is a dated record of a run against a dated anchor set, so it must not follow
-#: later changes to EXTERNAL_ANCHORS (#317). Its ORDER is load-bearing -- the
-#: bench suite indexes it, and each bench asserts the name it expects.
+#: The gate's external anchors as declared on 2026-09-07 (#152), strongest first:
+#: the externals the champion loses to, measured 2026-09-07 (`third_herder`,
+#: seeds 700-701, sides alternated; our reward share 0.197 / 0.362 / 0.411 /
+#: 0.475 / 0.488). Frozen: a bench is a dated record of a run against a dated
+#: anchor set, so it must not follow later changes to EXTERNAL_ANCHORS (#317).
+#: Its ORDER is load-bearing -- the bench suite indexes it, and each bench
+#: asserts the name it expects.
 ANCHORS_2026_09_07 = (
     "pilkwang_structured_economic_policy",
     "lonespear_kaggriculture_v21",
@@ -61,15 +64,14 @@ ANCHORS_2026_09_07 = (
     "madhur_sabherwal_hub_geometry_agent",
 )
 
-#: Gate anchors (#152): the externals the champion loses to, strongest first,
-#: measured 2026-09-07 (`third_herder`, seeds 700-701, sides alternated; our
-#: reward share 0.197 / 0.362 / 0.411 / 0.475 / 0.488). Changing this tuple is
-#: a dated ADR-0007 amendment, as adding `field_rival` to DEFAULT_ANCHORS was
-#: (#181). Every member must be pinned in the manifest before the gate will
-#: load it (`external_anchor_agents`).
+#: Gate anchors (#152). Changing this tuple is a dated ADR-0007 amendment, as
+#: adding `field_rival` to DEFAULT_ANCHORS was (#181). Every member must be
+#: pinned in the manifest before the gate will load it
+#: (`external_anchor_agents`).
 #: Shrunk 2026-09-19 (#317): pilkwang and premaananda108 left the manifest
-#: because neither can be fetched from source. Paired external rows recorded
-#: before that date are not comparable with rows recorded after it.
+#: because neither can be fetched from source; the cost is ADR-0007's
+#: 2026-09-19 amendment's to state, not restated here. Paired external rows
+#: recorded before that date are not comparable with rows recorded after it.
 EXTERNAL_ANCHORS = (
     "lonespear_kaggriculture_v21",
     "shashankjangid_agent_v1000_sovereign_prime",
