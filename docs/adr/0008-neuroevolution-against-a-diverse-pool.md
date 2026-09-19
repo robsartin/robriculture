@@ -133,6 +133,36 @@ harness; (3) the diverse external-opponent pool; (4) submission integration.
   upstream since its 2026-09-06 fetch, so its pinned bytes differ from the ones
   #229 measured, and it is not an anchor.
 
+- **The manifest holds twenty-three pinned entries, and a pin detects drift
+  without preserving the source (#295, #317, 2026-09-18).** The 2026-09-15
+  re-survey (#67) confirmed four vendorable agents genuinely new to the
+  manifest once deduplicated against the manifest itself rather than the
+  issue's own prose (#296); PR #318 added them, fetched and pinned with no
+  substitution, and recorded `ten_melon` 4-0-0 against each on seeds
+  1320-1323 (the first full-episode evidence any of them survives 720
+  turns). The entries, their sources, licences and pins are the manifest
+  (`harness/external_agents.json`), and each entry's reasoning is a named
+  test, not this prose. `EXTERNAL_ANCHORS` is untouched: these are
+  measurement opponents, and an anchor is a measured decision plus a dated
+  ADR-0007 amendment. Two findings landed with the widening and are
+  recorded here as findings, not decisions. First (#317): three of the
+  nineteen earlier entries can no longer be rebuilt from their source -- one
+  Kaggle kernel deleted, one restructured so no agent cell remains, one
+  republished with different bytes, which the pin correctly refused. Two of
+  the three are ADR-0007 gate anchors (`pilkwang_structured_economic_policy`,
+  `premaananda108_ecobot_v7`), so the gate's external limb runs today from
+  files cached on one machine and cannot be rebuilt from a clean clone;
+  `resolve_opponents(include_external=True)` already raises the #153
+  shortfall on the third. The 2026-09-07 premise above -- reproducibility by
+  pin -- gave detection, which worked, but not durability; every external
+  row recorded since 2026-09-07 was measured against files that cannot now
+  be re-obtained. Second (#316): `pilkwang` is a ten-tape route replayer
+  wrapped in a repair controller, the archetype the pool's own triage now
+  rejects (#297), and the pool's strongest entry. Neither finding changes a
+  recorded verdict; what to do about durability (#317) and about `pilkwang`
+  (#316) are open, and each will be a dated amendment here and, if it
+  touches the gate's set, in ADR-0007.
+
 ## Alternatives considered
 
 - **Keep hand-tuning heuristics.** Rejected: demonstrably fragile this session, and
