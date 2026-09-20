@@ -138,6 +138,35 @@ def regressed(ours: int, theirs: int) -> bool:
     return not (theirs <= PAIRED_FLOOR_WINS and theirs - ours == 1)
 
 
+#: Games a single paired external may fall short by before it fails the limb on
+#: its own (ADR-0007 amendment of 2026-09-20, #326). Shortfalls within it are
+#: pooled with the gains on the other pairs; a champion at the floor short by
+#: one is still the coin the 2026-09-15 amendment named.
+PAIRED_MAX_SHORTFALL = 1
+
+
+def external_failing(external: dict) -> list:
+    """The paired external limb judged as a whole (ADR-0007 amendment of
+    2026-09-20). `external` maps each anchor to `(ours, theirs)` wins on the
+    same seeds. A pair short by more than `PAIRED_MAX_SHORTFALL` fails on its
+    own (`external:<name>`). Otherwise the pairs are pooled: the contender's
+    wins over all pairs must be at least the champion's, a floor pair's single
+    game (`regressed`) counting nothing either way, else `external:net`."""
+    fatal = [f"external:{n}" for n, (ours, theirs) in external.items()
+             if theirs - ours > PAIRED_MAX_SHORTFALL]
+    if fatal:
+        return fatal
+    net = sum(ours - theirs for ours, theirs in external.values()
+              if not (theirs - ours == 1 and not regressed(ours, theirs)))
+    return ["external:net"] if net < 0 else []
+
+
+def external_net(external: dict) -> int:
+    """The pooled margin `external_failing` reads, for the record."""
+    return sum(ours - theirs for ours, theirs in external.values()
+               if not (theirs - ours == 1 and not regressed(ours, theirs)))
+
+
 def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
               anchor_bar=ANCHOR_BAR, *, external_pairs=(), identical=0, min_decided=MIN_DECIDED):
     """The declared verdict: the champion bar, each anchor's bar, and -- when
@@ -182,10 +211,10 @@ def criterion(champion_row, anchor_rows, champion_bar=CHAMPION_BAR,
         ([champion_row["opponent"]] if champion_rate < champion_bar else [])
     failing = champion_limb + \
               [n for n, rate in anchor_rates.items() if rate < anchor_bar] + \
-              [f"external:{n}" for n, (ours, theirs) in external.items() if regressed(ours, theirs)]
+              external_failing(external)
     return {"passed": not failing, "champion_rate": champion_rate, "decided": decided,
-            "identical": identical, "void": void,
-            "anchor_rates": anchor_rates, "external": external, "failing": failing}
+            "identical": identical, "void": void, "anchor_rates": anchor_rates,
+            "external": external, "external_net": external_net(external), "failing": failing}
 
 
 def ablation_verdict(contender_wins, ablation_wins, games):
@@ -261,13 +290,20 @@ def format_rows(rows):
 
 
 def format_external(pairs):
-    """One line per external anchor: contender W/G, champion W/G, ok or REGRESSED."""
+    """One line per external anchor -- contender W/G, champion W/G, ok / short
+    (one game, pooled) / REGRESSED (short by more than PAIRED_MAX_SHORTFALL) --
+    and a last line with the pooled net and the limb's verdict (2026-09-20)."""
     lines = [f"{'external':<44} {'contender':>10} {'champion':>10}  verdict"]
+    external = {}
     for p in pairs:
         c, k = p["contender"], p["champion"]
-        verdict = "REGRESSED" if regressed(c["wins"], k["wins"]) else "ok"
+        external[p["opponent"]] = (c["wins"], k["wins"])
+        gap = k["wins"] - c["wins"]
+        verdict = "REGRESSED" if gap > PAIRED_MAX_SHORTFALL else ("short" if regressed(c["wins"], k["wins"]) else "ok")
         lines.append(f"{p['opponent']:<44} {c['wins']:>3}/{c['games']:<6} "
                      f"{k['wins']:>3}/{k['games']:<6}  {verdict}")
+    net = external_net(external)
+    lines.append(f"{'pooled':<44} {'':>10} {'':>10}  net {net:+d}  {'REGRESSED' if external_failing(external) else 'ok'}")
     return "\n".join(lines)
 
 

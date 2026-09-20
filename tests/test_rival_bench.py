@@ -166,9 +166,10 @@ def test_a_single_game_below_a_champion_at_the_floor_is_not_a_regression():
     assert rb.regressed(15, 16) is True               # madhur-style: the limb this exists for
     pairs = [_pair("lonespear_kaggriculture_v21", 0, 1), _pair("shashank", 15, 16)]
     verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=pairs)
-    assert verdict["failing"] == ["external:shashank"]
+    assert verdict["failing"] == ["external:net"]           # 2026-09-20: pooled; the floor pair counts 0, shashank -1
     out = rb.format_external(pairs)
-    assert "lonespear_kaggriculture_v21" in out.split("REGRESSED")[0] and out.count("REGRESSED") == 1
+    assert "lonespear_kaggriculture_v21" in out.split("short")[0] and out.count("short") == 1
+    assert out.rstrip().endswith("net -1  REGRESSED")
 
 
 def test_criterion_passes_an_external_on_equal_wins_and_a_tie_is_not_a_win():
@@ -176,7 +177,7 @@ def test_criterion_passes_an_external_on_equal_wins_and_a_tie_is_not_a_win():
     tied = _pair("b", 2, 3)
     tied["contender"]["ties"] = 5          # 2 wins + 5 ties still reads 2
     verdict = rb.criterion(_row("dense_farm", 10), _six_anchors(), external_pairs=[equal, tied])
-    assert verdict["failing"] == ["external:b"]
+    assert verdict["failing"] == ["external:net"]           # one game short above the floor, nothing to offset it
 
 
 def test_criterion_raises_when_a_pair_was_not_played_on_the_same_seeds():
@@ -191,8 +192,11 @@ def test_format_external_marks_a_regression():
     text = rb.format_external([_pair("a", 3, 3), _pair("b", 1, 2)])
     lines = text.splitlines()
     assert lines[1].startswith("a") and lines[1].rstrip().endswith("ok")
-    assert lines[2].startswith("b") and lines[2].rstrip().endswith("REGRESSED")
+    assert lines[2].startswith("b") and lines[2].rstrip().endswith("short")
+    assert lines[3].rstrip().endswith("net -1  REGRESSED")
     assert "3/16" in lines[1] and "1/16" in lines[2] and "2/16" in lines[2]
+    text = rb.format_external([_pair("a", 3, 3), _pair("b", 1, 3)])
+    assert text.splitlines()[2].rstrip().endswith("REGRESSED") and text.rstrip().endswith("net -2  REGRESSED")
 
 
 def test_paired_external_rows_plays_both_strategies_on_the_same_seeds():
@@ -352,3 +356,36 @@ def test_decided_row_feeds_criterion_over_decided_games():
            "identical": 16, "seeds": "1191-1222"}
     v = rb.criterion(row, _six_anchors(), identical=row["identical"])
     assert v["decided"] == 16 and v["champion_rate"] == 10 / 16 and v["passed"] is True
+
+
+# --- ADR-0007 amendment of 2026-09-20: the paired external limb is judged as a whole (#326) ---
+
+def test_a_pair_short_by_two_or_more_fails_on_its_own():
+    assert rb.PAIRED_MAX_SHORTFALL == 1
+    assert rb.external_failing({"madhur": (14, 16), "lonespear": (10, 4)}) == ["external:madhur"]
+    assert rb.external_failing({"a": (0, 2)}) == ["external:a"]                    # two short at the floor
+    assert rb.external_failing({"a": (1, 3), "b": (0, 2)}) == ["external:a", "external:b"]
+
+
+def test_single_game_shortfalls_are_pooled_across_the_pairs():
+    # #324: madhur (15, 16), lonespear (8, 1), shashank (16, 16) -> net +6
+    assert rb.external_failing({"madhur": (15, 16), "lonespear": (8, 1), "shashank": (16, 16)}) == []
+    # #326: shashank (14, 15), lonespear (10, 4), madhur (16, 16) -> net +5
+    assert rb.external_failing({"shashank": (14, 15), "lonespear": (10, 4), "madhur": (16, 16)}) == []
+    # one game short at the top with nothing to offset it: still a regression
+    assert rb.external_failing({"madhur": (15, 16)}) == ["external:net"]
+    assert rb.external_failing({"madhur": (15, 16), "lonespear": (1, 1)}) == ["external:net"]
+    # a floor pair's one game is a coin and counts nothing either way
+    assert rb.external_failing({"lonespear": (0, 1)}) == []
+    assert rb.external_failing({"lonespear": (0, 1), "madhur": (15, 16), "shashank": (2, 1)}) == []
+    assert rb.external_failing({}) == []
+
+
+def test_criterion_reads_the_pooled_limb_and_still_reports_every_pair():
+    pairs = [_pair("madhur", 15, 16), _pair("lonespear", 8, 1), _pair("shashank", 16, 16)]
+    v = rb.criterion(_row("dense_farm", 15), _six_anchors(), external_pairs=pairs)
+    assert v["passed"] is True and v["failing"] == []
+    assert v["external"] == {"madhur": (15, 16), "lonespear": (8, 1), "shashank": (16, 16)}
+    assert v["external_net"] == 6
+    v = rb.criterion(_row("dense_farm", 15), _six_anchors(), external_pairs=[_pair("madhur", 14, 16), _pair("lonespear", 8, 1)])
+    assert v["passed"] is False and v["failing"] == ["external:madhur"] and v["external_net"] == 5

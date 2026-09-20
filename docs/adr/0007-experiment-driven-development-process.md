@@ -523,3 +523,48 @@ it was, not just how well it played.
 new ones — from the widened #295 pool or elsewhere — is a measured decision
 in its own right and gets its own dated amendment here, not a side effect of
 this one.
+
+### 2026-09-20 — the paired external limb is judged as a whole (#326, PR #328)
+
+**What this corrects.** The limb of 2026-09-07, with its floor of
+2026-09-15, rejects a contender that wins one game fewer than the champion
+against any external above the floor, whatever it does against the others.
+Three contenders this month were rejected on exactly one such game with the
+rest of the gate clean: #291 (`lonespear` 0 vs 1, before the floor), #324
+(`madhur` 15 vs 16, `lonespear` 8 vs 1) and #326 (`shashank` 14 vs 15,
+`lonespear` 10 vs 4, `madhur` level). Over #324 and #326 together the same
+contender was thirteen games up on `lonespear` and one down on each of the
+other two. At sixteen games a change with no effect at all on a swept
+external loses one game to it about half the time, and with three pairs a
+neutral contender fails at least one pair by a coin more often than not.
+The 2026-09-15 amendment kept the top-of-table case on purpose; the limb
+cannot tell that case from a coin, and it has now cost the line with the
+largest external gain of the season twice.
+
+**The rule.** The pairs are judged together. A pair short by more than
+`PAIRED_MAX_SHORTFALL` games still fails the limb on its own — a contender
+that trades games away wholesale against one strong farm is still caught.
+Otherwise the contender's wins over all the pairs must be at least the
+champion's, a floor pair's single game (the 2026-09-15 coin) counting
+nothing either way; a pooled shortfall fails as `external:net`. The
+constant, the pooling and the record are the code:
+`harness.rival_bench.PAIRED_MAX_SHORTFALL`, `external_failing`,
+`external_net` (cite them; do not copy the value here); the verdict carries
+`external_net` and the formatter prints each pair as ok, short or REGRESSED
+and a last pooled line. `regressed` keeps its meaning (a pair is short) and
+its floor.
+
+**Alternatives rejected.**
+- *Leave the limb as written.* It rejects half of all neutral contenders
+  on a coin and has no way to credit a gain on one external against a loss
+  on another; the guard it keeps at the top is one it cannot actually
+  exercise at sixteen games.
+- *One game of slack on every pair.* Lets a contender give up one game to
+  each of three externals unnoticed; the pooled rule fails that (net −3).
+- *A significance test per pair.* Sixteen seeds cannot power one.
+- *More seeds per external.* Thirty-two per pair would halve the coin's
+  odds, not remove them, at twice the run's cost.
+
+**What it does not do.** It does not re-read #324 or #326: both were
+declared and rejected under the rule of their day and stay rejected. A
+contender wanting the amended rule is declared again on fresh seeds.
