@@ -569,7 +569,7 @@ its floor.
 declared and rejected under the rule of their day and stay rejected. A
 contender wanting the amended rule is declared again on fresh seeds.
 
-### 2026-09-21 — seeds may be screened by the champion's own play (#337)
+### 2026-09-21 — seeds may be screened by the champion's own play (#337, PR #338)
 
 **What this corrects.** The amendment of 2026-09-16 rejected *picking seeds
 whose draw makes the change fire*, because the draw depends on both boards
