@@ -568,3 +568,63 @@ its floor.
 **What it does not do.** It does not re-read #324 or #326: both were
 declared and rejected under the rule of their day and stay rejected. A
 contender wanting the amended rule is declared again on fresh seeds.
+
+### 2026-09-21 — seeds may be screened by the champion's own play (#337)
+
+**What this corrects.** The amendment of 2026-09-16 rejected *picking seeds
+whose draw makes the change fire*, because the draw depends on both boards
+and is only known by playing the contender — running the experiment to
+choose its own sample. That holds for a change conditioned on state the
+contender has already shaped. It does not hold for a change conditioned on
+state fixed **before the contender's first divergence**: the town's shops at
+day 9 are drawn at the end of day 8 from boards the contender has not
+touched, so the champion playing itself reads them exactly. Without a
+screen such a change — the strawberry-dead town of #337, one seed in eight
+on the ladder — cannot reach `MIN_DECIDED` on sixteen seeds; the
+2026-09-16 rule excludes the identical games and then voids the run for
+having too few left. Extending the seeds until the floor is met costs about
+a hundred and thirty seeds per run, most of them the champion playing
+itself.
+
+**The rule.** A bench may declare its seeds as *the first N seeds at or
+above a declared start whose champion self-play satisfies a declared
+condition*, when all of the following hold and are declared before code:
+
+- the condition is read from the champion's own self-play, never from a
+  contender game;
+- the condition is fixed at a declared day, and the contender's first
+  divergence from the champion's own action stream in its seat is at or
+  after that day — a **mechanism control** on a screened seed proves it
+  (`harness.sixteend_bench.first_divergence`), and a **live control** on a
+  seed the screen rejects proves the change does not fire there
+  (`harness.rival_bench.seat_actions` equal to the champion's own);
+- the scan is in seed order from the declared start and recorded on the
+  issue (the seeds read and the seeds kept) before the criterion runs;
+- the condition's rate on the ladder is recorded with the verdict, so a
+  win rate over screened seeds is read as a win rate in that share of
+  games, never as a ladder rate.
+
+The champion row, the anchor rows and the paired external limb all run on
+the screened seeds; the identical-play rule of 2026-09-16 still applies to
+the champion row. A bench that declares no screen is unchanged.
+
+**Alternatives rejected.**
+- *Extend the seeds until the floor is met.* The 2026-09-16 rule as
+  written. A hundred-odd seeds a run, nearly all identical play, to measure
+  the same sixteen games the screen finds directly; and the anchor and
+  external limbs then run on the padding too.
+- *Screen by contender play.* The rejection of 2026-09-16 stands: a screen
+  that reads the contender's own game chooses the sample by the outcome.
+- *Lower `MIN_DECIDED` for conditional contenders.* Fewer decided games is
+  a weaker test; the screen gives the same sixteen decided games the rule
+  already asks for.
+- *Judge only the champion row on screened seeds and the other limbs on
+  plain seeds.* Two seed sets in one run, with the external pairs no longer
+  on the same seeds as the champion row; and a change that fires only in
+  dead towns is only ever tested against the field in dead towns.
+
+**What it does not do.** It does not admit a condition the contender can
+influence — a seed screened on the day-12 town is admissible only if the
+contender's first divergence is at or after day 12, which the mechanism
+control checks. It does not read a screened win rate as a ladder rate. It
+does not re-read #302: that run stays rejected.
