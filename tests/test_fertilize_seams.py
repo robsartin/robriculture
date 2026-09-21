@@ -117,7 +117,7 @@ def test_the_two_hooks_return_none_on_the_benchmark_and_are_seams():
     assert s.fertilizer_stock() is None and s.fertilize_crops() is None
     from harness.sheep_bench import _seam_names
     names = _seam_names()
-    assert {"fertilizer_stock", "fertilize_crops"} <= set(names) and len(names) == 16
+    assert {"fertilizer_stock", "fertilize_crops"} <= set(names) and len(names) == 17
 
 
 def test_a_contender_with_the_seams_on_survives_a_turn():

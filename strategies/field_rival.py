@@ -53,15 +53,21 @@ LATE_CROP = "WHEAT"
 CROP_CAP = {"MELON": 12, "STRAWBERRY": 15, "WHEAT": 5}
 
 
-def crop_for_day(day: int, season_days: int = SEASON_DAYS, pivot: int = PIVOT_DAY):
+def crop_for_day(day: int, season_days: int = SEASON_DAYS, pivot: int = PIVOT_DAY, windows=None):
     """The crop this farm plants on `day`, or ``None`` past the horizon.
 
     Melon before the pivot, strawberry after — the measured field's whole crop
     story. The horizon gate is the champion's own (`hired_hands.plantable`), so a
     seed is never spent on a plant that cannot reach first yield in time.
     `pivot` is the swing day (#252); the module default is the frozen `PIVOT_DAY`.
+    `windows` (#334): inclusive ``(first, last)`` day pairs in which melon is
+    planted again after the pivot, when it can still finish; ``None`` -- the
+    benchmark -- never does.
     """
     crop = "MELON" if day < pivot else "STRAWBERRY"
+    if windows and any(first <= day <= last for first, last in windows) \
+            and hh.plantable("MELON", day, season_days):
+        return "MELON"
     if hh.plantable(crop, day, season_days):
         return crop
     # The measured field carries 3-5 wheat tiles through days 20-24, when
@@ -95,15 +101,16 @@ def _ramp(table, day: int) -> int:
     return value
 
 
-def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS, caps=None, pivot=None):
+def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS, caps=None, pivot=None, windows=None):
     """The crop for one more empty tile, given what is already in the ground.
 
     The day's headline crop until its cap is met, then wheat: extra tiles are
     worth more filled with a crop whose market we are not already flooding.
     `pivot` is the swing day for a contender (#252); ``None`` keeps the frozen one.
+    `windows` is the second melon wave for a contender (#334); ``None`` keeps the frozen plan.
     """
     caps = CROP_CAP if caps is None else caps
-    crop = crop_for_day(day, season_days, PIVOT_DAY if pivot is None else pivot)
+    crop = crop_for_day(day, season_days, PIVOT_DAY if pivot is None else pivot, windows)
     if crop and standing.get(crop, 0) < caps.get(crop, 10 ** 6):
         return crop
     if (ch.cc_plantable(LATE_CROP, day, season_days)
@@ -398,7 +405,7 @@ BUY_ORDER = ("hires", "land", "seed", "herd")
 def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
                   empty_plots, standing=None, caps=None, prefer=None, target=None,
                   land=None, hire=None, reserve=None, pivot=None, order=None, floor=None,
-                  feed=None, fert=None):
+                  feed=None, fert=None, windows=None):
     """This turn's market orders, in priority order under the 10-order cap.
 
     Sells come first: they are what funds everything below them, and a shed at
@@ -424,6 +431,8 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
     `feed`: wheat the shed keeps for the herd, or ``None`` for the frozen `feed_buffer(animals)` (#262).
 
     `fert`: fertilizer the shed keeps back from the sweep for the crop line, or ``None`` for none (#277).
+
+    `windows`: the second melon wave, or ``None`` for the frozen plan (#334).
     """
     sells: list = []
     buys: list = []
@@ -470,7 +479,7 @@ def market_orders(day, hour, money, hands, quadrants, animals, shed, seeds,
 
     def seed():
         nonlocal budget
-        crop = crop_for_plot(day, standing, caps=caps, pivot=pivot)
+        crop = crop_for_plot(day, standing, caps=caps, pivot=pivot, windows=windows)
         if crop and empty_plots > 0:
             # Never stock more seed of a capped crop than its remaining headroom:
             # buying 25 strawberry seeds to fill 25 tiles is how the price we sell
@@ -755,6 +764,13 @@ class FieldRivalStrategy(Strategy):
         on the benchmark."""
         return None
 
+    def melon_windows(self):
+        """Inclusive ``(first, last)`` day pairs in which melon is planted again
+        after the pivot, or ``None`` for never. A seam for contenders (#334);
+        on the benchmark it never fires, so its crop plan stays frozen (#181).
+        """
+        return None
+
     def cluster_size(self):
         """Tiles per crop worker, or ``None`` for the frozen `CLUSTER`. A seam
         for contenders (#252); never fires on the benchmark."""
@@ -813,6 +829,7 @@ class FieldRivalStrategy(Strategy):
         animals = count_animals(tiles)
         block, crops = self.layout() or (PASTURE_TILES, CROP_TILES)
         pivot = self.pivot_day()
+        windows = self.melon_windows()
         cluster_size = self.cluster_size()
         cluster = CLUSTER if cluster_size is None else cluster_size
         pastures = active_pastures(day, animals,
@@ -835,7 +852,7 @@ class FieldRivalStrategy(Strategy):
                 continue
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
-            crop = crop_for_plot(day, standing, caps=self.CAPS, pivot=pivot)
+            crop = crop_for_plot(day, standing, caps=self.CAPS, pivot=pivot, windows=windows)
             mine = crop_cluster(i, workers, crops=crops, cluster=cluster)
             action = crop_worker_action(mine, tiles, pos, inv, crop, day, hour,
                                         shed=shed, fertilize=fertilize)
@@ -865,7 +882,7 @@ class FieldRivalStrategy(Strategy):
                                hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order(),
                                floor=self.spend_floor(day, animals, shed, prices), feed=feed,
-                               fert=self.fertilizer_stock(day))
+                               fert=self.fertilizer_stock(day), windows=windows)
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 
