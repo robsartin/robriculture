@@ -23,9 +23,11 @@ def test_crop_for_day_plants_melon_inside_a_window_and_is_frozen_outside_it():
 
 
 def test_crop_for_plot_still_caps_melon_inside_the_window():
+    """Inside the window, melon to its cap, then the day's frozen crop (strawberry),
+    then wheat -- never wheat in strawberry's place."""
     caps = {"MELON": 10, "STRAWBERRY": 38, "WHEAT": 24}
     assert fr.crop_for_plot(12, {"MELON": 3}, caps=caps, pivot=5, windows=WINDOW) == "MELON"
-    assert fr.crop_for_plot(12, {"MELON": 10}, caps=caps, pivot=5, windows=WINDOW) == "WHEAT"
+    assert fr.crop_for_plot(12, {"MELON": 10}, caps=caps, pivot=5, windows=WINDOW) == "STRAWBERRY"   # capped: the day's frozen crop, not wheat
     assert fr.crop_for_plot(12, {"MELON": 3}, caps=caps, pivot=5) == "STRAWBERRY"
 
 

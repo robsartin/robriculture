@@ -113,6 +113,12 @@ def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS, caps=None,
     crop = crop_for_day(day, season_days, PIVOT_DAY if pivot is None else pivot, windows)
     if crop and standing.get(crop, 0) < caps.get(crop, 10 ** 6):
         return crop
+    if windows is not None:
+        # The window's melon is capped: the day's frozen crop next, then the
+        # late crop -- a second wave never puts wheat where strawberry goes (#334).
+        frozen = crop_for_day(day, season_days, PIVOT_DAY if pivot is None else pivot)
+        if frozen and frozen != crop and standing.get(frozen, 0) < caps.get(frozen, 10 ** 6):
+            return frozen
     if (ch.cc_plantable(LATE_CROP, day, season_days)
             and standing.get(LATE_CROP, 0) < caps.get(LATE_CROP, 10 ** 6)):
         return LATE_CROP
