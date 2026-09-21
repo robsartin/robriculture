@@ -55,8 +55,15 @@ ANCHOR_BAR = 0.90
 SCAN_FROM = 2359
 SEED_COUNT = 16
 MELON_UNITS_BAR = 100
-#: The first step of DEAD_DAY: the contender may not diverge before it.
-DEAD_STEP = DEAD_DAY * fr.TURNS_PER_DAY
+#: Dead-at-9 towns are about one seed in eight, so SEED_COUNT is expected
+#: inside ~130 seeds; four hundred without enough dead seeds is a VOID, not
+#: a wait.
+MAX_SCAN = 400
+#: The index of the first action that answers day DEAD_DAY: actions lag
+#: observations by one step (`seat_actions[t]` answers the observation at
+#: `t - 1`), so the first action responding to day DEAD_DAY hour 0 is one
+#: past its observation's own step.
+DEAD_STEP = DEAD_DAY * fr.TURNS_PER_DAY + 1
 LONESPEAR = EXTERNAL_ANCHORS[0]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR  # the pool order is the pin (review)
 
@@ -99,7 +106,7 @@ def scan(start=SCAN_FROM, count=SEED_COUNT):  # pragma: no cover
         if shops is None:
             raise ValueError(f"seed {seed}: no observation for day {DEAD_DAY}")
         return straw_dead(shops)
-    return screen(itertools.count(start), dead_of, count)
+    return screen(itertools.islice(itertools.count(start), MAX_SCAN), dead_of, count)
 
 
 # --- readings ---------------------------------------------------------------
@@ -182,8 +189,10 @@ def main(argv=None):  # pragma: no cover
     ap.add_argument("--seeds", help="the screened seeds, comma-separated (from --scan)")
     ap.add_argument("--live-seed", type=int, help="the first live seed (from --scan)")
     args = ap.parse_args(argv)
+    if bool(args.seeds) != (args.live_seed is not None):
+        ap.error("--seeds and --live-seed go together")
 
-    if args.scan or not (args.seeds and args.live_seed):
+    if args.scan or not (args.seeds or args.live_seed):
         got = scan()
         print(f"screen from {SCAN_FROM}: read {got['read']} seeds; dead at day {DEAD_DAY}: "
               f"{','.join(str(s) for s in got['seeds'])}; live seed {got['live_seed']}")

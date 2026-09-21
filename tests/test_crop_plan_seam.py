@@ -29,10 +29,14 @@ def test_act_uses_the_plans_caps_and_windows_for_the_turn(monkeypatch):
         seen.append((caps, windows))
         return None
     monkeypatch.setattr(fr, "crop_for_plot", spy)
-    on = type("On", (fr.FieldRivalStrategy,), {"crop_plan": lambda self, obs: (DEAD_CAPS, DEAD_WINDOWS)})()
-    out = on.act(_obs())
+    got = []
+    on = type("On", (fr.FieldRivalStrategy,),
+               {"crop_plan": lambda self, obs: (got.append(obs), (DEAD_CAPS, DEAD_WINDOWS))[1]})()
+    obs = _obs()
+    out = on.act(obs)
     assert set(out) >= {"farmer", "hands", "market"}
     assert seen and all(c is DEAD_CAPS and w is DEAD_WINDOWS for c, w in seen)
+    assert got and got[0] is obs
     seen.clear()
     fr.FieldRivalStrategy().act(_obs())
     assert seen and all(c is fr.FieldRivalStrategy.CAPS and w is None for c, w in seen)

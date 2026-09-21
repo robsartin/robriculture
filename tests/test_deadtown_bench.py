@@ -12,7 +12,8 @@ def test_the_declared_constants():
     assert db.CONTENDER == "town_melon" and db.CHAMPION == "second_melon"
     assert db.CHAMPION_BAR == 0.60 and db.ANCHOR_BAR == 0.90
     assert db.SCAN_FROM == 2359 and db.SEED_COUNT == 16 and db.MELON_UNITS_BAR == 100
-    assert db.DEAD_STEP == 9 * fr.TURNS_PER_DAY
+    assert db.MAX_SCAN == 400
+    assert db.DEAD_STEP == 9 * fr.TURNS_PER_DAY + 1
     assert db.LONESPEAR.startswith("lonespear")
     assert db.criterion is rb.criterion and db.decided_row is rb.decided_row and rb.PAIRED_MAX_SHORTFALL == 1
 
