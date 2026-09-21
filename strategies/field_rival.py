@@ -106,6 +106,8 @@ def crop_for_plot(day: int, standing, season_days: int = SEASON_DAYS, caps=None,
 
     The day's headline crop until its cap is met, then wheat: extra tiles are
     worth more filled with a crop whose market we are not already flooding.
+    Inside a contender's melon window (#334) there is a middle tier: the
+    window's melon to its cap, then the day's frozen crop, then wheat.
     `pivot` is the swing day for a contender (#252); ``None`` keeps the frozen one.
     `windows` is the second melon wave for a contender (#334); ``None`` keeps the frozen plan.
     """
