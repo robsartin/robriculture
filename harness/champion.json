@@ -1,18 +1,18 @@
 {
   "criterion": "gate_succession",
-  "gate_opponent": "second_melon",
-  "submit_default": "second_melon",
+  "gate_opponent": "town_melon",
+  "submit_default": "town_melon",
   "succession": {
-    "predecessor": "fert_sixteen",
-    "issue": 334,
-    "pr": 335,
+    "predecessor": "second_melon",
+    "issue": 337,
+    "pr": 339,
     "date": "2026-09-21",
     "record": {
-      "wins": 14,
+      "wins": 15,
       "ties": 0,
       "games": 16,
-      "seeds": "1671-1686",
-      "p": 0.0020904541015625
+      "seeds": "2374-2489",
+      "p": 0.0002593994140625
     }
   }
 }
