@@ -779,6 +779,15 @@ class FieldRivalStrategy(Strategy):
         """
         return None
 
+    def crop_plan(self, obs):
+        """This turn's ``(caps, windows)`` pair in place of `CAPS` and
+        `melon_windows`, or ``None`` for the frozen plan. A seam for
+        contenders (#337) that read the observation -- the town's shops --
+        into the crop plan; on the benchmark it never fires, so its crop plan
+        stays frozen (#181).
+        """
+        return None
+
     def cluster_size(self):
         """Tiles per crop worker, or ``None`` for the frozen `CLUSTER`. A seam
         for contenders (#252); never fires on the benchmark."""
@@ -837,7 +846,8 @@ class FieldRivalStrategy(Strategy):
         animals = count_animals(tiles)
         block, crops = self.layout() or (PASTURE_TILES, CROP_TILES)
         pivot = self.pivot_day()
-        windows = self.melon_windows()
+        plan = self.crop_plan(obs)
+        caps, windows = (self.CAPS, self.melon_windows()) if plan is None else plan
         cluster_size = self.cluster_size()
         cluster = CLUSTER if cluster_size is None else cluster_size
         pastures = active_pastures(day, animals,
@@ -860,7 +870,7 @@ class FieldRivalStrategy(Strategy):
                 continue
             # Re-read the crop per worker: each plant this turn counts against
             # the cap immediately, so the crew cannot collectively overshoot it.
-            crop = crop_for_plot(day, standing, caps=self.CAPS, pivot=pivot, windows=windows)
+            crop = crop_for_plot(day, standing, caps=caps, pivot=pivot, windows=windows)
             mine = crop_cluster(i, workers, crops=crops, cluster=cluster)
             action = crop_worker_action(mine, tiles, pos, inv, crop, day, hour,
                                         shed=shed, fertilize=fertilize)
@@ -885,7 +895,7 @@ class FieldRivalStrategy(Strategy):
         market = market_orders(day, hour, me["money"], len(hands),
                                len(me.get("unlocked_quadrants") or ["NW"]),
                                animals, shed, seeds, empty, standing,
-                               caps=self.CAPS, prefer=self.herd_preference(obs),
+                               caps=caps, prefer=self.herd_preference(obs),
                                target=self.herd_target(day), land=self.land_target(day),
                                hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order(),
