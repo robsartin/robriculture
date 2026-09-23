@@ -47,7 +47,7 @@ def test_the_hook_returns_none_on_the_benchmark_and_is_a_seam():
     from harness.sheep_bench import _seam_names
     assert fr.FieldRivalStrategy().melon_windows() is None
     names = _seam_names()
-    assert "melon_windows" in names and len(names) == 18
+    assert "melon_windows" in names and len(names) == 20
 
 
 def test_a_contender_with_the_seam_on_survives_a_turn_and_the_stub_switches_it_off():

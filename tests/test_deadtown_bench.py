@@ -66,10 +66,10 @@ def test_live_failures_compare_the_seat_zero_streams(monkeypatch):
     assert db.live_failures([["a"], ["x"]], [["a", "b"], ["x"]]) == ["live_identity"]
 
 
-def test_the_identity_stub_switches_all_eighteen_seams_off_and_survives_a_turn():
+def test_the_identity_stub_switches_all_twenty_seams_off_and_survives_a_turn():
     from harness.sheep_bench import _seam_names
     names = _seam_names()
-    assert len(names) == 18 and "crop_plan" in names
+    assert len(names) == 20 and "crop_plan" in names
     cls = db.off_class()
     for n in names:
         assert n in cls.__dict__, f"seam {n} not switched off"
