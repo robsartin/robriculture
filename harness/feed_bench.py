@@ -163,6 +163,8 @@ def off_class():
         "pivot_day": lambda self: None,
         "melon_windows": lambda self: None,
         "crop_plan": lambda self, obs: None,
+        "carry_limit": lambda self: None,
+        "water_first": lambda self: None,
         "cluster_size": lambda self: None,
         "capital_reserve": lambda self, day=None, animals=None: None,
         "buy_order": lambda self: None,

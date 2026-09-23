@@ -237,13 +237,27 @@ def crop_cluster(worker: int, workers=LIVESTOCK_WORKERS, crops=CROP_TILES, clust
 TURNS_PER_DAY = hh.TURNS_PER_DAY
 
 
-def plot_action(tile, crop, day: int, hour: int):
+def _wants_water_first(tile, day: int) -> bool:
+    """A ready plant that a WATER would still lift: not ongoing, not watered
+    today, below its full yield, and no older than its yield window (#341).
+    The sim adds one unit per WATER from `(max_day + 1) // 2` to `max_day`."""
+    cd = CROPS[tile["crop"]]
+    age = day - tile.get("planted_day", day)
+    return (not cd["ongoing"] and not tile.get("watered_today", False)
+            and tile.get("yield_units", 0) < cd["max_yield"] and age <= cd["max_day"])
+
+
+def plot_action(tile, crop, day: int, hour: int, water_first=False):
     """The action for a worker standing on one of its crop tiles.
 
     Harvest before water before plant: a ready tile is money already earned, and
     an ongoing crop (strawberry) keeps offering HARVEST every time it regrows.
     Planting is refused on the final turn of the day -- a new plant carries
     ``consecutive_unwatered = 1`` and dies at 2, so it could never be watered.
+    `water_first` (#341): a ready, non-ongoing plant not yet watered today,
+    below its full yield and within its yield window, is watered first -- the
+    next turn's visit cuts it at the higher yield; ``False``, the benchmark,
+    harvests first.
     """
     if tile == "LOCKED":
         return ["PASS"]
@@ -255,6 +269,8 @@ def plot_action(tile, crop, day: int, hour: int):
         return ["PASS"]
     if hh._is_live_plant(tile):
         if hh.harvest_ready(tile, day):
+            if water_first and _wants_water_first(tile, day):
+                return ["WATER"]
             return ["HARVEST"]
         if not tile.get("watered_today", False):
             return ["WATER"]
@@ -327,7 +343,7 @@ def _tile_at(tiles, tile):
 
 
 def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour, shed=None,
-                       fertilize=None, fert_carry=FERT_CARRY):
+                       fertilize=None, fert_carry=FERT_CARRY, carry=CARRY_LIMIT, water_first=False):
     """One crop worker's action: bank a full load, else tend the first tile in
     its cluster that wants something, else walk any leftovers back to the shed.
 
@@ -343,6 +359,9 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour, shed=None,
     parked at the shed take every unit the herders banked, and the farm,
     whose days 1-5 run on fertilizer sales, died by day 3 (#277). The frozen
     benchmark never fertilizes, so with `fertilize` ``None`` nothing here moves.
+    `carry` (#341): units a worker carries before it banks, the frozen
+    `CARRY_LIMIT` by default. `water_first` (#341): passed to `plot_action`;
+    ``False`` on the benchmark.
     """
     inv = inv or {}
     if isinstance(fertilize, str):
@@ -353,7 +372,7 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour, shed=None,
     carrying = sum(n for item, n in inv.items()
                    if fertilize is None or item != "FERTILIZER")
 
-    if carrying >= CARRY_LIMIT:
+    if carrying >= carry:
         return ["DROP"] if at_shed else hh.step_toward(pos, shed_tile)
 
     def wants_fertilizer(plot):
@@ -371,7 +390,7 @@ def crop_worker_action(cluster, tiles, pos, inv, crop, day, hour, shed=None,
         plot = _tile_at(tiles, tile)
         if wants_fertilizer(plot):
             takers += 1
-        action = plot_action(plot, crop, day, hour)
+        action = plot_action(plot, crop, day, hour, water_first=water_first)
         if fert_in_hand > 0 and wants_fertilizer(plot) and action in (["PASS"], ["WATER"]):
             # A lapsed tile takes fertilizer whether or not it is watered yet:
             # it lasts three days, and the next WATER earns the bonus.
@@ -788,6 +807,18 @@ class FieldRivalStrategy(Strategy):
         """
         return None
 
+    def carry_limit(self):
+        """Units a crop worker carries before it banks, or ``None`` for the
+        frozen `CARRY_LIMIT`. A seam for contenders (#341); on the benchmark it
+        never fires, so its crop crew stays frozen (#181)."""
+        return None
+
+    def water_first(self):
+        """``True`` to water a ready plant before cutting it when a WATER would
+        still lift its yield, or ``None`` for the frozen order (harvest first).
+        A seam for contenders (#341); never fires on the benchmark."""
+        return None
+
     def cluster_size(self):
         """Tiles per crop worker, or ``None`` for the frozen `CLUSTER`. A seam
         for contenders (#252); never fires on the benchmark."""
@@ -858,6 +889,9 @@ class FieldRivalStrategy(Strategy):
         carry = FEED_CARRY if chosen_carry is None else chosen_carry
         feed = self.feed_stock(animals)
         fertilize = self.fertilize_crops(day)
+        chosen_load = self.carry_limit()
+        load = CARRY_LIMIT if chosen_load is None else chosen_load
+        water_first = bool(self.water_first())
 
         positions = [me["farmer"], *hands]
         used: dict = {}
@@ -873,7 +907,7 @@ class FieldRivalStrategy(Strategy):
             crop = crop_for_plot(day, standing, caps=caps, pivot=pivot, windows=windows)
             mine = crop_cluster(i, workers, crops=crops, cluster=cluster)
             action = crop_worker_action(mine, tiles, pos, inv, crop, day, hour,
-                                        shed=shed, fertilize=fertilize)
+                                        shed=shed, fertilize=fertilize, carry=load, water_first=water_first)
             if action[0] == "PLANT":
                 # One seed per PLANT, and the sim silently no-ops a plant we
                 # cannot pay for -- so a worker past the seed count would just

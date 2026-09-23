@@ -5,7 +5,7 @@ under ADR-0007 as amended 2026-09-16, 2026-09-20 and 2026-09-21, corrected
 Declared on #337 before any code. The seeds are screened (2026-09-21): the
 first SEED_COUNT seeds at or above SCAN_FROM whose day-9 town under the
 champion's own self-play has no strawberry shop; LIVE_SEED is the first
-whose town has one. Controls first -- identity (every seam off, eighteen, is
+whose town has one. Controls first -- identity (every seam off, twenty, is
 the frozen benchmark to the value), mechanism (melon units sold at least
 MELON_UNITS_BAR and more than the champion's, fewer strawberry units, and
 the contender's first divergence from the champion's own stream at or after
@@ -135,7 +135,7 @@ def live_failures(ours, own) -> list:
 
 
 def off_class():
-    """Every seam off (eighteen), the reference's caps, and the frozen herd ramp."""
+    """Every seam off (twenty), the reference's caps, and the frozen herd ramp."""
     from strategies import load
     body = {n: (lambda self, *a, **k: None) for n in _seam_names()}
     body["CAPS"] = load_reference().CAPS
