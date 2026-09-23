@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from harness import rival_bench as rb
 from harness import sixmelon_bench as sb
 from strategies import field_pace as fp
@@ -26,13 +24,21 @@ def test_the_seeds_are_fresh_against_every_range_already_spent():
 
 
 def _steps(sells):
-    """Fake steps: `sells` is a list of (day, seat, item, units) SELL orders; the
-    observation on each step carries its day."""
+    """Fake steps: `sells` is a list of (day, seat, item, units) SELL orders, each
+    chosen from an observation at `day` -- the way `_turns` dates an action: by
+    the PRECEDING step's own observation, never the step that carries the
+    action, which is the state the sim already produced by applying it. Each
+    entry becomes two consecutive steps: one whose own observation reports
+    `day` (what the action was chosen from), followed by the one carrying the
+    SELL, whose own observation has already advanced to `day + 1` -- exactly
+    what the sim does once the last turn of a day resolves."""
     out = []
     for day, seat, item, units in sells:
-        slots = [{"observation": {"day": day}, "action": {}}, {"observation": {"day": day}, "action": {}}]
-        slots[seat]["action"] = {"market": [["SELL", item, units]]}
-        out.append(slots)
+        prior = [{"observation": {"day": day}, "action": {}}, {"observation": {"day": day}, "action": {}}]
+        acted = [{"observation": {"day": day + 1}, "action": {}}, {"observation": {"day": day + 1}, "action": {}}]
+        acted[seat]["action"] = {"market": [["SELL", item, units]]}
+        out.append(prior)
+        out.append(acted)
     return out
 
 
@@ -44,6 +50,17 @@ def test_units_by_day_counts_one_seats_sells_through_a_day():
     assert sb.units_by_day(steps, 1, "MELON", 13) == 10
     assert sb.units_by_day(steps, 0, "STRAWBERRY", 13) == 4
     assert sb.units_by_day([], 0, "MELON", 13) == 0
+
+
+def test_units_by_day_dates_a_sale_by_the_observation_it_answered_not_the_one_it_produced():
+    """A SELL on the last turn of day 13 -- whose own step's observation
+    already reports day 14, the state the sim produces AFTER the action --
+    must still count for day=13; a SELL on the first turn of day 14, chosen
+    from a day-14 observation, must not."""
+    last_turn_of_13 = _steps([(13, 0, "MELON", 6)])
+    first_turn_of_14 = _steps([(14, 0, "MELON", 6)])
+    assert sb.units_by_day(last_turn_of_13, 0, "MELON", 13) == 6
+    assert sb.units_by_day(first_turn_of_14, 0, "MELON", 13) == 0
 
 
 def test_reading(monkeypatch):

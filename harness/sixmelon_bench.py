@@ -21,7 +21,7 @@ import argparse
 import os
 
 from harness.cashflow import play  # noqa: F401  -- pinned by the tests
-from harness.episode_analysis import _slot
+from harness.episode_analysis import _turns
 from harness.evolve import DEFAULT_ANCHORS
 from harness.external_pool import EXTERNAL_ANCHORS
 from harness.fert_bench import units_sold
@@ -55,14 +55,20 @@ def load_reference():
 
 
 def units_by_day(steps, seat, item, day) -> int:
-    """Units of `item` one seat SELLs on steps whose observation day is at most `day`."""
+    """Units of `item` one seat SELLs on turns dated at most `day`.
+
+    Dates each SELL the way `_turns` dates every action: by the observation it
+    was chosen from (the PRIOR step), never the step that carries it -- that
+    step's own observation is the state the sim already produced by applying
+    the action, so a SELL on the last turn of a day was landing on the next
+    day and being dropped, undercounting the day's total by one turn (#341
+    review round 1).
+    """
     total = 0
-    for t in range(len(steps)):
-        slot = _slot(steps, t, seat) or {}
-        obs = slot.get("observation") or {}
-        if obs.get("day") is None or obs["day"] > day:
+    for turn in _turns(steps, seat):
+        if turn["day"] is None or turn["day"] > day:
             continue
-        for order in ((slot.get("action") or {}).get("market") or []):
+        for order in turn["orders"]:
             if order and order[0] == "SELL" and order[1] == item:
                 total += int(order[2])
     return total
