@@ -1,18 +1,18 @@
 {
   "criterion": "gate_succession",
-  "gate_opponent": "town_melon",
-  "submit_default": "town_melon",
+  "gate_opponent": "wind_down",
+  "submit_default": "wind_down",
   "succession": {
-    "predecessor": "second_melon",
-    "issue": 337,
-    "pr": 339,
-    "date": "2026-09-21",
+    "predecessor": "town_melon",
+    "issue": 343,
+    "pr": 344,
+    "date": "2026-09-24",
     "record": {
-      "wins": 15,
+      "wins": 16,
       "ties": 0,
       "games": 16,
-      "seeds": "2374-2489",
-      "p": 0.0002593994140625
+      "seeds": "2586-2601",
+      "p": 1.52587890625e-05
     }
   }
 }
