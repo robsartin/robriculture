@@ -332,6 +332,11 @@ TRADABLE = tuple(_sim.PRODUCTS)
 #: earns; livestock is bought only from what is left after it is funded.
 CAPITAL_RESERVE = 1200
 
+#: A spend floor no farm reaches: with it in force `market_orders` buys no land,
+#: seed or herd, while hires and sells go on. Finite on purpose -- the seed
+#: block divides by it, and a float infinity there would raise (#343).
+NO_SPEND = 10 ** 9
+
 #: Animals we buy, cheapest first. Sheep are the better earner (200 vs 160) but
 #: cost 500, so the herd starts on cows and upgrades as money allows.
 HERD_MIX = ("COW", "SHEEP")
@@ -819,6 +824,13 @@ class FieldRivalStrategy(Strategy):
         A seam for contenders (#341); never fires on the benchmark."""
         return None
 
+    def wind_down(self, day):
+        """True to run the season out from `day`: no land, seed or herd buys,
+        no feed reserve (the sweep sells the wheat and none is bought), no
+        fertilizer held back. ``None`` -- the benchmark -- never does. A seam
+        for contenders (#343); never fires on the benchmark."""
+        return None
+
     def cluster_size(self):
         """Tiles per crop worker, or ``None`` for the frozen `CLUSTER`. A seam
         for contenders (#252); never fires on the benchmark."""
@@ -887,7 +899,8 @@ class FieldRivalStrategy(Strategy):
         herders = {worker: slot for slot, worker in enumerate(workers)}
         chosen_carry = self.feed_carry(animals, len(workers))
         carry = FEED_CARRY if chosen_carry is None else chosen_carry
-        feed = self.feed_stock(animals)
+        winding = bool(self.wind_down(day))
+        feed = 0 if winding else self.feed_stock(animals)
         fertilize = self.fertilize_crops(day)
         chosen_load = self.carry_limit()
         load = CARRY_LIMIT if chosen_load is None else chosen_load
@@ -933,8 +946,8 @@ class FieldRivalStrategy(Strategy):
                                target=self.herd_target(day), land=self.land_target(day),
                                hire=self.hire_target(day), reserve=self.capital_reserve(day, animals),
                                pivot=pivot, order=self.buy_order(),
-                               floor=self.spend_floor(day, animals, shed, prices), feed=feed,
-                               fert=self.fertilizer_stock(day), windows=windows)
+                               floor=NO_SPEND if winding else self.spend_floor(day, animals, shed, prices), feed=feed,
+                               fert=0 if winding else self.fertilizer_stock(day), windows=windows)
 
         return {"farmer": actions[0], "hands": actions[1:], "market": market}
 

@@ -3,7 +3,7 @@ ADR-0007 as amended 2026-09-16, 2026-09-20 and 2026-09-21, corrected
 2026-09-17.
 
 Declared on #341 before any code. Controls first -- identity (every seam off,
-twenty, is the frozen benchmark to the value) and mechanism (melon units sold
+twenty-one, is the frozen benchmark to the value) and mechanism (melon units sold
 by the end of EARLY_DAY at least EARLY_BAR and more than the champion's -- the
 first wave cut at six, none lost -- and melon units over the game more than
 the champion's; strawberry units printed, not gated); a failed control is a
@@ -94,7 +94,7 @@ def mechanism_failures(contender, champion) -> list:
 
 
 def off_class():
-    """Every seam off (twenty), the reference's caps, and the frozen herd ramp."""
+    """Every seam off (twenty-one), the reference's caps, and the frozen herd ramp."""
     from strategies import load
     body = {n: (lambda self, *a, **k: None) for n in _seam_names()}
     body["CAPS"] = load_reference().CAPS

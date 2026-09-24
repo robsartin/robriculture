@@ -82,10 +82,10 @@ def test_mechanism_failures_name_the_bars():
     assert sb.mechanism_failures({"melon_early": 0, "melon_units": 0, "strawberry_units": 0}, champ) == ["melon_early", "melon_units"]
 
 
-def test_the_identity_stub_switches_all_twenty_seams_off_and_survives_a_turn():
+def test_the_identity_stub_switches_all_twenty_one_seams_off_and_survives_a_turn():
     from harness.sheep_bench import _seam_names
     names = _seam_names()
-    assert len(names) == 20 and {"carry_limit", "water_first"} <= set(names)
+    assert len(names) == 21 and {"carry_limit", "water_first"} <= set(names)
     cls = sb.off_class()
     for n in names:
         assert n in cls.__dict__, f"seam {n} not switched off"
