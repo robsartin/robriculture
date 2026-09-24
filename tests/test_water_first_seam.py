@@ -62,7 +62,7 @@ def test_the_hooks_return_none_on_the_benchmark_and_are_seams():
     s = fr.FieldRivalStrategy()
     assert s.carry_limit() is None and s.water_first() is None
     names = _seam_names()
-    assert {"carry_limit", "water_first"} <= set(names) and len(names) == 20
+    assert {"carry_limit", "water_first"} <= set(names) and len(names) == 21
 
 
 def test_act_passes_the_hooks_to_the_crop_workers(monkeypatch):

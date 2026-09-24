@@ -1,18 +1,22 @@
-"""The six_melon experiment (#341): controls and criterion -- judged under
+"""The wind_down experiment (#343): controls and criterion -- judged under
 ADR-0007 as amended 2026-09-16, 2026-09-20 and 2026-09-21, corrected
 2026-09-17.
 
-Declared on #341 before any code. Controls first -- identity (every seam off,
-twenty-one, is the frozen benchmark to the value) and mechanism (melon units sold
-by the end of EARLY_DAY at least EARLY_BAR and more than the champion's -- the
-first wave cut at six, none lost -- and melon units over the game more than
-the champion's; strawberry units printed, not gated); a failed control is a
-VOID run (exit 2). Then rival_bench's criterion on the decided row: >= 60% of
-the decided games vs town_melon (VOID if fewer than MIN_DECIDED are decided),
->= 90% vs each anchor, the paired external limb as a whole.
+Declared on #343 before any code. Controls first -- identity (every seam off,
+twenty-one, is the frozen benchmark to the value) and mechanism (no BUY order
+from WIND_DAY on while the champion issues some; no WHEAT in the shed at the
+end of WIND_DAY while the champion holds some; the contender's first
+divergence from the champion's own stream at or after WIND_STEP; fertilizer
+in the shed printed, not gated); a failed control is a VOID run (exit 2).
+Then rival_bench's criterion on the decided row: >= 60% of the decided games
+vs town_melon (VOID if fewer than MIN_DECIDED are decided), >= 90% vs each
+anchor, the paired external limb as a whole.
 
-    .venv/bin/python -m harness.sixmelon_bench --controls
-    .venv/bin/python -m harness.sixmelon_bench --criterion
+Readings come from `harness.episode_analysis._turns`, which dates each
+action by the observation it answered.
+
+    .venv/bin/python -m harness.winddown_bench --controls
+    .venv/bin/python -m harness.winddown_bench --criterion
 """
 
 from __future__ import annotations
@@ -24,7 +28,6 @@ from harness.cashflow import play  # noqa: F401  -- pinned by the tests
 from harness.episode_analysis import _turns
 from harness.evolve import DEFAULT_ANCHORS
 from harness.external_pool import EXTERNAL_ANCHORS
-from harness.fert_bench import units_sold
 from harness.reserve_bench import MADHUR, REFERENCE  # noqa: F401  -- pinned by the tests
 from harness.rival_bench import (  # noqa: F401  -- pinned by the tests to rival_bench's own
     criterion,
@@ -34,17 +37,19 @@ from harness.rival_bench import (  # noqa: F401  -- pinned by the tests to rival
     paired_external_rows,
 )
 from harness.sheep_bench import _seam_names
+from harness.sixteend_bench import first_divergence
 from strategies import field_pace as fp
+from strategies import field_rival as fr
 
-CONTENDER = "six_melon"
+CONTENDER = "wind_down"
 CHAMPION = "town_melon"
-SEEDS = tuple(range(2522, 2538))
-CONTROL_SEED = 2522
+SEEDS = tuple(range(2586, 2602))
+CONTROL_SEED = 2586
 CHAMPION_BAR = 0.60
 ANCHOR_BAR = 0.90
-#: The first wave is cut by the end of this day; at six a tile, ten tiles clear the bar.
-EARLY_DAY = 13
-EARLY_BAR = 60
+WIND_DAY = 28
+#: The index of the first action that answers WIND_DAY: actions lag observations by one step.
+WIND_STEP = WIND_DAY * fr.TURNS_PER_DAY + 1
 LONESPEAR = EXTERNAL_ANCHORS[0]
 assert LONESPEAR.startswith("lonespear"), LONESPEAR  # the pool order is the pin (review)
 
@@ -54,42 +59,47 @@ def load_reference():
     return load(REFERENCE)
 
 
-def units_by_day(steps, seat, item, day) -> int:
-    """Units of `item` one seat SELLs on turns dated at most `day`.
-
-    Dates each SELL the way `_turns` dates every action: by the observation it
-    was chosen from (the PRIOR step), never the step that carries it -- that
-    step's own observation is the state the sim already produced by applying
-    the action, so a SELL on the last turn of a day was landing on the next
-    day and being dropped, undercounting the day's total by one turn (#341
-    review round 1).
-    """
+def buys_from(steps, seat, day) -> int:
+    """BUY orders (seed, product, animal, land) one seat issues on turns whose
+    answered observation is on `day` or later."""
     total = 0
     for turn in _turns(steps, seat):
-        if turn["day"] is None or turn["day"] > day:
+        if turn["day"] is None or turn["day"] < day:
             continue
-        for order in turn["orders"]:
-            if order and order[0] == "SELL" and order[1] == item:
-                total += int(order[2])
+        total += sum(1 for o in turn["orders"] if o and str(o[0]).startswith("BUY"))
     return total
 
 
+def shed_on_day(steps, seat, day, item):
+    """Units of `item` in the shed the last action of `day` answered, or
+    ``None`` when no turn answered that day."""
+    found = None
+    for turn in _turns(steps, seat):
+        if turn["day"] == day:
+            found = int((turn["shed"] or {}).get(item, 0) or 0)
+    return found
+
+
 def reading(steps, seat) -> dict:
-    """One side's melon units sold by the end of EARLY_DAY, and its melon and
-    strawberry units over the game."""
-    u = units_sold(steps, seat)
-    return {"melon_early": units_by_day(steps, seat, "MELON", EARLY_DAY),
-            "melon_units": u.get("MELON", 0), "strawberry_units": u.get("STRAWBERRY", 0)}
+    """One side's BUY orders from WIND_DAY on, and its wheat and fertilizer
+    in the shed at the end of WIND_DAY. No turn on WIND_DAY is an error."""
+    wheat = shed_on_day(steps, seat, WIND_DAY, "WHEAT")
+    if wheat is None:
+        raise ValueError(f"no turn answered day {WIND_DAY}: the game ended early")
+    return {"buys_28": buys_from(steps, seat, WIND_DAY), "wheat_28": wheat,
+            "fertilizer_28": shed_on_day(steps, seat, WIND_DAY, "FERTILIZER")}
 
 
-def mechanism_failures(contender, champion) -> list:
-    """Control 2's bars; the names of the ones that did not hold. Strawberry is
-    printed, never gated."""
+def mechanism_failures(contender, champion, *, first_diff) -> list:
+    """Control 2's bars; the names of the ones that did not hold. Fertilizer
+    is printed, never gated."""
     failed = []
-    if contender["melon_early"] < EARLY_BAR or not contender["melon_early"] > champion["melon_early"]:
-        failed.append("melon_early")
-    if not contender["melon_units"] > champion["melon_units"]:
-        failed.append("melon_units")
+    if contender["buys_28"] != 0 or not champion["buys_28"] > 0:
+        failed.append("buys_28")
+    if contender["wheat_28"] != 0 or not champion["wheat_28"] > 0:
+        failed.append("wheat_28")
+    if first_diff is None or first_diff < WIND_STEP:
+        failed.append("first_divergence")
     return failed
 
 
@@ -104,6 +114,13 @@ def off_class():
 
 # --- live games -------------------------------------------------------------
 
+def _own_steps(seed):  # pragma: no cover
+    from harness.rival_bench import _default_steps
+    from harness.triage import _default_agents
+    agents = _default_agents()
+    return _default_steps()(agents(CHAMPION), agents(CHAMPION), seed)
+
+
 def run_controls(seed=CONTROL_SEED):  # pragma: no cover
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
     from harness.tournament import play_rewards
@@ -117,9 +134,12 @@ def run_controls(seed=CONTROL_SEED):  # pragma: no cover
     out["identity"] = {"ok": got == base and precondition_ok, "base": base, "got": got,
                        "precondition_ok": precondition_ok}
     steps = play(CONTENDER, CHAMPION, seed)
+    own = _own_steps(seed)
     contender, champion = reading(steps, 0), reading(steps, 1)
-    failed = mechanism_failures(contender, champion)
-    out["mechanism"] = {"ok": not failed, "failed": failed, "contender": contender, "champion": champion}
+    first_diff = first_divergence(steps, own, 0)
+    failed = mechanism_failures(contender, champion, first_diff=first_diff)
+    out["mechanism"] = {"ok": not failed, "failed": failed, "first_diff": first_diff,
+                        "contender": contender, "champion": champion}
     return out
 
 
@@ -134,7 +154,7 @@ def run_criterion(seeds=SEEDS):  # pragma: no cover
 
 def main(argv=None):  # pragma: no cover
     os.environ.setdefault("ROBRICULTURE_STRICT", "1")
-    ap = argparse.ArgumentParser(description="six_melon: water a ready melon before cutting it, carry eighteen")
+    ap = argparse.ArgumentParser(description="wind_down: from day 28 buy nothing, keep no feed, hold no fertilizer")
     ap.add_argument("--controls", action="store_true")
     ap.add_argument("--criterion", action="store_true")
     args = ap.parse_args(argv)
@@ -145,10 +165,11 @@ def main(argv=None):  # pragma: no cover
     if do_controls:
         ctl = run_controls()
         print(f"control identity: {'OK' if ctl['identity']['ok'] else 'FAIL -- RUN VOID'}  {ctl['identity']}")
-        c, b = ctl["mechanism"]["contender"], ctl["mechanism"]["champion"]
-        print(f"control mechanism: {'OK' if ctl['mechanism']['ok'] else 'FAIL -- RUN VOID'}  "
-              f"(declared: melon units by day {EARLY_DAY} >= {EARLY_BAR} and > {CHAMPION}'s, melon units > {CHAMPION}'s; strawberry recorded)  "
-              f"contender {c}  {CHAMPION} {b}  failed={ctl['mechanism']['failed'] or 'none'}")
+        m = ctl["mechanism"]
+        print(f"control mechanism: {'OK' if m['ok'] else 'FAIL -- RUN VOID'}  "
+              f"(declared: no BUY from day {WIND_DAY} and {CHAMPION} buys; no WHEAT in the shed at the end of day {WIND_DAY} and {CHAMPION} holds some; "
+              f"first divergence >= step {WIND_STEP}; fertilizer recorded)  contender {m['contender']}  {CHAMPION} {m['champion']}  "
+              f"first_diff={m['first_diff']}  failed={m['failed'] or 'none'}")
         if not all(r["ok"] for r in ctl.values()):
             print("a control failed: the run is VOID")
             return 2

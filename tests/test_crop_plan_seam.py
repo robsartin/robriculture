@@ -20,7 +20,7 @@ def test_the_hook_returns_none_on_the_benchmark_and_is_a_seam():
     from harness.sheep_bench import _seam_names
     assert fr.FieldRivalStrategy().crop_plan(_obs()) is None
     names = _seam_names()
-    assert "crop_plan" in names and len(names) == 20
+    assert "crop_plan" in names and len(names) == 21
 
 
 def test_act_uses_the_plans_caps_and_windows_for_the_turn(monkeypatch):
