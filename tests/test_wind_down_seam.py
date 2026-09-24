@@ -26,15 +26,19 @@ def test_no_spend_is_a_floor_no_farm_reaches():
 
 
 def test_market_orders_with_the_wind_down_values_sells_feed_and_buys_nothing():
-    shed = {"WHEAT": 24, "FERTILIZER": 5, "MILK": 3}
-    on = fr.market_orders(20, 5, 20000, 10, 3, 12, shed, {}, 6, standing={}, caps={"MELON": 10, "WHEAT": 24},
+    # quadrants=2 < land_target(20)=3, animals=6 < animal_target(20)=10 and 4
+    # wheat is below feed_buffer(6) -- so the frozen farm off wants all four
+    # buy blocks (land, herd, feed wheat, seed), not just seed.
+    shed = {"WHEAT": 4, "FERTILIZER": 5, "MILK": 3}
+    on = fr.market_orders(20, 5, 20000, 10, 2, 6, shed, {}, 6, standing={}, caps={"MELON": 10, "WHEAT": 24},
                           pivot=5, floor=fr.NO_SPEND, feed=0, fert=0)
-    assert ["SELL", "WHEAT", 24] in on and ["SELL", "FERTILIZER", 5] in on and ["SELL", "MILK", 3] in on
+    assert ["SELL", "WHEAT", 4] in on and ["SELL", "FERTILIZER", 5] in on
     assert not [o for o in on if o[0].startswith("BUY")]
-    off = fr.market_orders(20, 5, 20000, 10, 3, 12, shed, {}, 6, standing={}, caps={"MELON": 10, "WHEAT": 24}, pivot=5)
-    assert [o for o in off if o[0] == "SELL" and o[1] == "WHEAT"] == [["SELL", "WHEAT", 24 - fr.feed_buffer(12)]] or \
-        not [o for o in off if o[0] == "SELL" and o[1] == "WHEAT"]
-    assert [o for o in off if o[0] == "BUY_SEED"]                   # the frozen farm still buys seed for its 6 empty plots
+    off = fr.market_orders(20, 5, 20000, 10, 2, 6, shed, {}, 6, standing={}, caps={"MELON": 10, "WHEAT": 24}, pivot=5)
+    assert not [o for o in off if o[0] == "SELL" and o[1] == "WHEAT"]
+    ops = {o[0] for o in off}
+    assert "BUY_LAND" in ops and "BUY_ANIMAL" in ops and "BUY_SEED" in ops
+    assert [o for o in off if o[0] == "BUY_PRODUCT" and o[1] == "WHEAT"]
 
 
 def test_act_passes_the_wind_down_values_only_when_the_hook_fires(monkeypatch):
@@ -47,6 +51,14 @@ def test_act_passes_the_wind_down_values_only_when_the_hook_fires(monkeypatch):
     obs = _obs()
     fr.FieldRivalStrategy().act(obs)
     assert seen == {"floor": None, "feed": None, "fert": None}
+    seen.clear()
+    rich = type("Rich", (fr.FieldRivalStrategy,), {
+        "feed_stock": lambda self, animals=None: 7,
+        "spend_floor": lambda self, *a, **k: 11,
+        "fertilizer_stock": lambda self, day=None: 3,
+    })()
+    rich.act(obs)
+    assert seen == {"floor": 11, "feed": 7, "fert": 3}
     seen.clear()
     got = []
     on = type("On", (fr.FieldRivalStrategy,), {"wind_down": lambda self, day: (got.append(day), True)[1]})()

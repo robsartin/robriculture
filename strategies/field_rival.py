@@ -334,7 +334,8 @@ CAPITAL_RESERVE = 1200
 
 #: A spend floor no farm reaches: with it in force `market_orders` buys no land,
 #: seed or herd, while hires and sells go on. Finite on purpose -- the seed
-#: block divides by it, and a float infinity there would raise (#343).
+#: block subtracts it before an `int()`, and a float infinity there would
+#: raise (#343).
 NO_SPEND = 10 ** 9
 
 #: Animals we buy, cheapest first. Sheep are the better earner (200 vs 160) but
