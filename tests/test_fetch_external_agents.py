@@ -142,13 +142,31 @@ def test_manifest_excludes_the_rejected_driw0x_jet1_and_agent1_variants():
     # weed-repair patches applied on top -- readable, licensed, and passes a
     # one-step smoke test, which is exactly why the exclusion needs to be
     # written down. This passes immediately against today's manifest (only
-    # chi7.py is vendored from this repo) -- it is a regression guard, not a
+    # chi11.py is vendored from this repo) -- it is a regression guard, not a
     # reproduced red. Scoped to this repo, not a substring search over every
     # entry's path.
     entries = fea.load_manifest()
     paths = [e.get("path", "") for e in entries if e.get("repo") == "Driw0x/Kaggriculture"]
     assert "jet1.py" not in paths
     assert "submissions/agent1.py" not in paths
+
+
+def _pre_selling_driw0x_rungs(manifest_path=fea.MANIFEST_PATH):
+    # Upstream chi.py through chi7.py contain no SELL at all; selling arrives
+    # in chi8.py ("sale-day routing", upstream docs/chi_agents.md).
+    pre_selling = {"src/agents/chi.py"} | {f"src/agents/chi{n}.py" for n in range(1, 8)}
+    return [
+        e["path"] for e in fea.load_manifest(manifest_path)
+        if e.get("repo") == "Driw0x/Kaggriculture" and e.get("path") in pre_selling
+    ]
+
+
+def test_manifest_excludes_driw0x_rungs_that_never_sell():
+    # #346: chi7 banked $0 in every game -- reward is final money and it never
+    # sells, so it was a dead pool voice. test_external_pool_liveness catches
+    # that behaviourally but skips wherever the pool is not fetched (CI); this
+    # is the CI-side guard for the one lineage whose early rungs are known dead.
+    assert _pre_selling_driw0x_rungs() == []
 
 
 # --- load_manifest: pure parsing ---
