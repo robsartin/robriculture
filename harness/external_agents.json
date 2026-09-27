@@ -160,17 +160,17 @@
       "sha256": "e5a60c72d0bfaa3ab8c425378466162db60de64b66dfbdf15149422df4b70810"
     },
     {
-      "name": "driw0x_kaggriculture_chi7",
+      "name": "driw0x_kaggriculture_chi11",
       "source_type": "github_file",
       "repo": "Driw0x/Kaggriculture",
-      "path": "src/agents/chi7.py",
-      "ref": "f7ea71ddae8591bddaf0925a119c3b4196e06319",
-      "url": "https://github.com/Driw0x/Kaggriculture/blob/master/src/agents/chi7.py",
+      "path": "src/agents/chi11.py",
+      "ref": "5585cbbe06f5b9b379449360274d805dc36af44f",
+      "url": "https://github.com/Driw0x/Kaggriculture/blob/master/src/agents/chi11.py",
       "license": "Apache-2.0",
-      "attribution": "Driw0x, Kaggriculture (https://github.com/Driw0x/Kaggriculture), src/agents/chi7.py, Apache License 2.0.",
-      "dest_filename": "driw0x_kaggriculture_chi7.py",
-      "notes": "2026-09-06 re-survey (#229). Fixed tile-layout planner: a module-level `CROP_STATE` dict hardcodes a crop assignment per board coordinate. 24KB, module-level `def agent(obs):`.",
-      "sha256": "2ce05deccb2f45dc2d9593db8c5d290a2d53469d77b9ad987cc6c06016c86536"
+      "attribution": "Driw0x, Kaggriculture (https://github.com/Driw0x/Kaggriculture), src/agents/chi11.py, Apache License 2.0.",
+      "dest_filename": "driw0x_kaggriculture_chi11.py",
+      "notes": "2026-09-27 (#346): replaces chi7, which banked $0 in every game because upstream chi.py-chi7.py never SELL (selling arrives in chi8.py). chi11 is the same author's planner lineage with sale-day routing, market-aware sales and hiring; beat chi7 4/4 (~128K) in the 2026-09-27 #67 survey. 104KB, self-contained (stdlib `copy` only); defines `def agent(obs):` twice and the second, at module end, is the live one.",
+      "sha256": "0a7b62ad34b95afe01d2eb3cd9d2dbf69f96084b3ea9391de8640b6f6399d987"
     },
     {
       "name": "darunesh1_kaggriculture_baseline_v1",
